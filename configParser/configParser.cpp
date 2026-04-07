@@ -1,34 +1,9 @@
-#include <iostream>
-#include <fstream>
+#include "configParser.hpp"
 #include <stdexcept>
-#include <vector>
+#include <iostream>
 #include <stdlib.h>
+#include <fstream>
 #include <sstream>
-#include <string>
-#include <map>
-
-struct Location
-{
-    std::vector<std::string> methods;
-    std::string path;
-    std::string root;
-    std::string autoindex;
-    std::string index;
-    std::string cgiPath;
-    std::string cgiExt;
-};
-
-struct ServerConfig
-{
-    std::string host;
-    int port;
-    std::vector<std::string> serverName;
-    std::string root;
-    std::vector<Location> Locations;
-    std::map<int, std::string> errorPage;
-
-    ServerConfig() : host("127.0.0.1"), port(80), root("./www") {}
-};
 
 std::vector<std::string> prepConf(const std::string& filepath)
 {
@@ -176,6 +151,7 @@ int main()
     std::cout << "server names: ";
     for (std::vector<std::string>::iterator tempIt = myServer.serverName.begin(); tempIt != myServer.serverName.end(); tempIt++)
         std::cout << *tempIt << " ";
+    std::cout << std::endl;
     std::cout << myServer.root << std::endl;
     std::cout << "Locations:" << std::endl;
     for (std::vector<Location>::iterator tempIt = myServer.Locations.begin(); tempIt != myServer.Locations.end(); tempIt++)
