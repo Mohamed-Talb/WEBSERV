@@ -141,39 +141,49 @@ std::vector<ServerConfig> parseTokens(std::vector<std::string> tokens)
     return allServers;
 }
 
-int main()
+
+std::vector<ServerConfig> GETconfig()
 {
     std::vector<std::string> tokens = prepConf("server.conf");
-    std::vector<ServerConfig> allServers = parseTokens(tokens);
-    ServerConfig myServer = allServers[0];
-    std::cout << myServer.host << std::endl;
-    std::cout << myServer.port << std::endl;
-    std::cout << "server names: ";
-    for (std::vector<std::string>::iterator tempIt = myServer.serverName.begin(); tempIt != myServer.serverName.end(); tempIt++)
-        std::cout << *tempIt << " ";
-    std::cout << std::endl;
-    std::cout << myServer.root << std::endl;
-    std::cout << "Locations:" << std::endl;
-    for (std::vector<Location>::iterator tempIt = myServer.Locations.begin(); tempIt != myServer.Locations.end(); tempIt++)
-    {
-        std::cout << "methodes: ";
-        for (std::vector<std::string>::iterator tempIt2 = (*tempIt).methods.begin(); tempIt2 != (*tempIt).methods.end(); tempIt2++)
-        {
-            std::cout << *tempIt2 << " ";
-        }
-        std::cout << std::endl;
-        std::cout << (*tempIt).path << std::endl;
-        std::cout << (*tempIt).root << std::endl;
-        std::cout << (*tempIt).autoindex << std::endl;
-        std::cout << (*tempIt).index << std::endl;
-        std::cout << (*tempIt).cgiPath << std::endl;
-        std::cout << (*tempIt).cgiExt << std::endl;
-        std::cout << "--------------------" << std::endl;
-    }
-    std::cout << "error pages:" << std::endl;
-    for (std::map<int, std::string>::iterator tempIt = myServer.errorPage.begin(); tempIt != myServer.errorPage.end(); tempIt++)
-    {
-        std::cout << (*tempIt).first << std::endl;
-        std::cout << (*tempIt).second << std::endl;
-    }
+    std::vector<ServerConfig> allServers = parseTokens(tokens); 
+    return allServers;
 }
+
+
+// int main()
+// {
+//     std::vector<std::string> tokens = prepConf("server.conf");
+//     std::vector<ServerConfig> allServers = parseTokens(tokens);    
+    
+//     // ServerConfig myServer = allServers[0];
+//     // std::cout << myServer.host << std::endl;
+//     // std::cout << myServer.port << std::endl;
+//     // std::cout << "server names: ";
+//     // for (std::vector<std::string>::iterator tempIt = myServer.serverName.begin(); tempIt != myServer.serverName.end(); tempIt++)
+//     //     std::cout << *tempIt << " ";
+//     // std::cout << std::endl;
+//     // std::cout << myServer.root << std::endl;
+//     // std::cout << "Locations:" << std::endl;
+//     // for (std::vector<Location>::iterator tempIt = myServer.Locations.begin(); tempIt != myServer.Locations.end(); tempIt++)
+//     // {
+//     //     std::cout << "methodes: ";
+//     //     for (std::vector<std::string>::iterator tempIt2 = (*tempIt).methods.begin(); tempIt2 != (*tempIt).methods.end(); tempIt2++)
+//     //     {
+//     //         std::cout << *tempIt2 << " ";
+//     //     }
+//     //     std::cout << std::endl;
+//     //     std::cout << (*tempIt).path << std::endl;
+//     //     std::cout << (*tempIt).root << std::endl;
+//     //     std::cout << (*tempIt).autoindex << std::endl;
+//     //     std::cout << (*tempIt).index << std::endl;
+//     //     std::cout << (*tempIt).cgiPath << std::endl;
+//     //     std::cout << (*tempIt).cgiExt << std::endl;
+//     //     std::cout << "--------------------" << std::endl;
+//     // }
+//     // std::cout << "error pages:" << std::endl;
+//     // for (std::map<int, std::string>::iterator tempIt = myServer.errorPage.begin(); tempIt != myServer.errorPage.end(); tempIt++)
+//     // {
+//     //     std::cout << (*tempIt).first << std::endl;
+//     //     std::cout << (*tempIt).second << std::endl;
+//     // }
+// }
