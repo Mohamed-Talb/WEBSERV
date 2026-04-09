@@ -26,6 +26,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <errno.h>     // errno
-#include <string.h>    // strerror if needed
+#include <string.h>    // strerror
+#include <sstream>
 
 #endif

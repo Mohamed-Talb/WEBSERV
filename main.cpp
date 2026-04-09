@@ -1,12 +1,18 @@
 #include "Server/Server.hpp"
 
 std::vector<ServerConfig> GETconfig();
-
 int main()
 {
-    std::vector<ServerConfig> serverconfig = GETconfig();
-    Server server;
-    server.loadListeners(serverconfig);
-    server.initEventSystem();
-    server.runEventLoop();
+    try
+    {
+        std::vector<ServerConfig> configs = GETconfig();
+        Server server;
+        server.init(configs);
+        server.runEventLoop();
+    }
+    catch (const ServerException& e)
+    {
+        std::cerr << e.what() << "\n";
+        return 1;
+    }
 }

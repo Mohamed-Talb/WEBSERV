@@ -1,4 +1,4 @@
-WEBSERV_SRC = main.cpp\
+WEBSERV_SRC = main.cpp Helpers.cpp Errors.cpp\
 			Server/Server.cpp Server/Listener.cpp Server/Client.cpp \
 			configParser/configParser.cpp 
 			

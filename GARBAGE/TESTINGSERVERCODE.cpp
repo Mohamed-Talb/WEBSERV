@@ -487,14 +487,3 @@ int main()
 
 
 
-
-
-Client
-{
-    socketFD;          // File descriptor of the client socket
-
-    readBuffer;     // Buffer storing data received from the client
-                           // Example: HTTP request data
-    writeBuffer;    // Buffer storing data waiting to be sent
-                           // Example: HTTP response
-};

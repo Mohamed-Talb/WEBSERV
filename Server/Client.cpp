@@ -1,23 +1,10 @@
 #include "Server.hpp"
 
-Client::Client() : socketFD(-1) {}
-
-Client::Client(int fd) : socketFD(fd)
-{
-    if (fcntl(socketFD, F_SETFL, O_NONBLOCK) < 0)
-    {
-        return ;
-        cout << "FCNTL FAILD";
-        closeConnection();
-        // HANDLING ERROR
-    }
-}
-
+Client::Client(int fd) : socketFD(fd) {}
 
 Client::~Client()
 {
-    if (socketFD >= 0)
-        ::close(socketFD);
+    closeConnection();
 }
 
 void Client::closeConnection()
@@ -29,19 +16,9 @@ void Client::closeConnection()
     }
 }
 
-int Client::getSocketFD() const
+bool Client::isConnected() const
 {
-    return socketFD;
-}
-
-std::string& Client::getReadBuffer()
-{
-    return readBuffer;
-}
-
-std::string& Client::getWriteBuffer()
-{
-    return writeBuffer;
+    return socketFD >= 0;
 }
 
 void Client::appendToReadBuffer(const std::string& data)
@@ -49,12 +26,38 @@ void Client::appendToReadBuffer(const std::string& data)
     readBuffer += data;
 }
 
+const std::string& Client::getReadBuffer() const
+{
+    return readBuffer;
+}
+
+void Client::clearReadBuffer()
+{
+    readBuffer.clear();
+}
+
+
 void Client::appendToWriteBuffer(const std::string& data)
 {
     writeBuffer += data;
 }
 
+const std::string& Client::getWriteBuffer() const
+{
+    return writeBuffer;
+}
+
+void Client::consumeWriteBuffer(size_t bytes)
+{
+    writeBuffer.erase(0, bytes);
+}
+
 bool Client::hasPendingWrite() const
 {
     return !writeBuffer.empty();
+}
+
+int Client::getSocketFD() const
+{
+    return socketFD;
 }

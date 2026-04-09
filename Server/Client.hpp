@@ -1,34 +1,38 @@
+// ─── Client.hpp ─────────────────────────────────────────────────────
 #ifndef CLIENT_HPP
 #define CLIENT_HPP
 
-#include "../configParser/configParser.hpp"
 #include "../Lib.hpp"
-
-using namespace std;
+#include "../Helpers.hpp"
 
 class Client
 {
 private:
-    int socketFD;
-    string readBuffer;
-    string writeBuffer;
+    int         socketFD;
+    std::string readBuffer;
+    std::string writeBuffer;
+
+    Client();
+    Client(const Client&);
+    Client& operator=(const Client&);
 
 public:
-    Client();
-    Client(int clientFD);
-    Client(const Client& other);
-    Client& operator=(const Client& other);
+    explicit Client(int fd);
     ~Client();
 
     void closeConnection();
+    bool isConnected()      const;
 
-    int getSocketFD() const;
+    void               appendToReadBuffer(const std::string& data);
+    const std::string& getReadBuffer()                              const;
+    void               clearReadBuffer();
 
-    void appendToReadBuffer(const string& data);
-    void appendToWriteBuffer(const string& data);
-    bool hasPendingWrite() const;
-    std::string& getReadBuffer();
-    std::string& getWriteBuffer();
+    void               appendToWriteBuffer(const std::string& data);
+    const std::string& getWriteBuffer()                             const;
+    void               consumeWriteBuffer(size_t bytes);
+    bool               hasPendingWrite()                            const;
+
+    int  getSocketFD() const;
 };
 
 #endif
