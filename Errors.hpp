@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <string>
 #include <cerrno>
+
 class ServerException : public std::runtime_error
 {
     public:
