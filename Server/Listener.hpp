@@ -30,27 +30,35 @@
 
 // ─── Listener.hpp ───────────────────────────────────────────────────
 
+enum IOState 
+{
+    IO_READY,        // Replaces 1: The operation finished, switch epoll state
+    IO_PENDING,      // Replaces 0: The operation needs more time, wait for epoll
+    IO_DISCONNECTED  // Replaces -1: The client dropped, kill the connection
+};
 
 class Listener
 {
     private:
         int                      socketFD;
-        ServerConfig             config;
+        std::vector<ServerConfig> configs;
         std::map<int, Client*>   clients;
-        void loadListener(const ServerConfig& conf);
+        void loadListener(const ServerConfig &conf);
         void closeListener(); 
         Listener();
         Listener(const Listener&);
         Listener& operator=(const Listener&);
 
     public:
-        explicit Listener(const ServerConfig& conf);
+        Listener(const std::vector<ServerConfig>& confs);
         ~Listener();
         // client lifecycle — called by Server
         Client* acceptClient();
         Client* getClient(int fd) const;
         void    removeClient(int clientFD);
-
+        const ServerConfig& matchConfig(const std::string& hostHeader) const;
+        IOState handleClientRead(Client* client);
+        IOState handleClientWrite(Client* client);
         int         getSocketFD() const;
         int         getPort()     const;
 };

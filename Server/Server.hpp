@@ -38,11 +38,12 @@ class Server
 {
     private:
         map<int, Listener*> listeners;
+        std::map<int, Listener*> clientMap;
         int epollFD;
-        // nobody outside should call these directly
         void addListener(Listener* listener);      // internal helper only
         void registerToEpoll(int fd, uint32_t events); // extracted helper
         void disconnectClient(Listener* listener, int clientFD);
+        void handleConnection(Listener *listener, int clientFd, uint32_t event);
         void handleNewConnection(Listener* listener);
         void handleClientRead(Listener* listener, Client* client);
         void handleClientWrite(Listener* listener, Client* client);
