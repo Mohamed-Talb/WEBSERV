@@ -1,4 +1,4 @@
-#include "../Server/Server.hpp"
+#include "Server.hpp"
 
 Client::Client(int fd) : socketFD(fd) {}
 
@@ -66,9 +66,9 @@ int Client::getSocketFD() const
 // ─── Listener.cpp ───────────────────────────────────────────────────
 #include "Server.hpp"
 
-Listener::Listener(const ServerConfig& conf): socketFD(-1), config(conf)
+Listener::Listener(const std::vector<ServerConfig>& confs): socketFD(-1), configs(confs)
 {
-    loadListener(conf);
+    loadListener(configs[0]); 
 }
 
 Listener::~Listener()
@@ -94,8 +94,10 @@ void Listener::loadListener(const ServerConfig& conf)
     // std::memset(&addr, 0, sizeof(addr));
     addr.sin_family      = AF_INET;
     addr.sin_port        = htons(conf.port);
-    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_addr.s_addr = inet_addr(conf.host.c_str()); 
 
+    if (addr.sin_addr.s_addr == INADDR_NONE)
+        addr.sin_addr.s_addr = INADDR_ANY;
     if (bind(socketFD, (sockaddr*)&addr, sizeof(addr)) < 0)
     {
         ::close(socketFD);
@@ -109,6 +111,8 @@ void Listener::loadListener(const ServerConfig& conf)
         socketFD = -1;
         throw ServerException("Listener","listen() failed on port " + intToString(conf.port));
     }
+    std::cout << "[LISTENER] : Successfully bound and listening on Port " 
+              << conf.port << " (Socket FD: " << socketFD << ")" << std::endl;
 }
 
 void Listener::closeListener()
@@ -127,6 +131,15 @@ void Listener::closeListener()
 }
 
 
+
+// const ServerConfig& Listener::matchConfig(const std::string& requestedHost) const // ????????????????
+// {
+//     return ;
+// }
+
+
+
+
 Client* Listener::acceptClient()
 {
     int clientFD = accept(socketFD, NULL, NULL);
@@ -135,7 +148,7 @@ Client* Listener::acceptClient()
     if (fcntl(clientFD, F_SETFL, O_NONBLOCK) < 0)
     {
         ::close(clientFD);
-        throw ServerException("Listener","fcntl() failed for new client on port " + intToString(config.port));
+        throw ServerException("Listener","fcntl() failed for new client on port " + intToString(configs[0].port));
     }
     Client* client       = new Client(clientFD);
     clients[clientFD]    = client;
@@ -161,8 +174,66 @@ void Listener::removeClient(int clientFD)
 }
 
 int Listener::getSocketFD() const { return socketFD; }
-int Listener::getPort()     const { return config.port; }
+int Listener::getPort()     const { return configs[0].port; }
 
+
+IOState Listener::handleClientRead(Client* client)
+{
+    char buf[4096];
+    int clientFD = client->getSocketFD();
+    int bytes = recv(clientFD, buf, sizeof(buf), 0);
+
+    if (bytes == 0) 
+        return IO_DISCONNECTED;
+        
+    if (bytes < 0)
+    {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return IO_PENDING;
+        return IO_DISCONNECTED;
+    }
+    client->appendToReadBuffer(std::string(buf, bytes));
+    if (client->getReadBuffer().find("\r\n\r\n") != std::string::npos)
+    {
+        std::cout << "[LISTENER] : Client FD " << client->getSocketFD() 
+              << " fully received request" << std::endl;
+        // add hhttp handler after build it and pass a config to it 
+        std::string finalResponse =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Length: 13\r\n"
+            "Content-Type: text/plain\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "Hello, World!";;
+        client->appendToWriteBuffer(finalResponse);
+        client->clearReadBuffer();
+        return IO_READY;
+    }
+    return IO_PENDING;
+}
+
+IOState Listener::handleClientWrite(Client* client)
+{
+    if (!client->hasPendingWrite())
+        return IO_READY;
+    int clientFD = client->getSocketFD();
+    const std::string& buffer = client->getWriteBuffer();
+    int bytes = send(clientFD, buffer.c_str(), buffer.size(), 0);
+
+    if (bytes < 0)
+    {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return IO_PENDING;
+        return IO_DISCONNECTED;
+    }
+    client->consumeWriteBuffer(bytes);
+    if (!client->hasPendingWrite())
+    {
+        // Note form mtaleb: For HTTP/1.1 Keep-Alive, you go back to reading.  For HTTP/1.0 Connection: close, you might actually return -1 here.
+        return IO_READY; 
+    }
+    return IO_PENDING;
+}
 
 
 #include "Server.hpp"
@@ -184,17 +255,25 @@ void Server::registerToEpoll(int fd, uint32_t events)
     }
 }
 
-void Server::init(vector<ServerConfig>& configs)
+void Server::init(std::vector<ServerConfig>& configs)
 {
+    std::cout << "[SERVER] : Initializing server... Grouping configs." << std::endl;
     epollFD = epoll_create(1024);
     if (epollFD < 0)
         throw ServerException("Server", "epoll_create() failed");
-    for (size_t i = 0; i < configs.size(); ++i)
+
+    std::map<int, std::vector<ServerConfig> > groupedConfigs;
+    for (size_t i = 0; i < configs.size(); ++i) 
     {
-        Listener* listener = new Listener(configs[i]); // throws on socket/bind/listen fail
-        listeners[listener->getSocketFD()] = listener;
-        registerToEpoll(listener->getSocketFD(), EPOLLIN); // throws on epoll_ctl fail
+        groupedConfigs[configs[i].port].push_back(configs[i]);
     }
+    for (std::map<int, std::vector<ServerConfig> >::iterator it = groupedConfigs.begin(); it != groupedConfigs.end(); ++it)
+    {
+        Listener* listener = new Listener(it->second); 
+        listeners[listener->getSocketFD()] = listener;
+        registerToEpoll(listener->getSocketFD(), EPOLLIN);
+    }
+    std::cout << "[SERVER] : Epoll created with FD " << epollFD << std::endl;
 }
 
 void Server::shutdown()
@@ -217,16 +296,18 @@ void Server::disconnectClient(Listener* listener, int clientFD)
 {
     epoll_ctl(epollFD, EPOLL_CTL_DEL, clientFD, NULL); 
     listener->removeClient(clientFD);
+    clientMap.erase(clientFD);
+    std::cout << "[SERVER] : Disconnecting Client FD " << clientFD << std::endl;
 }
 
-// SERVER RUNING
+
 void Server::handleNewConnection(Listener* listener)
 {
     Client* client = listener->acceptClient();
     if (!client)
         return;
     int clientFD = client->getSocketFD();
-
+    clientMap[clientFD] = listener;
     epoll_event ev;
     ev.events  = EPOLLIN;
     ev.data.fd = clientFD;
@@ -234,160 +315,86 @@ void Server::handleNewConnection(Listener* listener)
     {
         logError("handleNewConnection", "epoll_ctl ADD failed for client fd " + intToString(clientFD));
         listener->removeClient(clientFD);
+        clientMap.erase(clientFD); // Clean up if epoll fails
         return;
     }
+    std::cout << "[SERVER] : New connection! Assigned Client FD " << clientFD 
+            << " on port " << listener->getPort() << std::endl;
 }
 
-void Server::handleClientWrite(Listener* listener, Client* client)
+void Server::handleConnection(Listener *listener, int clientFd, uint32_t event)
 {
-    if (!client->hasPendingWrite())
-        return;
-
-    int clientFD = client->getSocketFD();
-    const std::string& buffer = client->getWriteBuffer();
-
-    int bytes = send(clientFD, buffer.c_str(), buffer.size(), 0);
-
-    if (bytes < 0)
+    Client* client = listener->getClient(clientFd);
+    if (event & (EPOLLHUP | EPOLLERR))
     {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return; // kernel buffer full — epoll will notify us when ready again
-        logError("handleClientWrite", "send() failed for fd " + intToString(clientFD));
-        disconnectClient(listener, clientFD);
-        return;
+        disconnectClient(listener, clientFd);
+        return ;
     }
-    client->consumeWriteBuffer(bytes);
-    if (!client->hasPendingWrite())
+    if (event & EPOLLIN)
     {
-        epoll_event ev;
-        ev.events  = EPOLLIN;
-        ev.data.fd = clientFD;
-        if (epoll_ctl(epollFD, EPOLL_CTL_MOD, clientFD, &ev) < 0)
+        IOState status = listener->handleClientRead(client);
+        if (status == IO_DISCONNECTED) 
         {
-            logError("handleClientWrite", "epoll_ctl MOD failed for fd " + intToString(clientFD));
-            disconnectClient(listener, clientFD);
+            disconnectClient(listener, clientFd);
+            return ;
         }
-    }
-}
-
-
-void Server::handleClientRead(Listener* listener, Client* client)
-{
-    char buf[4096];
-    int  clientFD = client->getSocketFD();
-    int  bytes    = recv(clientFD, buf, sizeof(buf), 0);
-
-    if (bytes < 0)
-    {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return; // no data yet — not an error
-        logError("handleClientRead", "recv() failed for fd " + intToString(clientFD));
-        disconnectClient(listener, clientFD);
-        return;
-    }
-
-    if (bytes == 0)
-    {
-        disconnectClient(listener, clientFD);
-        return;
-    }
-
-    client->appendToReadBuffer(std::string(buf, bytes));
-    cout << client->getReadBuffer(); 
-    if (client->getReadBuffer().find("\r\n\r\n") != std::string::npos)
-    {
-        // full request received — build response
-        // (this will be the HTTP parser entry point later)
-        std::string response =
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Length: 13\r\n"
-            "Content-Type: text/plain\r\n"
-            "Connection: close\r\n"
-            "\r\n"
-            "Hello, World!";
-        client->appendToWriteBuffer(response);
-        client->clearReadBuffer();
-        epoll_event ev;
-        ev.events  = EPOLLIN | EPOLLOUT;
-        ev.data.fd = clientFD;
-        if (epoll_ctl(epollFD, EPOLL_CTL_MOD, clientFD, &ev) < 0)
+        if (status == IO_READY)
         {
-            logError("handleClientRead", "epoll_ctl MOD failed for fd " + intToString(clientFD));
-            disconnectClient(listener, clientFD);
+            epoll_event ev;
+            ev.events  = EPOLLIN | EPOLLOUT;
+            ev.data.fd = clientFd;
+            epoll_ctl(epollFD, EPOLL_CTL_MOD, clientFd, &ev);
         }
+        // If status == IO_PENDING, we do nothing and let the loop continue
     }
+    if (event & EPOLLOUT)
+    {
+        IOState status = listener->handleClientWrite(client);
+        if (status == IO_DISCONNECTED)
+        {
+            disconnectClient(listener, clientFd);
+            return;
+        }
+        if (status == IO_READY) 
+        {
+            epoll_event ev;
+            ev.events  = EPOLLIN;
+            ev.data.fd = clientFd;
+            epoll_ctl(epollFD, EPOLL_CTL_MOD, clientFd, &ev);
+        }
+    }   
 }
 
 void Server::runEventLoop()
 {
-    const int   MAX_EVENTS = 1024;
+    const int MAX_EVENTS = 1024;
     epoll_event readyEvents[MAX_EVENTS];
+    
+
     while (true)
     {
-        int ready = epoll_wait(epollFD, readyEvents, MAX_EVENTS, -1);
-        if (ready < 0)
-        {
-            if (errno == EINTR)
-                continue;
-            throw ServerException("runEventLoop", "epoll_wait() failed");
-        }
+        int ready = epoll_wait(epollFD, readyEvents, MAX_EVENTS, -1); // handling eppoll wait errors 
+
         for (int i = 0; i < ready; ++i)
         {
             int fd = readyEvents[i].data.fd;
-            std::map<int, Listener*>::iterator it = listeners.find(fd);
-            if (it != listeners.end())
-            {
-                handleNewConnection(it->second);
-                continue;
-            }
-            Client*   client         = NULL;
-            Listener* parentListener = NULL;
+            uint32_t currEvent = readyEvents[i].events;
 
-            for (it = listeners.begin(); it != listeners.end(); ++it)
+            std::map<int, Listener*>::iterator listenerIt = listeners.find(fd);
+            if (listenerIt != listeners.end())
             {
-                client = it->second->getClient(fd);
-                if (client)
-                {
-                    parentListener = it->second;
-                    break;
-                }
-            }
-            if (!client)
+                handleNewConnection(listenerIt->second);
                 continue;
-            uint32_t events = readyEvents[i].events;
-            if (events & (EPOLLHUP | EPOLLERR))
-            {
-                disconnectClient(parentListener, fd);
-                continue;
+            
             }
-            if (events & EPOLLIN)
-            {
-                handleClientRead(parentListener, client);
+            std::map<int, Listener*>::iterator clientIt = clientMap.find(fd);
+            if (clientIt == clientMap.end()) 
                 continue;
-            }
-            if (events & EPOLLOUT)
-                handleClientWrite(parentListener, client);
+            Listener* parentListener = clientIt->second;
+            handleConnection(parentListener, fd, currEvent);
         }
     }
 }
 
 
 
-#include "Server/Server.hpp"
-
-std::vector<ServerConfig> GETconfig();
-int main()
-{
-    try
-    {
-        std::vector<ServerConfig> configs = GETconfig();
-        Server server;
-        server.init(configs);
-        server.runEventLoop();
-    }
-    catch (const ServerException& e)
-    {
-        std::cerr << e.what() << "\n";
-        return 1;
-    }
-}
