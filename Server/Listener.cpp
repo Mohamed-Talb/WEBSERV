@@ -1,5 +1,150 @@
 // ─── Listener.cpp ───────────────────────────────────────────────────
 #include "Server.hpp"
+#include "Client.hpp"
+#include <cctype>
+#include <fstream>
+
+namespace
+{
+    struct ParsedRequest
+    {
+        std::string method;
+        std::string target;
+        std::string version;
+        std::map<std::string, std::string> headers;
+        std::string body;
+    };
+
+    static std::string toUpper(std::string value)
+    {
+        for (size_t i = 0; i < value.size(); ++i)
+            value[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(value[i])));
+        return value;
+    }
+
+    static std::string toLower(std::string value)
+    {
+        for (size_t i = 0; i < value.size(); ++i)
+            value[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(value[i])));
+        return value;
+    }
+
+    static std::string trim(const std::string& value)
+    {
+        size_t start = 0;
+        while (start < value.size() && (value[start] == ' ' || value[start] == '\t'))
+            ++start;
+        size_t end = value.size();
+        while (end > start && (value[end - 1] == ' ' || value[end - 1] == '\t'))
+            --end;
+        return value.substr(start, end - start);
+    }
+
+    static bool parseSize(const std::string& token, size_t& value)
+    {
+        if (token.empty())
+            return false;
+        std::istringstream iss(token);
+        size_t parsed = 0;
+        iss >> parsed;
+        if (iss.fail() || !iss.eof())
+            return false;
+        value = parsed;
+        return true;
+    }
+
+    static bool parseChunkedBody(const std::string& rawBody, std::string& outBody, size_t& consumed)
+    {
+        outBody.clear();
+        consumed = 0;
+        size_t cursor = 0;
+        while (true)
+        {
+            size_t lineEnd = rawBody.find("\r\n", cursor);
+            if (lineEnd == std::string::npos)
+                return false;
+            std::string sizeLine = rawBody.substr(cursor, lineEnd - cursor);
+            size_t semi = sizeLine.find(';');
+            if (semi != std::string::npos)
+                sizeLine = sizeLine.substr(0, semi);
+            std::istringstream iss(sizeLine);
+            size_t chunkSize = 0;
+            iss >> std::hex >> chunkSize;
+            if (iss.fail() || !iss.eof())
+                return false;
+            cursor = lineEnd + 2;
+            if (rawBody.size() < cursor + chunkSize + 2)
+                return false;
+            if (chunkSize == 0)
+            {
+                if (rawBody.size() < cursor + 2)
+                    return false;
+                if (rawBody.substr(cursor, 2) != "\r\n")
+                    return false;
+                consumed = cursor + 2;
+                return true;
+            }
+            outBody.append(rawBody, cursor, chunkSize);
+            cursor += chunkSize;
+            if (rawBody.substr(cursor, 2) != "\r\n")
+                return false;
+            cursor += 2;
+        }
+    }
+
+    static std::string detectContentType(const std::string& path)
+    {
+        size_t dot = path.find_last_of('.');
+        if (dot == std::string::npos)
+            return "application/octet-stream";
+        std::string ext = toLower(path.substr(dot));
+        if (ext == ".html" || ext == ".htm")
+            return "text/html";
+        if (ext == ".css")
+            return "text/css";
+        if (ext == ".js")
+            return "application/javascript";
+        if (ext == ".json")
+            return "application/json";
+        if (ext == ".txt")
+            return "text/plain";
+        if (ext == ".png")
+            return "image/png";
+        if (ext == ".jpg" || ext == ".jpeg")
+            return "image/jpeg";
+        if (ext == ".gif")
+            return "image/gif";
+        return "application/octet-stream";
+    }
+
+    static bool readFile(const std::string& filePath, std::string& content)
+    {
+        std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
+        if (!file.is_open())
+            return false;
+        std::ostringstream data;
+        data << file.rdbuf();
+        content = data.str();
+        return true;
+    }
+
+    static std::string buildResponse(int statusCode, const std::string& reason, const std::string& body, const std::string& contentType)
+    {
+        std::ostringstream oss;
+        oss << "HTTP/1.1 " << statusCode << " " << reason << "\r\n";
+        oss << "Content-Length: " << body.size() << "\r\n";
+        oss << "Content-Type: " << contentType << "\r\n";
+        oss << "Connection: close\r\n";
+        oss << "\r\n";
+        oss << body;
+        return oss.str();
+    }
+
+    static std::string buildTextResponse(int statusCode, const std::string& reason, const std::string& body)
+    {
+        return buildResponse(statusCode, reason, body, "text/plain");
+    }
+}
 
 Listener::Listener(const std::vector<ServerConfig>& confs): socketFD(-1), configs(confs)
 {
@@ -71,6 +216,22 @@ void Listener::closeListener()
 // {
 //     return ;
 // }
+const ServerConfig& Listener::matchConfig(const std::string& hostHeader) const
+{
+    std::string requestedHost = hostHeader;
+    size_t portSep = requestedHost.find(':');
+    if (portSep != std::string::npos)
+        requestedHost = requestedHost.substr(0, portSep);
+    for (size_t i = 0; i < configs.size(); ++i)
+    {
+        for (size_t j = 0; j < configs[i].serverName.size(); ++j)
+        {
+            if (configs[i].serverName[j] == requestedHost)
+                return configs[i];
+        }
+    }
+    return configs[0];
+}
 
 
 
@@ -128,23 +289,174 @@ IOState Listener::handleClientRead(Client* client)
         return IO_DISCONNECTED;
     }
     client->appendToReadBuffer(std::string(buf, bytes));
-    if (client->getReadBuffer().find("\r\n\r\n") != std::string::npos)
+    std::string response;
+    std::string readBuffer = client->getReadBuffer();
+    size_t headerEnd = readBuffer.find("\r\n\r\n");
+    if (headerEnd == std::string::npos)
+        return IO_PENDING;
+
+    ParsedRequest request;
+    std::string headerBlock = readBuffer.substr(0, headerEnd);
+    std::istringstream headerStream(headerBlock);
+    std::string requestLine;
+    if (!std::getline(headerStream, requestLine))
+        response = buildTextResponse(400, "Bad Request", "Malformed request line");
+    else
     {
-        std::cout << "[LISTENER] : Client FD " << client->getSocketFD() 
-              << " fully received request" << std::endl;
-        // add hhttp handler after build it and pass a config to it 
-        std::string finalResponse =
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Length: 13\r\n"
-            "Content-Type: text/plain\r\n"
-            "Connection: close\r\n"
-            "\r\n"
-            "Hello, World!";;
-        client->appendToWriteBuffer(finalResponse);
-        client->clearReadBuffer();
-        return IO_READY;
+        if (!requestLine.empty() && requestLine[requestLine.size() - 1] == '\r')
+            requestLine.erase(requestLine.size() - 1);
+        std::istringstream rl(requestLine);
+        if (!(rl >> request.method >> request.target >> request.version))
+            response = buildTextResponse(400, "Bad Request", "Malformed request line");
+        request.method = toUpper(request.method);
+        if (response.empty() && !rl.eof())
+            response = buildTextResponse(400, "Bad Request", "Malformed request line");
     }
-    return IO_PENDING;
+
+    std::string headerLine;
+    while (response.empty() && std::getline(headerStream, headerLine))
+    {
+        if (!headerLine.empty() && headerLine[headerLine.size() - 1] == '\r')
+            headerLine.erase(headerLine.size() - 1);
+        if (headerLine.empty())
+            continue;
+        size_t sep = headerLine.find(':');
+        if (sep == std::string::npos)
+        {
+            response = buildTextResponse(400, "Bad Request", "Malformed headers");
+            break;
+        }
+        std::string name = toLower(trim(headerLine.substr(0, sep)));
+        std::string value = trim(headerLine.substr(sep + 1));
+        request.headers[name] = value;
+    }
+
+    if (response.empty() && request.version != "HTTP/1.1" && request.version != "HTTP/1.0")
+        response = buildTextResponse(505, "HTTP Version Not Supported", "Unsupported HTTP version");
+    if (response.empty() && request.version == "HTTP/1.1" && request.headers.find("host") == request.headers.end())
+        response = buildTextResponse(400, "Bad Request", "Host header is required");
+
+    size_t consumedBody = 0;
+    std::string payload = readBuffer.substr(headerEnd + 4);
+    std::map<std::string, std::string>::const_iterator teIt = request.headers.find("transfer-encoding");
+    std::map<std::string, std::string>::const_iterator clIt = request.headers.find("content-length");
+    if (response.empty() && teIt != request.headers.end() && clIt != request.headers.end())
+        response = buildTextResponse(400, "Bad Request", "Conflicting body headers");
+    if (response.empty() && teIt != request.headers.end())
+    {
+        if (toLower(teIt->second) != "chunked")
+            response = buildTextResponse(400, "Bad Request", "Unsupported transfer encoding");
+        else if (!parseChunkedBody(payload, request.body, consumedBody))
+            return IO_PENDING;
+    }
+    else if (response.empty() && clIt != request.headers.end())
+    {
+        size_t contentLength = 0;
+        if (!parseSize(trim(clIt->second), contentLength))
+            response = buildTextResponse(400, "Bad Request", "Invalid Content-Length");
+        else
+        {
+            if (payload.size() < contentLength)
+                return IO_PENDING;
+            request.body = payload.substr(0, contentLength);
+            consumedBody = contentLength;
+        }
+    }
+
+    if (response.empty())
+    {
+        if (request.method != "GET" && request.method != "POST" && request.method != "DELETE")
+            response = buildTextResponse(405, "Method Not Allowed", "Unsupported method");
+        else
+        {
+            std::string host;
+            std::map<std::string, std::string>::const_iterator hostIt = request.headers.find("host");
+            if (hostIt != request.headers.end())
+                host = hostIt->second;
+            const ServerConfig& selectedConfig = matchConfig(host);
+            std::string route = request.target;
+            size_t query = route.find('?');
+            if (query != std::string::npos)
+                route = route.substr(0, query);
+
+            const Location* matchedLocation = NULL;
+            size_t bestLen = 0;
+            for (size_t i = 0; i < selectedConfig.Locations.size(); ++i)
+            {
+                const Location& current = selectedConfig.Locations[i];
+                if (route.compare(0, current.path.size(), current.path) == 0 && current.path.size() >= bestLen)
+                {
+                    matchedLocation = &current;
+                    bestLen = current.path.size();
+                }
+            }
+            if (!matchedLocation || (matchedLocation->path == "/" && route != "/"))
+            {
+                std::string fileContent;
+                bool found = readFile("./Error.html", fileContent);
+                if (found)
+                    response = buildResponse(404, "Not Found", fileContent, detectContentType("./Error.html"));
+                else
+                response = buildTextResponse(404, "Not Found", "File not found");
+            }
+            else if (!matchedLocation->methods.empty())
+            {
+                bool allowed = false;
+                for (size_t i = 0; i < matchedLocation->methods.size(); ++i)
+                {
+                    if (toUpper(matchedLocation->methods[i]) == request.method)
+                    {
+                        allowed = true;
+                        break;
+                    }
+                }
+                if (!allowed)
+                    response = buildTextResponse(405, "Method Not Allowed", "Method not allowed for route");
+            }
+        }
+    }
+
+    if (response.empty())
+    {
+        std::cout << "[LISTENER] : Client FD " << client->getSocketFD()
+                  << " fully received request: " << request.method << " " << request.target << std::endl;
+        if (request.method == "GET")
+        {
+            std::string host;
+            std::map<std::string, std::string>::const_iterator hostIt = request.headers.find("host");
+            if (hostIt != request.headers.end())
+                host = hostIt->second;
+            const ServerConfig& selectedConfig = matchConfig(host);
+            std::string route = request.target;
+            size_t query = route.find('?');
+            if (query != std::string::npos)
+                route = route.substr(0, query);
+            if (route.empty() || route == "/")
+                route = "/index.html";
+            std::string filePath = selectedConfig.root + route;
+            std::string fileContent;
+            bool found = readFile(filePath, fileContent);
+            if (!found && route == "/index.html")
+            {
+                filePath = "./index.html";
+                found = readFile(filePath, fileContent);
+            }
+            if (found)
+                response = buildResponse(200, "OK", fileContent, detectContentType(filePath));
+            else
+                response = buildTextResponse(404, "Not Found", "File not found");
+        }
+        else
+            response = buildTextResponse(200, "OK", "Hello, World!");
+    }
+
+    client->appendToWriteBuffer(response);
+    client->clearReadBuffer();
+    (void)consumedBody;
+    size_t parsedBytes = headerEnd + 4 + consumedBody;
+    if (readBuffer.size() > parsedBytes)
+        client->appendToReadBuffer(readBuffer.substr(parsedBytes));
+    return IO_READY;
 }
 
 IOState Listener::handleClientWrite(Client* client)
