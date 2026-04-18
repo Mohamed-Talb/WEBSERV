@@ -4,37 +4,15 @@
 #include "../configParser/configParser.hpp"
 #include "Client.hpp"
 #include "../Errors.hpp"
-// class Listener
-// {
-//     private:
-//         int socketFD;
-//         ServerConfig config;
-//         std::map<int, Client*> clients;
-
-//     public:
-//         Listener();
-//         Listener(const ServerConfig &conf);
-//         ~Listener();
-
-//         void loadListener(const ServerConfig& conf);   // Create socket, bind, listen
-//         Client* acceptClient();                        // Accept new client
-//         Client* getClient(int fd);                     // Get client by FD
-//         void removeClient(int clientFD);               // Remove client
-//         void closeListener();                          // Close all clients + listening socket
-
-//         int getSocketFD() const;
-//         int getPort() const;
-
-//         std::map<int, Client*>& getClients();
-// };
-
-// ─── Listener.hpp ───────────────────────────────────────────────────
+#include "../HTTP/HttpRequest.hpp"
+#include "../HTTP/HttpResponse.hpp"
+#include "../HTTP/HttpHandler.hpp"
 
 enum IOState 
 {
-    IO_READY,        // Replaces 1: The operation finished, switch epoll state
-    IO_PENDING,      // Replaces 0: The operation needs more time, wait for epoll
-    IO_DISCONNECTED  // Replaces -1: The client dropped, kill the connection
+    IO_READY,        // Replaces 0: The operation finished, switch epoll state
+    IO_PENDING,      // Replaces 1: The operation needs more time, wait for epoll
+    IO_DISCONNECTED  // Replaces 2: The client dropped, kill the connection
 };
 
 class Listener

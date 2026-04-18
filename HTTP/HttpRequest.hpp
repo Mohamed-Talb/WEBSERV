@@ -1,0 +1,35 @@
+// HttpRequest.hpp
+#ifndef HTTPREQUEST_HPP
+#define HTTPREQUEST_HPP
+
+#include <string>
+#include <map>
+#include <sstream>
+
+class HttpRequest
+{
+private:
+    std::string method;
+    std::string target;
+    std::string version;
+    std::map<std::string, std::string> headers;
+    std::string body;
+    size_t consumedBytes;
+    int errorCode;
+
+public:
+    HttpRequest();
+    ~HttpRequest();
+
+    int parse(const std::string& rawBuffer);
+
+    std::string getMethod() const;
+    std::string getTarget() const;
+    std::string getVersion() const;
+    std::string getHeader(const std::string& key) const;
+    std::string getBody() const;
+    size_t getConsumedBytes() const;
+    int getErrorCode() const;
+};
+
+#endif
