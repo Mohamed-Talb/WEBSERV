@@ -172,7 +172,6 @@ IOState Listener::handleClientRead(Client* client)
     }
 
     client->appendToWriteBuffer(response.toString());
-
     size_t parsedBytes = request.getConsumedBytes();
     client->clearReadBuffer();
     if (readBuffer.size() > parsedBytes)

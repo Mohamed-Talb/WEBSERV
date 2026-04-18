@@ -13,28 +13,31 @@ HttpResponse::HttpResponse(int code, const std::string& reason) : statusCode(cod
 
 HttpResponse::~HttpResponse() {}
 
-void HttpResponse::setHeader(const std::string& key, const std::string& value)
+void HttpResponse::setHeader(const std::string& name, const std::string& value)
 {
-    headers[key] = value;
+    headers[name] = value;
 }
 
 void HttpResponse::setBody(const std::string& content, const std::string& contentType)
 {
     body = content;
     headers["Content-Type"] = contentType;
-    std::ostringstream ss;
-    ss << body.size();
-    headers["Content-Length"] = ss.str();
+
+    std::ostringstream sizeStream;
+    sizeStream << body.size();
+    headers["Content-Length"] = sizeStream.str();
 }
 
 std::string HttpResponse::toString() const
 {
-    std::ostringstream oss;
-    oss << "HTTP/1.1 " << statusCode << " " << reasonPhrase << "\r\n";
-    for (std::map<std::string, std::string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
+    std::ostringstream responseStream;
+    responseStream << "HTTP/1.1 " << statusCode << " " << reasonPhrase << "\r\n";
+
+    std::map<std::string, std::string>::const_iterator headerIterator;
+    for (headerIterator = headers.begin(); headerIterator != headers.end(); ++headerIterator)
     {
-        oss << it->first << ": " << it->second << "\r\n";
+        responseStream << headerIterator->first << ": " << headerIterator->second << "\r\n";
     }
-    oss << "\r\n" << body;
-    return oss.str();
+    responseStream << "\r\n" << body;
+    return responseStream.str();
 }

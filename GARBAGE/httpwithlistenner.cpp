@@ -477,3 +477,115 @@ IOState Listener::handleClientWrite(Client* client)
     }
     return IO_PENDING;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int HttpRequest::parse(const std::string& rawBuffer)
+{
+    size_t headerEnd = rawBuffer.find("\r\n\r\n");
+    if (headerEnd == std::string::npos)
+        return 0;
+    std::string headerBlock = rawBuffer.substr(0, headerEnd);
+    std::istringstream headerStream(headerBlock);   //???????????????
+    std::string requestLine;
+
+    if (!std::getline(headerStream, requestLine))
+    {
+        errorCode = 400;
+        return 1;
+    }
+    if (!requestLine.empty() && requestLine[requestLine.size() - 1] == '\r')
+        requestLine.erase(requestLine.size() - 1);
+    std::istringstream rl(requestLine);
+    if (!(rl >> method >> target >> version))
+    {
+        errorCode = 400;
+        return 1;
+    }
+    method = toUpper(method);
+
+    std::string headerLine;
+    while (std::getline(headerStream, headerLine))
+    {
+        if (!headerLine.empty() && headerLine[headerLine.size() - 1] == '\r')
+            headerLine.erase(headerLine.size() - 1);
+        if (headerLine.empty())
+            continue;
+        size_t sep = headerLine.find(':');
+        if (sep == std::string::npos)
+        {
+            errorCode = 400;
+            return 1;
+        }
+        std::string name = toLower(trim(headerLine.substr(0, sep)));
+        std::string value = trim(headerLine.substr(sep + 1));
+        headers[name] = value;
+    }
+
+    if (version != "HTTP/1.1" && version != "HTTP/1.0")
+    {
+        errorCode = 505;
+        return 1;
+    }
+    if (version == "HTTP/1.1" && headers.find("host") == headers.end())
+    {
+        errorCode = 400;
+        return 1;
+    }
+
+    size_t consumedBody = 0;
+    std::string payload = rawBuffer.substr(headerEnd + 4);
+
+    if (headers.count("transfer-encoding") && headers.count("content-length"))
+    {
+        errorCode = 400;
+        return 1;
+    }
+
+    if (headers.count("transfer-encoding"))
+    {
+        if (toLower(headers["transfer-encoding"]) != "chunked")
+        {
+            errorCode = 400;
+            return 1;
+        }
+        if (!parseChunkedBody(payload, body, consumedBody))
+            return 0;
+    }
+    else if (headers.count("content-length"))
+    {
+        size_t contentLength = 0;
+        if (!parseSize(headers.at("content-length"), contentLength))
+        {
+            errorCode = 400;
+            return 1;
+        }
+        if (payload.size() < contentLength)
+            return 0;
+        body = payload.substr(0, contentLength);
+        consumedBody = contentLength;
+    }
+
+    consumedBytes = headerEnd + 4 + consumedBody;
+    return 1;
+}

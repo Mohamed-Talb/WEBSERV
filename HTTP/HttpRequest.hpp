@@ -23,6 +23,12 @@ public:
 
     int parse(const std::string& rawBuffer);
 
+    bool parseRequestLine(std::istringstream& headerStream);
+    bool parseHeaders(std::istringstream& headerStream);
+    int  extractBody(const std::string& payload, size_t& consumedBody);
+    
+    
+    
     std::string getMethod() const;
     std::string getTarget() const;
     std::string getVersion() const;
