@@ -5,6 +5,8 @@
 #include <string>
 #include <map>
 #include <sstream>
+#include <cctype>
+#include "../Helpers.hpp"
 
 class HttpRequest
 {

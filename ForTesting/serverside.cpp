@@ -1,3 +1,68 @@
+#include "Server.hpp"
+
+Client::Client(int fd) : socketFD(fd) {}
+
+Client::~Client()
+{
+    closeConnection();
+}
+
+void Client::closeConnection()
+{
+    if (socketFD >= 0)
+    {
+        ::close(socketFD);
+        socketFD = -1;
+    }
+}
+
+bool Client::isConnected() const
+{
+    return socketFD >= 0;
+}
+
+void Client::appendToReadBuffer(const std::string& data)
+{
+    readBuffer += data;
+}
+
+const std::string& Client::getReadBuffer() const
+{
+    return readBuffer;
+}
+
+void Client::clearReadBuffer()
+{
+    readBuffer.clear();
+}
+
+
+void Client::appendToWriteBuffer(const std::string& data)
+{
+    writeBuffer += data;
+}
+
+const std::string& Client::getWriteBuffer() const
+{
+    return writeBuffer;
+}
+
+void Client::consumeWriteBuffer(size_t bytes)
+{
+    writeBuffer.erase(0, bytes);
+}
+
+bool Client::hasPendingWrite() const
+{
+    return !writeBuffer.empty();
+}
+
+int Client::getSocketFD() const
+{
+    return socketFD;
+}
+
+
 // ─── Listener.cpp ───────────────────────────────────────────────────
 #include "Server.hpp"
 #include "Client.hpp"
@@ -170,7 +235,7 @@ IOState Listener::handleClientRead(Client* client)
         const ServerConfig& selectedConfig = matchConfig(host);
         response = handler.process(request, selectedConfig);
     }
-    std::cout << "\n--- SENDING TO BROWSER ---\n" << response.toString() << "\n--------------------------\n";
+
     client->appendToWriteBuffer(response.toString());
     size_t parsedBytes = request.getConsumedBytes();
     client->clearReadBuffer();
@@ -204,3 +269,169 @@ IOState Listener::handleClientWrite(Client* client)
     }
     return IO_PENDING;
 }
+
+
+
+#include "Server.hpp"
+// ─── Server.cpp ─────────────────────────────────────────────────────
+Server::Server() : epollFD(-1) {}
+
+Server::~Server() { shutdown(); }
+
+void Server::registerToEpoll(int fd, uint32_t events)
+{
+    epoll_event ev;
+    ev.events  = events;
+    ev.data.fd = fd;
+    if (epoll_ctl(epollFD, EPOLL_CTL_ADD, fd, &ev) < 0)
+    {
+        ::close(epollFD);
+        epollFD = -1;
+        throw ServerException("Server", "epoll_ctl ADD failed for fd " + intToString(fd));
+    }
+}
+
+void Server::init(std::vector<ServerConfig>& configs)
+{
+    std::cout << "[SERVER] : Initializing server... Grouping configs." << std::endl;
+    epollFD = epoll_create(1024);
+    if (epollFD < 0)
+        throw ServerException("Server", "epoll_create() failed");
+
+    std::map<int, std::vector<ServerConfig> > groupedConfigs;
+    for (size_t i = 0; i < configs.size(); ++i) 
+    {
+        groupedConfigs[configs[i].port].push_back(configs[i]);
+    }
+    for (std::map<int, std::vector<ServerConfig> >::iterator it = groupedConfigs.begin(); it != groupedConfigs.end(); ++it)
+    {
+        Listener* listener = new Listener(it->second); 
+        listeners[listener->getSocketFD()] = listener;
+        registerToEpoll(listener->getSocketFD(), EPOLLIN);
+    }
+    std::cout << "[SERVER] : Epoll created with FD " << epollFD << std::endl;
+}
+
+void Server::shutdown()
+{
+    for (map<int, Listener*>::iterator it = listeners.begin(); it != listeners.end(); ++it)
+    {
+        delete it->second;
+    }
+    listeners.clear();
+    if (epollFD >= 0)
+    {
+        ::close(epollFD);
+        epollFD = -1;
+    }
+}
+
+
+
+void Server::disconnectClient(Listener* listener, int clientFD)
+{
+    epoll_ctl(epollFD, EPOLL_CTL_DEL, clientFD, NULL); 
+    listener->removeClient(clientFD);
+    clientMap.erase(clientFD);
+    std::cout << "[SERVER] : Disconnecting Client FD " << clientFD << std::endl;
+}
+
+
+void Server::handleNewConnection(Listener* listener)
+{
+    Client* client = listener->acceptClient();
+    if (!client)
+        return;
+    int clientFD = client->getSocketFD();
+    clientMap[clientFD] = listener;
+    epoll_event ev;
+    ev.events  = EPOLLIN;
+    ev.data.fd = clientFD;
+    if (epoll_ctl(epollFD, EPOLL_CTL_ADD, clientFD, &ev) < 0)
+    {
+        logError("handleNewConnection", "epoll_ctl ADD failed for client fd " + intToString(clientFD));
+        listener->removeClient(clientFD);
+        clientMap.erase(clientFD); // Clean up if epoll fails
+        return;
+    }
+    std::cout << "[SERVER] : New connection! Assigned Client FD " << clientFD 
+            << " on port " << listener->getPort() << std::endl;
+}
+
+void Server::handleConnection(Listener *listener, int clientFd, uint32_t event)
+{
+    Client* client = listener->getClient(clientFd);
+    if (event & (EPOLLHUP | EPOLLERR))
+    {
+        disconnectClient(listener, clientFd);
+        return ;
+    }
+    if (event & EPOLLIN)
+    {
+        IOState status = listener->handleClientRead(client);
+        if (status == IO_DISCONNECTED) 
+        {
+            disconnectClient(listener, clientFd);
+            return ;
+        }
+        if (status == IO_READY)
+        {
+            epoll_event ev;
+            ev.events  = EPOLLIN | EPOLLOUT;
+            ev.data.fd = clientFd;
+            epoll_ctl(epollFD, EPOLL_CTL_MOD, clientFd, &ev);
+        }
+        // If status == IO_PENDING, we do nothing and let the loop continue
+    }
+    if (event & EPOLLOUT)
+    {
+        IOState status = listener->handleClientWrite(client);
+        if (status == IO_DISCONNECTED)
+        {
+            disconnectClient(listener, clientFd);
+            return;
+        }
+        if (status == IO_READY) 
+        {
+            epoll_event ev;
+            ev.events  = EPOLLIN;
+            ev.data.fd = clientFd;
+            epoll_ctl(epollFD, EPOLL_CTL_MOD, clientFd, &ev);
+        }
+    }   
+}
+
+void Server::runEventLoop()
+{
+    const int MAX_EVENTS = 1024;
+    epoll_event readyEvents[MAX_EVENTS];
+    
+
+    while (true)
+    {
+        int ready = epoll_wait(epollFD, readyEvents, MAX_EVENTS, -1); // handling eppoll wait errors 
+
+        for (int i = 0; i < ready; ++i)
+        {
+            int fd = readyEvents[i].data.fd;
+            uint32_t currEvent = readyEvents[i].events;
+
+            std::map<int, Listener*>::iterator listenerIt = listeners.find(fd);
+            if (listenerIt != listeners.end())
+            {
+                handleNewConnection(listenerIt->second);
+                continue;
+            
+            }
+            std::map<int, Listener*>::iterator clientIt = clientMap.find(fd);
+            if (clientIt == clientMap.end()) 
+                continue;
+            Listener* parentListener = clientIt->second;
+            handleConnection(parentListener, fd, currEvent);
+        }
+    }
+}
+
+
+
+

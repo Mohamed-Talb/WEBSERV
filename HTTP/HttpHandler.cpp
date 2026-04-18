@@ -1,24 +1,9 @@
 // HttpHandler.cpp
 #include "HttpHandler.hpp"
-#include <fstream>
-#include <cctype>
+
 
 HttpHandler::HttpHandler() {}
 HttpHandler::~HttpHandler() {}
-
-static std::string toUpper(std::string value)
-{
-    for (size_t i = 0; i < value.size(); ++i)
-        value[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(value[i])));
-    return value;
-}
-
-static std::string toLower(std::string value)
-{
-    for (size_t i = 0; i < value.size(); ++i)
-        value[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(value[i])));
-    return value;
-}
 
 std::string HttpHandler::detectContentType(const std::string& path)
 {
@@ -96,14 +81,15 @@ HttpResponse HttpHandler::process(const HttpRequest& request, const ServerConfig
             longestMatchLen = candidateLocation.path.size();
         }
     }
-
-    if (!bestLocationMatch || (bestLocationMatch->path == "/" && requestPath != "/"))
+    if (!bestLocationMatch)
     {
         std::string errorPageContent;
-        if (readFile("./Error.html", errorPageContent))
+        std::string errorPath = config.root + "/Error.html"; 
+        
+        if (readFile(errorPath, errorPageContent))
         {
             HttpResponse response(404, "Not Found");
-            response.setBody(errorPageContent, detectContentType("./Error.html"));
+            response.setBody(errorPageContent, detectContentType(errorPath));
             return response;
         }
         return buildError(404, "Not Found", "File not found");

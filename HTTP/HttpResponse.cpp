@@ -3,12 +3,12 @@
 
 HttpResponse::HttpResponse() : statusCode(200), reasonPhrase("OK")
 {
-    headers["Connection"] = "close";
+    headers["Connection"] = "keep-alive";
 }
 
 HttpResponse::HttpResponse(int code, const std::string& reason) : statusCode(code), reasonPhrase(reason)
 {
-    headers["Connection"] = "close";
+    headers["Connection"] = "keep-alive";
 }
 
 HttpResponse::~HttpResponse() {}

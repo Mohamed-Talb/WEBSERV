@@ -6,7 +6,9 @@
 #include "HttpResponse.hpp"
 #include "../configParser/configParser.hpp"
 #include <string>
-
+#include <fstream>
+#include <cctype>
+#include "../Helpers.hpp"
 class HttpHandler
 {
 private:
