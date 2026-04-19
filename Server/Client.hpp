@@ -27,15 +27,15 @@ public:
 
     void appendToReadBuffer(const char* data, size_t size);
     void consumeReadBuffer(size_t bytes);
-    const std::string getReadBuffer()                              const;
     void               clearReadBuffer();
-
+    
     void               appendToWriteBuffer(const std::string& data);
-    const std::string getWriteBuffer()                             const;
     void               consumeWriteBuffer(size_t bytes);
     bool               hasPendingWrite()                            const;
-
-    HttpRequest& getRequest();
+    
+    const std::string &getWriteBuffer()                             const;
+    const std::string &getReadBuffer()                              const;
+    HttpRequest &getRequest();
     int  getSocketFD() const;
 };
 

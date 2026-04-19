@@ -128,23 +128,30 @@ int Listener::getPort()     const { return configs[0].port; }
 
 IOState Listener::handleClientRead(Client* client)
 {
-    char buf[4096];
+    char buf[8192];
     int clientFD = client->getSocketFD();
-    int bytes = recv(clientFD, buf, sizeof(buf), 0);
+    bool dataRead = false;
 
-    if (bytes == 0)
-        return IO_DISCONNECTED;
-    if (bytes < 0)
+    while (true)
     {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return IO_PENDING;
-        return IO_DISCONNECTED;
+        int bytes = recv(clientFD, buf, sizeof(buf), 0);
+        if (bytes == 0)
+            return IO_DISCONNECTED;
+        if (bytes < 0)
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                break;
+            return IO_DISCONNECTED;
+        }
+        client->appendToReadBuffer(buf, bytes);
+        dataRead = true;
     }
 
-    client->appendToReadBuffer(buf, bytes);
-    std::string readBuffer = client->getReadBuffer();
+    if (!dataRead)
+        return IO_PENDING;
 
-    HttpRequest& request = client->getRequest(); 
+    const std::string &readBuffer = client->getReadBuffer();
+    HttpRequest &request = client->getRequest(); 
     
     int parseStatus = request.parse(readBuffer);
 
@@ -177,7 +184,7 @@ IOState Listener::handleClientWrite(Client* client)
     if (!client->hasPendingWrite())
         return IO_READY;
     int clientFD = client->getSocketFD();
-    const std::string& buffer = client->getWriteBuffer();
+    const std::string &buffer = client->getWriteBuffer();
     int bytes = send(clientFD, buffer.c_str(), buffer.size(), 0);
 
     if (bytes < 0)

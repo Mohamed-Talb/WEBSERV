@@ -34,7 +34,7 @@ void Client::consumeReadBuffer(size_t bytes)
         readBuffer.erase(0, bytes);
 }
 
-const std::string Client::getReadBuffer() const
+const std::string &Client::getReadBuffer() const
 {
     return readBuffer;
 }
@@ -50,7 +50,7 @@ void Client::appendToWriteBuffer(const std::string& data)
     writeBuffer += data;
 }
 
-const std::string Client::getWriteBuffer() const
+const std::string &Client::getWriteBuffer() const
 {
     return writeBuffer;
 }

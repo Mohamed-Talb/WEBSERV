@@ -74,7 +74,7 @@ void Server::handleNewConnection(Listener* listener)
     {
         logError("handleNewConnection", "epoll_ctl ADD failed for client fd " + intToString(clientFD));
         listener->removeClient(clientFD);
-        clientMap.erase(clientFD); // Clean up if epoll fails
+        clientMap.erase(clientFD);
         return;
     }
 }
@@ -142,7 +142,6 @@ void Server::runEventLoop()
             {
                 handleNewConnection(listenerIt->second);
                 continue;
-            
             }
             std::map<int, Listener*>::iterator clientIt = clientMap.find(fd);
             if (clientIt == clientMap.end()) 
