@@ -34,7 +34,7 @@ void Client::consumeReadBuffer(size_t bytes)
         readBuffer.erase(0, bytes);
 }
 
-const std::string Client::getReadBuffer() const
+const std::string &Client::getReadBuffer() const
 {
     return readBuffer;
 }
@@ -50,7 +50,7 @@ void Client::appendToWriteBuffer(const std::string& data)
     writeBuffer += data;
 }
 
-const std::string Client::getWriteBuffer() const
+const std::string &Client::getWriteBuffer() const
 {
     return writeBuffer;
 }
@@ -78,6 +78,7 @@ HttpRequest& Client::getRequest()
 
 // ─── Listener.cpp ───────────────────────────────────────────────────
 // ─── Listener.cpp ───────────────────────────────────────────────────
+// ─── Listener.cpp ───────────────────────────────────────────────────
 #include "Server.hpp"
 #include "Client.hpp"
 #include <cctype>
@@ -103,10 +104,8 @@ void Listener::loadListener(const ServerConfig& conf)
     {
         ::close(socketFD);
         socketFD = -1;
-        throw ServerException("Listener",
-            "setsockopt() failed on port " + intToString(conf.port));
+        throw ServerException("Listener", "setsockopt() failed on port " + intToString(conf.port));
     }
-
     sockaddr_in addr;
     // std::memset(&addr, 0, sizeof(addr));
     addr.sin_family      = AF_INET;
@@ -128,8 +127,6 @@ void Listener::loadListener(const ServerConfig& conf)
         socketFD = -1;
         throw ServerException("Listener","listen() failed on port " + intToString(conf.port));
     }
-    std::cout << "[LISTENER] : Successfully bound and listening on Port " 
-              << conf.port << " (Socket FD: " << socketFD << ")" << std::endl;
 }
 
 void Listener::closeListener()
@@ -211,23 +208,30 @@ int Listener::getPort()     const { return configs[0].port; }
 
 IOState Listener::handleClientRead(Client* client)
 {
-    char buf[4096];
+    char buf[8192];
     int clientFD = client->getSocketFD();
-    int bytes = recv(clientFD, buf, sizeof(buf), 0);
+    bool dataRead = false;
 
-    if (bytes == 0)
-        return IO_DISCONNECTED;
-    if (bytes < 0)
+    while (true)
     {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return IO_PENDING;
-        return IO_DISCONNECTED;
+        int bytes = recv(clientFD, buf, sizeof(buf), 0);
+        if (bytes == 0)
+            return IO_DISCONNECTED;
+        if (bytes < 0)
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                break;
+            return IO_DISCONNECTED;
+        }
+        client->appendToReadBuffer(buf, bytes);
+        dataRead = true;
     }
 
-    client->appendToReadBuffer(buf, bytes);
-    std::string readBuffer = client->getReadBuffer();
+    if (!dataRead)
+        return IO_PENDING;
 
-    HttpRequest& request = client->getRequest(); 
+    const std::string &readBuffer = client->getReadBuffer();
+    HttpRequest &request = client->getRequest(); 
     
     int parseStatus = request.parse(readBuffer);
 
@@ -244,7 +248,6 @@ IOState Listener::handleClientRead(Client* client)
     {
         std::cout << "[LISTENER] : Client FD " << clientFD
                   << " fully received request: " << request.getMethod() << " " << request.getTarget() << std::endl;
-        
         std::string host = request.getHeader("host");
         const ServerConfig &selectedConfig = matchConfig(host);
         response = handler.process(request, selectedConfig);
@@ -260,7 +263,7 @@ IOState Listener::handleClientWrite(Client* client)
     if (!client->hasPendingWrite())
         return IO_READY;
     int clientFD = client->getSocketFD();
-    const std::string& buffer = client->getWriteBuffer();
+    const std::string &buffer = client->getWriteBuffer();
     int bytes = send(clientFD, buffer.c_str(), buffer.size(), 0);
 
     if (bytes < 0)
@@ -273,10 +276,11 @@ IOState Listener::handleClientWrite(Client* client)
     if (!client->hasPendingWrite())
     {
         // Note form mtaleb: For HTTP/1.1 Keep-Alive, you go back to reading.  For HTTP/1.0 Connection: close, you might actually return -1 here.
-        return IO_READY; 
+        return IO_READY;
     }
     return IO_PENDING;
 }
+
 
 
 

@@ -146,36 +146,30 @@ IOState Listener::handleClientRead(Client* client)
         client->appendToReadBuffer(buf, bytes);
         dataRead = true;
     }
+    if (!dataRead) {return IO_PENDING;}
+	const std::string &readBuffer = client->getReadBuffer();
+	HttpRequest &request = client->getRequest(); 
+	while (true)
+	{
+		int parseStatus = request.parse(readBuffer);
+		if (parseStatus == 0)
+			break;
 
-    if (!dataRead)
-        return IO_PENDING;
-
-    const std::string &readBuffer = client->getReadBuffer();
-    HttpRequest &request = client->getRequest(); 
-    
-    int parseStatus = request.parse(readBuffer);
-
-    if (parseStatus == 0)
-        return IO_PENDING;
-
-    HttpResponse response;
-    HttpHandler handler;
-    if (request.getErrorCode() != 0)
-    {
-        response = handler.process(request, configs[0]); 
-    }
-    else
-    {
-        std::cout << "[LISTENER] : Client FD " << clientFD
-                  << " fully received request: " << request.getMethod() << " " << request.getTarget() << std::endl;
-        
-        std::string host = request.getHeader("host");
-        const ServerConfig &selectedConfig = matchConfig(host);
-        response = handler.process(request, selectedConfig);
-    }
-    client->appendToWriteBuffer(response.toString());
-    client->consumeReadBuffer(request.getConsumedBytes());
-    request.reset(); 
+		HttpResponse response;
+		HttpHandler handler;
+		
+		if (request.getErrorCode() != 0)
+			response = handler.process(request, configs[0]); 
+		else
+		{
+			std::string host = request.getHeader("host");
+			const ServerConfig &selectedConfig = matchConfig(host);
+			response = handler.process(request, selectedConfig);
+		}
+		client->appendToWriteBuffer(response.toString());
+		client->consumeReadBuffer(request.getConsumedBytes());
+		request.reset(); 
+	}
     return IO_READY;
 }
 
@@ -197,7 +191,7 @@ IOState Listener::handleClientWrite(Client* client)
     if (!client->hasPendingWrite())
     {
         // Note form mtaleb: For HTTP/1.1 Keep-Alive, you go back to reading.  For HTTP/1.0 Connection: close, you might actually return -1 here.
-        return IO_READY; 
+        return IO_READY;
     }
     return IO_PENDING;
 }
