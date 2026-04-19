@@ -5,34 +5,7 @@
 #include "../Lib.hpp"
 #include "Listener.hpp"
 
-
 using namespace std;
-
-// class Server
-// {
-//     private:
-//         map<int, Listener*> listeners;
-//         int epollFD;
-
-//     public:
-//         Server();
-//         // Server(const Server& other) = delete;
-//         // Server& operator=(const Server& other) = delete;
-//         ~Server();
-
-//         void loadListeners(vector<ServerConfig> &ports);
-//         void addListener(Listener* listener);
-
-//         void initEventSystem();
-//         // void registerListener(Listener* listener); // IMPLEMENTATION ..... ??? 
- 
-//         void handleNewConnection(Listener* listener);
-//         void handleClientRead(Listener* listener,Client* client);
-//         void handleClientWrite(Listener* listener, Client* client);
-
-//         void runEventLoop();
-//         void shutdown();
-// };
 
 class Server
 {
@@ -40,20 +13,17 @@ class Server
         map<int, Listener*> listeners;
         std::map<int, Listener*> clientMap;
         int epollFD;
-        void addListener(Listener* listener);      // internal helper only
-        void registerToEpoll(int fd, uint32_t events); // extracted helper
+        void registerToEpoll(int fd, uint32_t events);
         void disconnectClient(Listener* listener, int clientFD);
         void handleConnection(Listener *listener, int clientFd, uint32_t event);
         void handleNewConnection(Listener* listener);
-        void handleClientRead(Listener* listener, Client* client);
-        void handleClientWrite(Listener* listener, Client* client);
 
     public:
         Server();
         ~Server();
-        void init(vector<ServerConfig>& configs);                      // setup
+        void init(vector<ServerConfig>& configs);           // setup
         void runEventLoop();                               // run
-        void shutdown();                                   // teardown (also called by destructor)
+        void shutdown(); 
 };
 
 #endif

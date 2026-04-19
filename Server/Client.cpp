@@ -21,12 +21,20 @@ bool Client::isConnected() const
     return socketFD >= 0;
 }
 
-void Client::appendToReadBuffer(const std::string& data)
+void Client::appendToReadBuffer(const char* data, size_t size)
 {
-    readBuffer += data;
+    readBuffer.append(data, size);
 }
 
-const std::string& Client::getReadBuffer() const
+void Client::consumeReadBuffer(size_t bytes)
+{
+    if (bytes >= readBuffer.size())
+        readBuffer.clear();
+    else
+        readBuffer.erase(0, bytes);
+}
+
+const std::string Client::getReadBuffer() const
 {
     return readBuffer;
 }
@@ -42,7 +50,7 @@ void Client::appendToWriteBuffer(const std::string& data)
     writeBuffer += data;
 }
 
-const std::string& Client::getWriteBuffer() const
+const std::string Client::getWriteBuffer() const
 {
     return writeBuffer;
 }
@@ -60,4 +68,10 @@ bool Client::hasPendingWrite() const
 int Client::getSocketFD() const
 {
     return socketFD;
+}
+
+
+HttpRequest& Client::getRequest()
+{
+    return request;
 }

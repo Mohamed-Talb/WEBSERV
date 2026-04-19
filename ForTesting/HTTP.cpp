@@ -1,4 +1,4 @@
-// HttpRequest.cpp
+
 #include "HttpRequest.hpp"
 #include <cctype>
 

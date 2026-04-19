@@ -1,4 +1,4 @@
-// HttpRequest.hpp
+
 #ifndef HTTPREQUEST_HPP
 #define HTTPREQUEST_HPP
 
@@ -22,7 +22,7 @@ private:
 public:
     HttpRequest();
     ~HttpRequest();
-
+    void reset();
     int parse(const std::string& rawBuffer);
 
     bool parseRequestLine(std::istringstream& headerStream);

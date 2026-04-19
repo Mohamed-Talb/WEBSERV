@@ -21,12 +21,20 @@ bool Client::isConnected() const
     return socketFD >= 0;
 }
 
-void Client::appendToReadBuffer(const std::string& data)
+void Client::appendToReadBuffer(const char* data, size_t size)
 {
-    readBuffer += data;
+    readBuffer.append(data, size);
 }
 
-const std::string& Client::getReadBuffer() const
+void Client::consumeReadBuffer(size_t bytes)
+{
+    if (bytes >= readBuffer.size())
+        readBuffer.clear();
+    else
+        readBuffer.erase(0, bytes);
+}
+
+const std::string Client::getReadBuffer() const
 {
     return readBuffer;
 }
@@ -42,7 +50,7 @@ void Client::appendToWriteBuffer(const std::string& data)
     writeBuffer += data;
 }
 
-const std::string& Client::getWriteBuffer() const
+const std::string Client::getWriteBuffer() const
 {
     return writeBuffer;
 }
@@ -63,6 +71,12 @@ int Client::getSocketFD() const
 }
 
 
+HttpRequest& Client::getRequest()
+{
+    return request;
+}
+
+// ─── Listener.cpp ───────────────────────────────────────────────────
 // ─── Listener.cpp ───────────────────────────────────────────────────
 #include "Server.hpp"
 #include "Client.hpp"
@@ -210,10 +224,11 @@ IOState Listener::handleClientRead(Client* client)
         return IO_DISCONNECTED;
     }
 
-    client->appendToReadBuffer(std::string(buf, bytes));
+    client->appendToReadBuffer(buf, bytes);
     std::string readBuffer = client->getReadBuffer();
 
-    HttpRequest request;
+    HttpRequest& request = client->getRequest(); 
+    
     int parseStatus = request.parse(readBuffer);
 
     if (parseStatus == 0)
@@ -221,7 +236,6 @@ IOState Listener::handleClientRead(Client* client)
 
     HttpResponse response;
     HttpHandler handler;
-
     if (request.getErrorCode() != 0)
     {
         response = handler.process(request, configs[0]); 
@@ -232,18 +246,12 @@ IOState Listener::handleClientRead(Client* client)
                   << " fully received request: " << request.getMethod() << " " << request.getTarget() << std::endl;
         
         std::string host = request.getHeader("host");
-        const ServerConfig& selectedConfig = matchConfig(host);
+        const ServerConfig &selectedConfig = matchConfig(host);
         response = handler.process(request, selectedConfig);
     }
-
     client->appendToWriteBuffer(response.toString());
-    size_t parsedBytes = request.getConsumedBytes();
-    client->clearReadBuffer();
-    if (readBuffer.size() > parsedBytes)
-    {
-        client->appendToReadBuffer(readBuffer.substr(parsedBytes));
-    }
-
+    client->consumeReadBuffer(request.getConsumedBytes());
+    request.reset(); 
     return IO_READY;
 }
 

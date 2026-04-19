@@ -24,10 +24,8 @@ void Listener::loadListener(const ServerConfig& conf)
     {
         ::close(socketFD);
         socketFD = -1;
-        throw ServerException("Listener",
-            "setsockopt() failed on port " + intToString(conf.port));
+        throw ServerException("Listener", "setsockopt() failed on port " + intToString(conf.port));
     }
-
     sockaddr_in addr;
     // std::memset(&addr, 0, sizeof(addr));
     addr.sin_family      = AF_INET;
@@ -49,8 +47,6 @@ void Listener::loadListener(const ServerConfig& conf)
         socketFD = -1;
         throw ServerException("Listener","listen() failed on port " + intToString(conf.port));
     }
-    std::cout << "[LISTENER] : Successfully bound and listening on Port " 
-              << conf.port << " (Socket FD: " << socketFD << ")" << std::endl;
 }
 
 void Listener::closeListener()
@@ -145,10 +141,11 @@ IOState Listener::handleClientRead(Client* client)
         return IO_DISCONNECTED;
     }
 
-    client->appendToReadBuffer(std::string(buf, bytes));
+    client->appendToReadBuffer(buf, bytes);
     std::string readBuffer = client->getReadBuffer();
 
-    HttpRequest request;
+    HttpRequest& request = client->getRequest(); 
+    
     int parseStatus = request.parse(readBuffer);
 
     if (parseStatus == 0)
@@ -156,7 +153,6 @@ IOState Listener::handleClientRead(Client* client)
 
     HttpResponse response;
     HttpHandler handler;
-
     if (request.getErrorCode() != 0)
     {
         response = handler.process(request, configs[0]); 
@@ -167,18 +163,12 @@ IOState Listener::handleClientRead(Client* client)
                   << " fully received request: " << request.getMethod() << " " << request.getTarget() << std::endl;
         
         std::string host = request.getHeader("host");
-        const ServerConfig& selectedConfig = matchConfig(host);
+        const ServerConfig &selectedConfig = matchConfig(host);
         response = handler.process(request, selectedConfig);
     }
-    std::cout << "\n--- SENDING TO BROWSER ---\n" << response.toString() << "\n--------------------------\n";
     client->appendToWriteBuffer(response.toString());
-    size_t parsedBytes = request.getConsumedBytes();
-    client->clearReadBuffer();
-    if (readBuffer.size() > parsedBytes)
-    {
-        client->appendToReadBuffer(readBuffer.substr(parsedBytes));
-    }
-
+    client->consumeReadBuffer(request.getConsumedBytes());
+    request.reset(); 
     return IO_READY;
 }
 

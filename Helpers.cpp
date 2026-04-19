@@ -20,3 +20,15 @@ std::string toLower(std::string value)
         value[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(value[i])));
     return value;
 }
+
+std::string trim(const std::string& value)
+{
+    size_t start = 0;
+    while (start < value.size() && (value[start] == ' ' || value[start] == '\t'))
+        ++start;
+    size_t end = value.size();
+    while (end > start && (value[end - 1] == ' ' || value[end - 1] == '\t'))
+        --end;
+    return value.substr(start, end - start);
+}
+

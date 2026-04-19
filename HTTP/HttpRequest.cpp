@@ -1,18 +1,5 @@
-// HttpRequest.cpp
+
 #include "HttpRequest.hpp"
-
-
-static std::string trim(const std::string& value)
-{
-    size_t start = 0;
-    while (start < value.size() && (value[start] == ' ' || value[start] == '\t'))
-        ++start;
-    size_t end = value.size();
-    while (end > start && (value[end - 1] == ' ' || value[end - 1] == '\t'))
-        --end;
-    return value.substr(start, end - start);
-}
-
 
 static bool parseChunkedBody(const std::string& rawInputData, std::string& decodedBody, size_t& totalConsumed)
 {
@@ -106,7 +93,7 @@ int HttpRequest::extractBody(const std::string& rawBodyData, size_t& bytesConsum
 }
 
 
-bool HttpRequest::parseHeaders(std::istringstream& input)
+bool HttpRequest::parseHeaders(std::istringstream &input)
 {
     std::string line;
     while (std::getline(input, line))
@@ -128,7 +115,7 @@ bool HttpRequest::parseHeaders(std::istringstream& input)
     return true;
 }
 
-bool HttpRequest::parseRequestLine(std::istringstream& input)
+bool HttpRequest::parseRequestLine(std::istringstream &input)
 {
     std::string line;
     if (!std::getline(input, line))
@@ -205,4 +192,16 @@ std::string HttpRequest::getHeader(const std::string& key) const
     if (it != headers.end())
         return it->second;
     return "";
+}
+
+
+void HttpRequest::reset()
+{
+    method.clear();
+    target.clear();
+    version.clear();
+    headers.clear();
+    body.clear();
+    consumedBytes = 0;
+    errorCode = 0;
 }

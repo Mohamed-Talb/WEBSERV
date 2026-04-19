@@ -1,4 +1,4 @@
-// HttpHandler.cpp
+
 #include "HttpHandler.hpp"
 
 
@@ -44,78 +44,91 @@ HttpResponse HttpHandler::buildError(int statusCode, const std::string& statusRe
     return response;
 }
 
+std::string HttpHandler::stripQuery(const std::string& path)
+{
+    size_t queryStart = path.find('?');
+    if (queryStart != std::string::npos)
+        return path.substr(0, queryStart);
+    return path;
+}
+
+const Location* HttpHandler::matchLocation(const std::string& path, const ServerConfig& config)
+{
+    const Location* bestMatch = NULL;
+    size_t longestLen = 0;
+
+    for (size_t i = 0; i < config.Locations.size(); ++i)
+    {
+        const Location& loc = config.Locations[i];
+        if (path.compare(0, loc.path.size(), loc.path) == 0 && loc.path.size() >= longestLen)
+        {
+            bestMatch = &loc;
+            longestLen = loc.path.size();
+        }
+    }
+    return bestMatch;
+}
+
+
+bool HttpHandler::isMethodAllowed(const std::string& method, const Location& loc)
+{
+    if (loc.methods.empty())
+        return true; 
+        
+    for (size_t i = 0; i < loc.methods.size(); ++i)
+    {
+        if (toUpper(loc.methods[i]) == method)
+            return true;
+    }
+    return false;
+}
+
+
+HttpResponse HttpHandler::handle404(const ServerConfig& config)
+{
+    std::string errorPageContent;
+    std::string errorPath = config.root + "/Error.html"; 
+    
+    if (readFile(errorPath, errorPageContent))
+    {
+        HttpResponse response(404, "Not Found");
+        response.setBody(errorPageContent, detectContentType(errorPath));
+        return response;
+    }
+    return buildError(404, "Not Found", "File not found");
+}
+
 HttpResponse HttpHandler::process(const HttpRequest& request, const ServerConfig& config)
 {
-
     int errorCode = request.getErrorCode();
     if (errorCode != 0)
     {
-        if (errorCode == 505) 
-            return buildError(505, "HTTP Version Not Supported", "Unsupported HTTP version");
-        if (errorCode == 400)
-            return buildError(400, "Bad Request", "Malformed request");
+        if (errorCode == 505) return buildError(505, "HTTP Version Not Supported", "Unsupported HTTP version");
+        if (errorCode == 400) return buildError(400, "Bad Request", "Malformed request");
         return buildError(errorCode, "Error", "Parsing failed");
     }
-
 
     std::string method = request.getMethod();
     if (method != "GET" && method != "POST" && method != "DELETE")
         return buildError(405, "Method Not Allowed", "Unsupported method");
 
-    std::string requestPath = request.getTarget();
-    size_t queryStartPos = requestPath.find('?');
-    if (queryStartPos != std::string::npos)
-        requestPath = requestPath.substr(0, queryStartPos);
+    std::string requestPath = stripQuery(request.getTarget());
 
-    const Location *bestLocationMatch = NULL;
-    size_t longestMatchLen = 0;
+    const Location* matchedLocation = matchLocation(requestPath, config);
+    if (!matchedLocation)
+        return handle404(config);
 
-    for (size_t i = 0; i < config.Locations.size(); ++i)
-    {
-        const Location &candidateLocation = config.Locations[i];
-        
-        bool isPrefixMatch = (requestPath.compare(0, candidateLocation.path.size(), candidateLocation.path) == 0);
-        if (isPrefixMatch && candidateLocation.path.size() >= longestMatchLen)
-        {
-            bestLocationMatch = &candidateLocation;
-            longestMatchLen = candidateLocation.path.size();
-        }
-    }
-    if (!bestLocationMatch)
-    {
-        std::string errorPageContent;
-        std::string errorPath = config.root + "/Error.html"; 
-        
-        if (readFile(errorPath, errorPageContent))
-        {
-            HttpResponse response(404, "Not Found");
-            response.setBody(errorPageContent, detectContentType(errorPath));
-            return response;
-        }
-        return buildError(404, "Not Found", "File not found");
-    }
+    if (!isMethodAllowed(method, *matchedLocation))
+        return buildError(405, "Method Not Allowed", "Method not allowed for route");
 
-    if (!bestLocationMatch->methods.empty())
-    {
-        bool isAllowed = false;
-        for (size_t i = 0; i < bestLocationMatch->methods.size(); ++i)
-        {
-            if (toUpper(bestLocationMatch->methods[i]) == method)
-            {
-                isAllowed = true;
-                break;
-            }
-        }
-        if (!isAllowed)
-            return buildError(405, "Method Not Allowed", "Method not allowed for route");
-    }
     if (method == "GET")
         return handleGet(request, requestPath, config);
-
     HttpResponse response(200, "OK");
     response.setBody("Hello, World!", "text/plain");
     return response;
 }
+
+
 
 HttpResponse HttpHandler::handleGet(const HttpRequest& request, std::string requestPath, const ServerConfig& config)
 {

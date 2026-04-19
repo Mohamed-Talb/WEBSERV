@@ -19,23 +19,21 @@ void Server::registerToEpoll(int fd, uint32_t events)
 
 void Server::init(std::vector<ServerConfig>& configs)
 {
-    std::cout << "[SERVER] : Initializing server... Grouping configs." << std::endl;
     epollFD = epoll_create(1024);
     if (epollFD < 0)
         throw ServerException("Server", "epoll_create() failed");
-
     std::map<int, std::vector<ServerConfig> > groupedConfigs;
     for (size_t i = 0; i < configs.size(); ++i) 
     {
         groupedConfigs[configs[i].port].push_back(configs[i]);
     }
-    for (std::map<int, std::vector<ServerConfig> >::iterator it = groupedConfigs.begin(); it != groupedConfigs.end(); ++it)
+    std::map<int, std::vector<ServerConfig> >::iterator it;
+    for (it = groupedConfigs.begin(); it != groupedConfigs.end(); ++it)
     {
         Listener* listener = new Listener(it->second); 
         listeners[listener->getSocketFD()] = listener;
         registerToEpoll(listener->getSocketFD(), EPOLLIN);
     }
-    std::cout << "[SERVER] : Epoll created with FD " << epollFD << std::endl;
 }
 
 void Server::shutdown()
@@ -59,7 +57,6 @@ void Server::disconnectClient(Listener* listener, int clientFD)
     epoll_ctl(epollFD, EPOLL_CTL_DEL, clientFD, NULL); 
     listener->removeClient(clientFD);
     clientMap.erase(clientFD);
-    std::cout << "[SERVER] : Disconnecting Client FD " << clientFD << std::endl;
 }
 
 
@@ -80,8 +77,6 @@ void Server::handleNewConnection(Listener* listener)
         clientMap.erase(clientFD); // Clean up if epoll fails
         return;
     }
-    std::cout << "[SERVER] : New connection! Assigned Client FD " << clientFD 
-            << " on port " << listener->getPort() << std::endl;
 }
 
 void Server::handleConnection(Listener *listener, int clientFd, uint32_t event)
