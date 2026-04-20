@@ -1,5 +1,5 @@
 
-#include "HttpResponse.hpp"
+#include "HttpHandler.hpp"
 
 HttpResponse::HttpResponse() : statusCode(200), reasonPhrase("OK")
 {

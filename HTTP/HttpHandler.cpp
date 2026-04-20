@@ -1,15 +1,12 @@
-
 #include "HttpHandler.hpp"
 
-
-HttpHandler::HttpHandler() {}
+HttpHandler::HttpHandler(const ServerConfig &serverConfig) : Config(&serverConfig) {}
 HttpHandler::~HttpHandler() {}
 
-std::string HttpHandler::detectContentType(const std::string& path)
+std::string HttpHandler::contentType(const std::string& path)
 {
     size_t extensionPos = path.find_last_of('.');
-    if (extensionPos == std::string::npos)
-        return "application/octet-stream";
+    if (extensionPos == std::string::npos) return "application/octet-stream";
 
     std::string fileExtension = toLower(path.substr(extensionPos));
 
@@ -52,14 +49,14 @@ std::string HttpHandler::stripQuery(const std::string& path)
     return path;
 }
 
-const Location* HttpHandler::matchLocation(const std::string& path, const ServerConfig& config)
+const Location* HttpHandler::matchLocation(const std::string& path)
 {
     const Location* bestMatch = NULL;
     size_t longestLen = 0;
 
-    for (size_t i = 0; i < config.Locations.size(); ++i)
+    for (size_t i = 0; i < Config->Locations.size(); ++i)
     {
-        const Location& loc = config.Locations[i];
+        const Location& loc = Config->Locations[i];
         if (path.compare(0, loc.path.size(), loc.path) == 0 && loc.path.size() >= longestLen)
         {
             bestMatch = &loc;
@@ -68,7 +65,6 @@ const Location* HttpHandler::matchLocation(const std::string& path, const Server
     }
     return bestMatch;
 }
-
 
 bool HttpHandler::isMethodAllowed(const std::string& method, const Location& loc)
 {
@@ -83,22 +79,21 @@ bool HttpHandler::isMethodAllowed(const std::string& method, const Location& loc
     return false;
 }
 
-
-HttpResponse HttpHandler::handle404(const ServerConfig& config)
+HttpResponse HttpHandler::handle404()
 {
     std::string errorPageContent;
-    std::string errorPath = config.root + "/Error.html"; 
+    std::string errorPath = Config->root + "/Error.html"; 
     
     if (readFile(errorPath, errorPageContent))
     {
         HttpResponse response(404, "Not Found");
-        response.setBody(errorPageContent, detectContentType(errorPath));
+        response.setBody(errorPageContent, contentType(errorPath));
         return response;
     }
     return buildError(404, "Not Found", "File not found");
 }
 
-HttpResponse HttpHandler::process(const HttpRequest& request, const ServerConfig& config)
+HttpResponse HttpHandler::process(const HttpRequest& request)
 {
     int errorCode = request.getErrorCode();
     if (errorCode != 0)
@@ -114,44 +109,18 @@ HttpResponse HttpHandler::process(const HttpRequest& request, const ServerConfig
 
     std::string requestPath = stripQuery(request.getTarget());
 
-    const Location* matchedLocation = matchLocation(requestPath, config);
+    const Location* matchedLocation = matchLocation(requestPath);
     if (!matchedLocation)
-        return handle404(config);
+        return handle404();
 
     if (!isMethodAllowed(method, *matchedLocation))
         return buildError(405, "Method Not Allowed", "Method not allowed for route");
 
     if (method == "GET")
-        return handleGet(request, requestPath, config);
+        return GET(request, requestPath);
+
     HttpResponse response(200, "OK");
     response.setBody("Hello, World!", "text/plain");
     return response;
 }
 
-
-
-HttpResponse HttpHandler::handleGet(const HttpRequest& request, std::string requestPath, const ServerConfig& config)
-{
-    (void)request; 
-
-    if (requestPath.empty() || requestPath == "/")
-        requestPath = "/index.html";
-
-    std::string fullPath = config.root + requestPath;
-    std::string fileContent;
-
-    bool isFound = readFile(fullPath, fileContent);
-
-    if (!isFound && requestPath == "/index.html")
-    {
-        fullPath = "./index.html";
-        isFound = readFile(fullPath, fileContent);
-    }
-    if (isFound)
-    {
-        HttpResponse response(200, "OK");
-        response.setBody(fileContent, detectContentType(fullPath));
-        return response;
-    }
-    return buildError(404, "Not Found", "File not found");
-}

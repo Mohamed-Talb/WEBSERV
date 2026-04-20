@@ -27,6 +27,17 @@ static std::string trim(const std::string& value)
     return value.substr(start, end - start);
 }
 
+#include "HttpRequest.hpp"
+
+HttpRequest::HttpRequest() : state(PARSE_REQUEST_LINE), consumedBytes(0), errorCode(0) {}
+void HttpRequest::reset() 
+{
+    method.clear(); target.clear(); version.clear();
+    headers.clear(); body.clear();
+    consumedBytes = 0; 
+    errorCode = 0;
+    state = PARSE_REQUEST_LINE;
+}
 
 static bool parseChunkedBody(const std::string& rawInputData, std::string& decodedBody, size_t& totalConsumed)
 {
@@ -76,7 +87,6 @@ static bool parseChunkedBody(const std::string& rawInputData, std::string& decod
     }
 }
 
-HttpRequest::HttpRequest() : consumedBytes(0), errorCode(0) {}
 HttpRequest::~HttpRequest() {}
 
 
@@ -120,7 +130,7 @@ int HttpRequest::extractBody(const std::string& rawBodyData, size_t& bytesConsum
 }
 
 
-bool HttpRequest::parseHeaders(std::istringstream& input)
+bool HttpRequest::parseHeaders(std::istringstream &input)
 {
     std::string line;
     while (std::getline(input, line))
@@ -142,7 +152,7 @@ bool HttpRequest::parseHeaders(std::istringstream& input)
     return true;
 }
 
-bool HttpRequest::parseRequestLine(std::istringstream& input)
+bool HttpRequest::parseRequestLine(std::istringstream &input)
 {
     std::string line;
     if (!std::getline(input, line))
@@ -159,51 +169,67 @@ bool HttpRequest::parseRequestLine(std::istringstream& input)
     return true;
 }
 
-int HttpRequest::parse(const std::string &rawRequestData)
+void HttpRequest::setError(int code)
 {
-    size_t headerEndIndex = rawRequestData.find("\r\n\r\n");
-    if (headerEndIndex == std::string::npos)
-        return 0;
-        
-    std::string headerSection = rawRequestData.substr(0, headerEndIndex);
-    std::istringstream headerStream(headerSection);
-
-    if (!parseRequestLine(headerStream))
-    {
-        errorCode = 400;
-        return 1;
-    }
-    if (!parseHeaders(headerStream))
-    {
-        errorCode = 400;
-        return 1;
-    }
-
-    if (version != "HTTP/1.1" && version != "HTTP/1.0")
-    {
-        errorCode = 505;
-        return 1;
-    }
-    if (version == "HTTP/1.1" && headers.find("host") == headers.end())
-    {
-        errorCode = 400;
-        return 1;
-    }
-
-    size_t bytesConsumed = 0;
-    std::string bodyData = rawRequestData.substr(headerEndIndex + 4);
-    int bodyParseStatus = extractBody(bodyData, bytesConsumed);
-    if (bodyParseStatus == -1)
-    {
-        errorCode = 400;
-        return 1;
-    }
-    if (bodyParseStatus == 0)
-        return 0;
-    consumedBytes = headerEndIndex + 4 + bytesConsumed;
-    return 1;
+    errorCode = code;
+    state = PARSE_ERROR;
 }
 
+int HttpRequest::parse(const std::string &rawRequestData)
+{
+    while (state != PARSE_COMPLETE && state != PARSE_ERROR)
+    {
+        if (state == PARSE_REQUEST_LINE)
+        {
+            size_t crlf = rawRequestData.find("\r\n", consumedBytes);
+            if (crlf == std::string::npos) return 0; // Need more data
+
+            std::string line = rawRequestData.substr(consumedBytes, crlf - consumedBytes);
+            std::istringstream lineStream(line);
+            
+            if (!(lineStream >> method >> target >> version)) 
+			{
+                setError(400);
+                return 1; 
+            }
+            consumedBytes = crlf + 2;
+            state = PARSE_HEADERS;
+        }
+        else if (state == PARSE_HEADERS)
+        {
+            size_t headerEnd = rawRequestData.find("\r\n\r\n", consumedBytes);
+            if (headerEnd == std::string::npos) return 0; // Need more data
+
+            std::string headerSection = rawRequestData.substr(consumedBytes, headerEnd - consumedBytes);
+            std::istringstream headerStream(headerSection);
+            
+            if (!parseHeaders(headerStream)) 
+			{
+                setError(400);
+                return 1;
+            }
+            
+            consumedBytes = headerEnd + 4;
+            state = PARSE_BODY;
+        }
+        else if (state == PARSE_BODY)
+        {
+            std::string bodyData = rawRequestData.substr(consumedBytes);
+            size_t bodyConsumed = 0;
+            int status = extractBody(bodyData, bodyConsumed);
+            
+            if (status == 0) return 0;
+            if (status == -1) {
+                setError(400);
+                return 1;
+            }
+            
+            consumedBytes += bodyConsumed;
+            state = PARSE_COMPLETE;
+        }
+    }
+    return 1;
+}
 
 
 std::string HttpRequest::getMethod() const { return method; }

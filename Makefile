@@ -1,7 +1,7 @@
 WEBSERV_SRC = main.cpp Helpers.cpp Errors.cpp\
 			Server/Server.cpp Server/Listener.cpp Server/Client.cpp \
 			configParser/configParser.cpp \
-			HTTP/HttpHandler.cpp  HTTP/HttpRequest.cpp  HTTP/HttpResponse.cpp
+			HTTP/HttpHandler.cpp  HTTP/HttpRequest.cpp  HTTP/HttpResponse.cpp HTTP/GET.cpp
 
 			
 WEBSERV_OBJ = $(WEBSERV_SRC:.cpp=.o)

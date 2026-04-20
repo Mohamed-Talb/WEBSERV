@@ -80,27 +80,29 @@ HttpRequest& Client::getRequest()
 }
 
 
-const ServerConfig* Client::matchConfig(const std::string& host) const
+const ServerConfig* Client::matchConfig(const std::string& rawHost) const
 {
-    for (size_t i = 0; i < configs.size(); ++i) 
+    std::string host = rawHost;
+    size_t portSep = host.find(':');
+    if (portSep != std::string::npos) 
+        host = host.substr(0, portSep);
+    host = toLower(host);
+
+	for (size_t i = 0; i < configs.size(); ++i) 
     {
         for (size_t j = 0; j < configs[i].serverName.size(); ++j) 
         {
             if (configs[i].serverName[j] == host) 
-            {
-                return &configs[i]; // Found an exact match!
-            }
+                return &configs[i];
         }
     }
     return &configs[0]; 
 }
 
-
 void Client::handleRead()
 {
     char buf[8192];
     bool dataRead = false;
-
     while (true)
     {
         int bytes = recv(socketFD, buf, sizeof(buf), 0);
@@ -120,29 +122,31 @@ void Client::handleRead()
         dataRead = true;
     }
 
-    if (!dataRead) return;
+    if (!dataRead)
+        return;
 
     while (true)
     {
         int parseStatus = request.parse(readBuffer);
         if (parseStatus == 0)
             break;
-        HttpResponse response;
-        HttpHandler handler;
 
         if (request.getErrorCode() != 0)
         {
-            response = handler.process(request, configs[0]); 
+            HttpHandler handler(configs[0]); 
+            HttpResponse response = handler.process(request); // No second argument needed
+            appendToWriteBuffer(response.toString());
+            server->removeHandler(socketFD);
+            return;
         }
-        else
-        {
-            std::string host = request.getHeader("host");
-            size_t portSep = host.find(':');
-            if (portSep != std::string::npos) 
-                host = host.substr(0, portSep);
-            const ServerConfig* selectedConfig = matchConfig(host);
-            response = handler.process(request, *selectedConfig);
-        }
+
+        const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
+        if (!selectedConfig)
+             selectedConfig = &configs[0];
+
+        HttpHandler handler(*selectedConfig); 
+        HttpResponse response = handler.process(request); // No second argument needed
+
         appendToWriteBuffer(response.toString());
         consumeReadBuffer(request.getConsumedBytes());
         request.reset(); 

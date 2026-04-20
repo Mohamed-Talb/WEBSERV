@@ -6,7 +6,7 @@
 #include "../Lib.hpp"
 #include "Server.ipp"
 #include "../Helpers.hpp"
-#include "../HTTP/HttpRequest.hpp"
+#include "../HTTP/HttpHandler.hpp"
 #include "../configParser/configParser.hpp"
 #include "../Errors.hpp"
 
@@ -65,7 +65,7 @@ class Client : public IEventHandler
     virtual void handleRead();
     virtual void handleWrite();
 
-    HttpRequest &getRequest();
+    HttpRequest 	&getRequest();
     const std::string &getReadBuffer() const;
     const std::string &getWriteBuffer() const;
 
