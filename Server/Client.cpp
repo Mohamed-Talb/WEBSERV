@@ -1,6 +1,11 @@
 #include "Server.hpp"
+#include "../HTTP/HttpHandler.hpp"
+#include <sys/socket.h>
+#include <unistd.h>
+#include <errno.h>
 
-Client::Client(int fd) : socketFD(fd) {}
+Client::Client(int fd, Server* srv, const std::vector<ServerConfig>& confs) 
+    : socketFD(fd), server(srv), configs(confs) {}
 
 Client::~Client()
 {
@@ -44,7 +49,6 @@ void Client::clearReadBuffer()
     readBuffer.clear();
 }
 
-
 void Client::appendToWriteBuffer(const std::string& data)
 {
     writeBuffer += data;
@@ -65,13 +69,108 @@ bool Client::hasPendingWrite() const
     return !writeBuffer.empty();
 }
 
-int Client::getSocketFD() const
+int Client::getFD() const
 {
     return socketFD;
 }
 
-
 HttpRequest& Client::getRequest()
 {
     return request;
+}
+
+
+const ServerConfig* Client::matchConfig(const std::string& host) const
+{
+    for (size_t i = 0; i < configs.size(); ++i) 
+    {
+        for (size_t j = 0; j < configs[i].serverName.size(); ++j) 
+        {
+            if (configs[i].serverName[j] == host) 
+            {
+                return &configs[i]; // Found an exact match!
+            }
+        }
+    }
+    return &configs[0]; 
+}
+
+
+void Client::handleRead()
+{
+    char buf[8192];
+    bool dataRead = false;
+
+    while (true)
+    {
+        int bytes = recv(socketFD, buf, sizeof(buf), 0);
+        if (bytes == 0)
+        {
+            server->removeHandler(socketFD);
+            return;
+        }
+        if (bytes < 0)
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                break;
+            server->removeHandler(socketFD);
+            return;
+        }
+        appendToReadBuffer(buf, bytes);
+        dataRead = true;
+    }
+
+    if (!dataRead) return;
+
+    while (true)
+    {
+        int parseStatus = request.parse(readBuffer);
+        if (parseStatus == 0)
+            break;
+        HttpResponse response;
+        HttpHandler handler;
+
+        if (request.getErrorCode() != 0)
+        {
+            response = handler.process(request, configs[0]); 
+        }
+        else
+        {
+            std::string host = request.getHeader("host");
+            size_t portSep = host.find(':');
+            if (portSep != std::string::npos) 
+                host = host.substr(0, portSep);
+            const ServerConfig* selectedConfig = matchConfig(host);
+            response = handler.process(request, *selectedConfig);
+        }
+        appendToWriteBuffer(response.toString());
+        consumeReadBuffer(request.getConsumedBytes());
+        request.reset(); 
+    }
+
+    if (hasPendingWrite())
+    {
+        server->modifyHandler(this, EPOLLIN | EPOLLOUT);
+    }
+}
+
+void Client::handleWrite()
+{
+    if (!hasPendingWrite()) return;
+    while (hasPendingWrite())
+    {
+        int bytes = send(socketFD, writeBuffer.c_str(), writeBuffer.size(), 0);
+        if (bytes < 0)
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                return;
+            server->removeHandler(socketFD);
+            return;
+        }
+        consumeWriteBuffer(bytes);
+    }
+    if (!hasPendingWrite())
+    {
+        server->modifyHandler(this, EPOLLIN);
+    }
 }
