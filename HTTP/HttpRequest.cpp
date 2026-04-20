@@ -2,6 +2,8 @@
 #include "HttpHandler.hpp"
 
 HttpRequest::HttpRequest() : state(PARSE_REQUEST_LINE), consumedBytes(0), errorCode(0) {}
+HttpRequest::~HttpRequest() {}
+
 void HttpRequest::reset() 
 {
     method.clear(); target.clear(); version.clear();
@@ -58,9 +60,6 @@ static bool parseChunkedBody(const std::string& rawInputData, std::string& decod
         currentPosition += CRLF_SIZE;
     }
 }
-
-HttpRequest::~HttpRequest() {}
-
 
 int HttpRequest::extractBody(const std::string& rawBodyData, size_t& bytesConsumed)
 {
@@ -191,25 +190,17 @@ int HttpRequest::parse(const std::string &rawRequestData)
             int status = extractBody(bodyData, bodyConsumed);
             
             if (status == 0) return 0;
-            if (status == -1) {
+            if (status == -1)
+			{
                 setError(400);
                 return 1;
             }
-            
             consumedBytes += bodyConsumed;
             state = PARSE_COMPLETE;
         }
     }
     return 1;
 }
-
-
-std::string HttpRequest::getMethod() const { return method; }
-std::string HttpRequest::getTarget() const { return target; }
-std::string HttpRequest::getVersion() const { return version; }
-std::string HttpRequest::getBody() const { return body; }
-size_t HttpRequest::getConsumedBytes() const { return consumedBytes; }
-int HttpRequest::getErrorCode() const { return errorCode; }
 
 std::string HttpRequest::getHeader(const std::string& key) const
 {
@@ -218,3 +209,11 @@ std::string HttpRequest::getHeader(const std::string& key) const
         return it->second;
     return "";
 }
+
+std::string HttpRequest::getBody()		const { return body; }
+std::string HttpRequest::getMethod()	const { return method; }
+std::string HttpRequest::getTarget() 	const { return target; }
+std::string HttpRequest::getVersion()	const { return version; }
+int HttpRequest::getErrorCode()			const { return errorCode; }
+size_t HttpRequest::getConsumedBytes()	const { return consumedBytes; }
+
