@@ -18,4 +18,5 @@ int main()
 }
 
 
-// You lack Timeout Management (The Slowloris Vulnerability)
+// Timeout Management (The Slowloris Vulnerability)
+// in client handlRead if the httpparser return a error custo the error page for client config

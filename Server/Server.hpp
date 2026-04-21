@@ -10,7 +10,6 @@
 #include "../configParser/configParser.hpp"
 #include "../Errors.hpp"
 
-class Listener;
 
 class Server
 {
@@ -33,16 +32,37 @@ class Server
 };
 
 
+class Listener : public IEventHandler 
+{
+        private:
+        int socketFD;
+        Server* server; 
+        std::vector<ServerConfig> configs;
+        
+        Listener();
+        Listener(const Listener&);
+
+        public:
+        virtual ~Listener();
+        Listener(const std::vector<ServerConfig>& confs, Server* srv);
+        
+        virtual void handleRead();
+        virtual void handleWrite();
+
+        int getPort() const;
+        virtual int  getFD() const;
+};
+
 class Client : public IEventHandler
 {
     private:
+    int socketFD;
+    Server* server;
     HttpRequest request;
-    int         socketFD;
     std::string readBuffer;
     std::string writeBuffer;
-    
-    Server* server;
     std::vector<ServerConfig> configs;
+    
 
     Client();
     Client(const Client&);
@@ -65,37 +85,11 @@ class Client : public IEventHandler
     virtual void handleRead();
     virtual void handleWrite();
 
-    HttpRequest 	&getRequest();
+    HttpRequest &getRequest();
+    virtual int getFD() const;
     const std::string &getReadBuffer() const;
     const std::string &getWriteBuffer() const;
 
-    virtual int  getFD() const;
-};
-
-
-class Listener : public IEventHandler 
-{
-        private:
-        int                       socketFD;
-        std::vector<ServerConfig> configs;
-        Server* server; 
-
-        void closeListener(); 
-        void loadListener(const ServerConfig &conf);
-        
-        Listener();
-        Listener(const Listener&);
-        Listener& operator=(const Listener&);
-
-        public:
-        virtual ~Listener();
-        Listener(const std::vector<ServerConfig>& confs, Server* srv);
-        
-        virtual void handleRead();
-        virtual void handleWrite();
-
-        int getPort() const;
-        virtual int  getFD() const;
 };
 
 #endif

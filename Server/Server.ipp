@@ -3,7 +3,7 @@
 
 class IEventHandler
 {
-public:
+    public:
     virtual ~IEventHandler() {}
     
     virtual void handleRead() = 0;

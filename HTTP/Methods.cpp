@@ -10,17 +10,17 @@ HttpResponse HttpHandler::GET(const HttpRequest& request, std::string requestPat
     std::string fullPath = Config->root + requestPath;
     std::string fileContent;
 
-    bool isFound = readFile(fullPath, fileContent);
+    bool isFound = HttpUtils::readFile(fullPath, fileContent);
 
     if (!isFound && requestPath == "/index.html")
     {
         fullPath = "./index.html";
-        isFound = readFile(fullPath, fileContent);
+        isFound = HttpUtils::readFile(fullPath, fileContent);
     }
     if (isFound)
     {
         HttpResponse response(200, "OK");
-        response.setBody(fileContent, contentType(fullPath));
+        response.setBody(fileContent, HttpUtils::contentType(fullPath));
         return response;
     }
     return handle404();

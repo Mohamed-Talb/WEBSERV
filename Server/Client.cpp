@@ -4,15 +4,9 @@
 #include <unistd.h>
 #include <errno.h>
 
-Client::Client(int fd, Server* srv, const std::vector<ServerConfig>& confs) 
-    : socketFD(fd), server(srv), configs(confs) {}
+Client::Client(int fd, Server *srv, const std::vector<ServerConfig> &confs) : socketFD(fd), server(srv), configs(confs) {}
 
 Client::~Client()
-{
-    closeConnection();
-}
-
-void Client::closeConnection()
 {
     if (socketFD >= 0)
     {
@@ -21,15 +15,6 @@ void Client::closeConnection()
     }
 }
 
-bool Client::isConnected() const
-{
-    return socketFD >= 0;
-}
-
-void Client::appendToReadBuffer(const char* data, size_t size)
-{
-    readBuffer.append(data, size);
-}
 
 void Client::consumeReadBuffer(size_t bytes)
 {
@@ -39,48 +24,28 @@ void Client::consumeReadBuffer(size_t bytes)
         readBuffer.erase(0, bytes);
 }
 
-const std::string &Client::getReadBuffer() const
-{
-    return readBuffer;
-}
-
-void Client::clearReadBuffer()
-{
-    readBuffer.clear();
-}
-
-void Client::appendToWriteBuffer(const std::string& data)
-{
-    writeBuffer += data;
-}
-
-const std::string &Client::getWriteBuffer() const
-{
-    return writeBuffer;
-}
-
 void Client::consumeWriteBuffer(size_t bytes)
 {
-    writeBuffer.erase(0, bytes);
-}
-
-bool Client::hasPendingWrite() const
-{
-    return !writeBuffer.empty();
-}
-
-int Client::getFD() const
-{
-    return socketFD;
-}
-
-HttpRequest& Client::getRequest()
-{
-    return request;
+    if (bytes >= readBuffer.size())
+        writeBuffer.clear();
+    else
+        writeBuffer.erase(0, bytes);
 }
 
 
-const ServerConfig* Client::matchConfig(const std::string& rawHost) const
+void Client::appendToWriteBuffer(const std::string& data) {writeBuffer += data;}
+void Client::appendToReadBuffer(const char *data, size_t size) {readBuffer.append(data, size);}
+
+
+
+int Client::getFD() const {return socketFD;}
+HttpRequest &Client::getRequest() {return request;}
+bool Client::isConnected() const {return socketFD >= 0;}
+bool Client::hasPendingWrite() const {return !writeBuffer.empty();}
+const std::string &Client::getReadBuffer() const{return readBuffer;}
+const std::string &Client::getWriteBuffer() const {return writeBuffer;}
+
+const ServerConfig *Client::matchConfig(const std::string& rawHost) const
 {
     std::string host = rawHost;
     size_t portSep = host.find(':');
@@ -96,7 +61,7 @@ const ServerConfig* Client::matchConfig(const std::string& rawHost) const
                 return &configs[i];
         }
     }
-    return &configs[0]; 
+    return &configs[0]; // ?????????? mtaleb: fix the bug here 
 }
 
 void Client::handleRead()
@@ -130,32 +95,25 @@ void Client::handleRead()
         int parseStatus = request.parse(readBuffer);
         if (parseStatus == 0)
             break;
-
         if (request.getErrorCode() != 0)
         {
             HttpHandler handler(configs[0]); 
-            HttpResponse response = handler.process(request); // No second argument needed
+            HttpResponse response = handler.process(request);
             appendToWriteBuffer(response.toString());
             server->removeHandler(socketFD);
             return;
         }
-
         const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
         if (!selectedConfig)
              selectedConfig = &configs[0];
-
         HttpHandler handler(*selectedConfig); 
-        HttpResponse response = handler.process(request); // No second argument needed
-
+        HttpResponse response = handler.process(request);
         appendToWriteBuffer(response.toString());
         consumeReadBuffer(request.getConsumedBytes());
         request.reset(); 
     }
-
     if (hasPendingWrite())
-    {
         server->modifyHandler(this, EPOLLIN | EPOLLOUT);
-    }
 }
 
 void Client::handleWrite()

@@ -7,7 +7,7 @@
 #include <fstream>
 #include <cctype>
 #include "../Helpers.hpp"
-
+#include "algorithm"
 
 
 #include <string>
@@ -24,6 +24,12 @@ enum State
 	PARSE_ERROR
 };
 
+namespace HttpUtils
+{
+    std::string contentType(const std::string& path);
+    bool        readFile(const std::string& filePath, std::string& content);
+    std::string stripQuery(const std::string& path);
+}
 
 class HttpRequest 
 {
@@ -40,7 +46,9 @@ class HttpRequest
     int 	errorCode;
 
     void setError(int code);
-
+    int parseRequestLine(const std::string& raw);
+    int parseHeaders(const std::string& raw);
+    int parseBody(const std::string& raw);
 	public:
     HttpRequest();
     ~HttpRequest();
@@ -48,18 +56,13 @@ class HttpRequest
     void reset();
     int parse(const std::string& rawBuffer);
 
-    bool parseRequestLine(std::istringstream& headerStream);
-    bool parseHeaders(std::istringstream& headerStream);
-    int  extractBody(const std::string& payload, size_t& consumedBody);
-    
-
+    int getErrorCode() const;
+    std::string getBody() const;
     std::string getMethod() const;
     std::string getTarget() const;
     std::string getVersion() const;
-    std::string getHeader(const std::string& key) const;
-    std::string getBody() const;
     size_t getConsumedBytes() const;
-    int getErrorCode() const;
+    std::string getHeader(const std::string& key) const;
     
 
     State getState() const { return state; }
@@ -89,10 +92,8 @@ class HttpHandler
 {
 	private:
     const ServerConfig 	*Config;
-
-    std::string 	contentType(const std::string& path);
-    bool 			readFile(const std::string& filePath, std::string& content);
-    std::string 	stripQuery(const std::string& path);
+    std::vector<Location> sortedLocations;
+    
     const Location* matchLocation(const std::string& path);
     bool 			isMethodAllowed(const std::string& method, const Location& loc);
     HttpResponse 	handle404();

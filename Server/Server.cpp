@@ -20,12 +20,13 @@ Server::~Server()
     }
 }
 
-void Server::init(const std::vector<ServerConfig>& confs)
+void Server::init(const std::vector<ServerConfig> &confs)
 {
     configs = confs;
     epollFD = epoll_create(1024);
     if (epollFD < 0)
         throw ServerException("Server", "epoll_create failed");
+    
     std::map<int, std::vector<ServerConfig> > groupedConfigs;
     for (size_t i = 0; i < configs.size(); ++i) 
     {

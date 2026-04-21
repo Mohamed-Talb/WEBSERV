@@ -2,20 +2,9 @@
 #include <cctype>
 #include <fstream>
 
-Listener::Listener(const std::vector<ServerConfig>& confs, Server* srv)
-    : socketFD(-1), configs(confs), server(srv)
+Listener::Listener(const std::vector<ServerConfig> &confs, Server *srv) : socketFD(-1), server(srv), configs(confs)
 {
-    loadListener(configs[0]); 
-}
-
-Listener::~Listener()
-{
-    closeListener();
-}
-
-
-void Listener::loadListener(const ServerConfig& conf)
-{
+    ServerConfig conf = configs[0];
     socketFD = socket(AF_INET, SOCK_STREAM, 0);
     if (socketFD < 0)
         throw ServerException("Listener", "socket() failed on port " + intToString(conf.port));
@@ -54,7 +43,7 @@ void Listener::loadListener(const ServerConfig& conf)
     }
 }
 
-void Listener::closeListener()
+Listener::~Listener()
 {
     if (socketFD >= 0)
     {
@@ -67,13 +56,11 @@ void Listener::handleRead()
 {
     while (true)
     {
-        int clientFD = accept(socketFD, NULL, NULL);
-        
+        int clientFD = accept(socketFD, NULL, NULL);     
         if (clientFD < 0)
         {
             break; 
         }
-        
         if (fcntl(clientFD, F_SETFL, O_NONBLOCK) < 0)
         {
             ::close(clientFD);
@@ -84,16 +71,6 @@ void Listener::handleRead()
     }
 }
 
-void Listener::handleWrite()
-{
-}
-
-int Listener::getFD() const
-{
-    return socketFD;
-}
-
-int Listener::getPort() const 
-{ 
-    return configs[0].port; 
-}
+void Listener::handleWrite() {}
+int Listener::getFD() const {return socketFD;}
+int Listener::getPort() const {return configs[0].port;}
