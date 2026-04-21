@@ -1,0 +1,1404 @@
+Errors.cpp:#include "Errors.hpp"
+Errors.cpp:#include <string.h>    // strerror
+Errors.cpp:ServerException::ServerException(const std::string& context, const std::string& msg) : std::runtime_error("[" + context + "] " + msg + ": " + strerror(errno)) {}
+Errors.cpp:
+Errors.cpp:void logError(const std::string& context, const std::string& msg)
+Errors.cpp:{
+Errors.cpp:    std::cerr << "[ERROR][" << context << "] " << msg << ": " << strerror(errno) << "\n";
+Errors.cpp:}
+Helpers.cpp:#include "Helpers.hpp"
+Helpers.cpp:
+Helpers.cpp:std::string intToString(int value)
+Helpers.cpp:{
+Helpers.cpp:    std::stringstream ss;
+Helpers.cpp:    ss << value;
+Helpers.cpp:    return ss.str();
+Helpers.cpp:}
+Helpers.cpp:
+Helpers.cpp:std::string toUpper(std::string value)
+Helpers.cpp:{
+Helpers.cpp:    for (size_t i = 0; i < value.size(); ++i)
+Helpers.cpp:        value[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(value[i])));
+Helpers.cpp:    return value;
+Helpers.cpp:}
+Helpers.cpp:
+Helpers.cpp:std::string toLower(std::string value)
+Helpers.cpp:{
+Helpers.cpp:    for (size_t i = 0; i < value.size(); ++i)
+Helpers.cpp:        value[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(value[i])));
+Helpers.cpp:    return value;
+Helpers.cpp:}
+Helpers.cpp:
+Helpers.cpp:std::string trim(const std::string& value)
+Helpers.cpp:{
+Helpers.cpp:    size_t start = 0;
+Helpers.cpp:    while (start < value.size() && (value[start] == ' ' || value[start] == '\t'))
+Helpers.cpp:        ++start;
+Helpers.cpp:    size_t end = value.size();
+Helpers.cpp:    while (end > start && (value[end - 1] == ' ' || value[end - 1] == '\t'))
+Helpers.cpp:        --end;
+Helpers.cpp:    return value.substr(start, end - start);
+Helpers.cpp:}
+Helpers.cpp:
+main.cpp:#include "Server/Server.hpp"
+main.cpp:
+main.cpp:std::vector<ServerConfig> GETconfig();
+main.cpp:int main()
+main.cpp:{
+main.cpp:    try
+main.cpp:    {
+main.cpp:        std::vector<ServerConfig> configs = GETconfig();
+main.cpp:        Server server;
+main.cpp:        server.init(configs);
+main.cpp:        server.runEventLoop();
+main.cpp:    }
+main.cpp:    catch (const ServerException& e)
+main.cpp:    {
+main.cpp:        std::cerr << e.what() << "\n";
+main.cpp:        return 1;
+main.cpp:    }
+main.cpp:}
+Errors.hpp:#ifndef ERRORS_HPP
+Errors.hpp:#define ERRORS_HPP
+Errors.hpp:#include <iostream>
+Errors.hpp:#include <stdexcept>
+Errors.hpp:#include <string>
+Errors.hpp:#include <cerrno>
+Errors.hpp:
+Errors.hpp:class ServerException : public std::runtime_error
+Errors.hpp:{
+Errors.hpp:    public:
+Errors.hpp:    ServerException(const std::string& context, const std::string& msg);
+Errors.hpp:};
+Errors.hpp:void logError(const std::string& context, const std::string& msg);
+Errors.hpp:
+Errors.hpp:#endif
+Helpers.hpp:#ifndef HELPERS_HPP
+Helpers.hpp:#define HELPERS_HPP
+Helpers.hpp:
+Helpers.hpp:#include "Lib.hpp"
+Helpers.hpp:
+Helpers.hpp:std::string intToString(int value);
+Helpers.hpp:std::string toUpper(std::string value);
+Helpers.hpp:std::string toLower(std::string value);
+Helpers.hpp:std::string trim(const std::string& value);
+Helpers.hpp:#endif
+Lib.hpp:#ifndef LIB_HPP
+Lib.hpp:#define LIB_HPP
+Lib.hpp:
+Lib.hpp:#include <map>
+Lib.hpp:#include <vector>
+Lib.hpp:#include <string>
+Lib.hpp:#include <iostream>
+Lib.hpp:#include <map>
+Lib.hpp:#include <vector>
+Lib.hpp:#include <iostream>
+Lib.hpp:#include "configParser/configParser.hpp"
+Lib.hpp:#include <sys/socket.h>
+Lib.hpp:#include <netinet/in.h>
+Lib.hpp:#include <arpa/inet.h>
+Lib.hpp:#include <unistd.h>
+Lib.hpp:#include <netdb.h>
+Lib.hpp:#include <poll.h>
+Lib.hpp:#include <sys/epoll.h>
+Lib.hpp:#include <fcntl.h>
+Lib.hpp:#include <cerrno>
+Lib.hpp:#include <cstdio>      // perror
+Lib.hpp:#include <cstdlib>     // exit
+Lib.hpp:#include <unistd.h>    // close
+Lib.hpp:#include <fcntl.h>     // fcntl
+Lib.hpp:#include <sys/epoll.h> // epoll
+Lib.hpp:#include <sys/socket.h>
+Lib.hpp:#include <netinet/in.h>
+Lib.hpp:#include <errno.h>     // errno
+Lib.hpp:#include <string.h>    // strerror
+Lib.hpp:#include <sstream>
+Lib.hpp:
+Lib.hpp:#endif
+Logger.hpp:#include <iostream>
+Logger.hpp:#include <string>
+Logger.hpp:
+Logger.hpp:// logger in cpp with debug levels 
+Logger.hpp:class Logger 
+Logger.hpp:{
+Logger.hpp:public:
+Logger.hpp:    static void server(const std::string& msg) { std::cout << "\033[1;34m[SERVER]\033[0m : " << msg << std::endl; }
+Logger.hpp:    static void listener(const std::string& msg) { std::cout << "\033[1;32m[LISTENER]\033[0m : " << msg << std::endl; }
+Logger.hpp:    static void client(const std::string& msg) { std::cout << "\033[1;36m[CLIENT]\033[0m : " << msg << std::endl; }
+Logger.hpp:    static void error(const std::string& msg) { std::cerr << "\033[1;31m[ERROR]\033[0m : " << msg << std::endl; }
+Logger.hpp:};
+Server/Client.cpp:#include "Server.hpp"
+Server/Client.cpp:
+Server/Client.cpp:Client::Client(int fd) : socketFD(fd) {}
+Server/Client.cpp:
+Server/Client.cpp:Client::~Client()
+Server/Client.cpp:{
+Server/Client.cpp:    closeConnection();
+Server/Client.cpp:}
+Server/Client.cpp:
+Server/Client.cpp:void Client::closeConnection()
+Server/Client.cpp:{
+Server/Client.cpp:    if (socketFD >= 0)
+Server/Client.cpp:    {
+Server/Client.cpp:        ::close(socketFD);
+Server/Client.cpp:        socketFD = -1;
+Server/Client.cpp:    }
+Server/Client.cpp:}
+Server/Client.cpp:
+Server/Client.cpp:bool Client::isConnected() const
+Server/Client.cpp:{
+Server/Client.cpp:    return socketFD >= 0;
+Server/Client.cpp:}
+Server/Client.cpp:
+Server/Client.cpp:void Client::appendToReadBuffer(const char* data, size_t size)
+Server/Client.cpp:{
+Server/Client.cpp:    readBuffer.append(data, size);
+Server/Client.cpp:}
+Server/Client.cpp:
+Server/Client.cpp:void Client::consumeReadBuffer(size_t bytes)
+Server/Client.cpp:{
+Server/Client.cpp:    if (bytes >= readBuffer.size())
+Server/Client.cpp:        readBuffer.clear();
+Server/Client.cpp:    else
+Server/Client.cpp:        readBuffer.erase(0, bytes);
+Server/Client.cpp:}
+Server/Client.cpp:
+Server/Client.cpp:const std::string Client::getReadBuffer() const
+Server/Client.cpp:{
+Server/Client.cpp:    return readBuffer;
+Server/Client.cpp:}
+Server/Client.cpp:
+Server/Client.cpp:void Client::clearReadBuffer()
+Server/Client.cpp:{
+Server/Client.cpp:    readBuffer.clear();
+Server/Client.cpp:}
+Server/Client.cpp:
+Server/Client.cpp:
+Server/Client.cpp:void Client::appendToWriteBuffer(const std::string& data)
+Server/Client.cpp:{
+Server/Client.cpp:    writeBuffer += data;
+Server/Client.cpp:}
+Server/Client.cpp:
+Server/Client.cpp:const std::string Client::getWriteBuffer() const
+Server/Client.cpp:{
+Server/Client.cpp:    return writeBuffer;
+Server/Client.cpp:}
+Server/Client.cpp:
+Server/Client.cpp:void Client::consumeWriteBuffer(size_t bytes)
+Server/Client.cpp:{
+Server/Client.cpp:    writeBuffer.erase(0, bytes);
+Server/Client.cpp:}
+Server/Client.cpp:
+Server/Client.cpp:bool Client::hasPendingWrite() const
+Server/Client.cpp:{
+Server/Client.cpp:    return !writeBuffer.empty();
+Server/Client.cpp:}
+Server/Client.cpp:
+Server/Client.cpp:int Client::getSocketFD() const
+Server/Client.cpp:{
+Server/Client.cpp:    return socketFD;
+Server/Client.cpp:}
+Server/Client.cpp:
+Server/Client.cpp:
+Server/Client.cpp:HttpRequest& Client::getRequest()
+Server/Client.cpp:{
+Server/Client.cpp:    return request;
+Server/Client.cpp:}
+Server/Listener.cpp:// ─── Listener.cpp ───────────────────────────────────────────────────
+Server/Listener.cpp:#include "Server.hpp"
+Server/Listener.cpp:#include "Client.hpp"
+Server/Listener.cpp:#include <cctype>
+Server/Listener.cpp:#include <fstream>
+Server/Listener.cpp:
+Server/Listener.cpp:Listener::Listener(const std::vector<ServerConfig>& confs): socketFD(-1), configs(confs)
+Server/Listener.cpp:{
+Server/Listener.cpp:    loadListener(configs[0]); 
+Server/Listener.cpp:}
+Server/Listener.cpp:
+Server/Listener.cpp:Listener::~Listener()
+Server/Listener.cpp:{
+Server/Listener.cpp:    closeListener();
+Server/Listener.cpp:}
+Server/Listener.cpp:
+Server/Listener.cpp:void Listener::loadListener(const ServerConfig& conf)
+Server/Listener.cpp:{
+Server/Listener.cpp:    socketFD = socket(AF_INET, SOCK_STREAM, 0);
+Server/Listener.cpp:    if (socketFD < 0)
+Server/Listener.cpp:        throw ServerException("Listener","socket() failed on port " + intToString(conf.port));
+Server/Listener.cpp:    int opt = 1;
+Server/Listener.cpp:    if (setsockopt(socketFD, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
+Server/Listener.cpp:    {
+Server/Listener.cpp:        ::close(socketFD);
+Server/Listener.cpp:        socketFD = -1;
+Server/Listener.cpp:        throw ServerException("Listener", "setsockopt() failed on port " + intToString(conf.port));
+Server/Listener.cpp:    }
+Server/Listener.cpp:    sockaddr_in addr;
+Server/Listener.cpp:    // std::memset(&addr, 0, sizeof(addr));
+Server/Listener.cpp:    addr.sin_family      = AF_INET;
+Server/Listener.cpp:    addr.sin_port        = htons(conf.port);
+Server/Listener.cpp:    addr.sin_addr.s_addr = inet_addr(conf.host.c_str()); 
+Server/Listener.cpp:
+Server/Listener.cpp:    if (addr.sin_addr.s_addr == INADDR_NONE)
+Server/Listener.cpp:        addr.sin_addr.s_addr = INADDR_ANY;
+Server/Listener.cpp:    if (bind(socketFD, (sockaddr*)&addr, sizeof(addr)) < 0)
+Server/Listener.cpp:    {
+Server/Listener.cpp:        ::close(socketFD);
+Server/Listener.cpp:        socketFD = -1;
+Server/Listener.cpp:        throw ServerException("Listener","bind() failed on port " + intToString(conf.port));
+Server/Listener.cpp:    }
+Server/Listener.cpp:
+Server/Listener.cpp:    if (listen(socketFD, SOMAXCONN) < 0)
+Server/Listener.cpp:    {
+Server/Listener.cpp:        ::close(socketFD);
+Server/Listener.cpp:        socketFD = -1;
+Server/Listener.cpp:        throw ServerException("Listener","listen() failed on port " + intToString(conf.port));
+Server/Listener.cpp:    }
+Server/Listener.cpp:}
+Server/Listener.cpp:
+Server/Listener.cpp:void Listener::closeListener()
+Server/Listener.cpp:{
+Server/Listener.cpp:    for (std::map<int, Client*>::iterator it = clients.begin(); it != clients.end(); ++it)
+Server/Listener.cpp:    {
+Server/Listener.cpp:        it->second->closeConnection();
+Server/Listener.cpp:        delete it->second;
+Server/Listener.cpp:    }
+Server/Listener.cpp:    clients.clear();
+Server/Listener.cpp:    if (socketFD >= 0)
+Server/Listener.cpp:    {
+Server/Listener.cpp:        ::close(socketFD);
+Server/Listener.cpp:        socketFD = -1;
+Server/Listener.cpp:    }
+Server/Listener.cpp:}
+Server/Listener.cpp:
+Server/Listener.cpp:
+Server/Listener.cpp:
+Server/Listener.cpp:// const ServerConfig& Listener::matchConfig(const std::string& requestedHost) const // ????????????????
+Server/Listener.cpp:// {
+Server/Listener.cpp://     return ;
+Server/Listener.cpp:// }
+Server/Listener.cpp:const ServerConfig& Listener::matchConfig(const std::string& hostHeader) const
+Server/Listener.cpp:{
+Server/Listener.cpp:    std::string requestedHost = hostHeader;
+Server/Listener.cpp:    size_t portSep = requestedHost.find(':');
+Server/Listener.cpp:    if (portSep != std::string::npos)
+Server/Listener.cpp:        requestedHost = requestedHost.substr(0, portSep);
+Server/Listener.cpp:    for (size_t i = 0; i < configs.size(); ++i)
+Server/Listener.cpp:    {
+Server/Listener.cpp:        for (size_t j = 0; j < configs[i].serverName.size(); ++j)
+Server/Listener.cpp:        {
+Server/Listener.cpp:            if (configs[i].serverName[j] == requestedHost)
+Server/Listener.cpp:                return configs[i];
+Server/Listener.cpp:        }
+Server/Listener.cpp:    }
+Server/Listener.cpp:    return configs[0];
+Server/Listener.cpp:}
+Server/Listener.cpp:
+Server/Listener.cpp:
+Server/Listener.cpp:
+Server/Listener.cpp:
+Server/Listener.cpp:Client* Listener::acceptClient()
+Server/Listener.cpp:{
+Server/Listener.cpp:    int clientFD = accept(socketFD, NULL, NULL);
+Server/Listener.cpp:    if (clientFD < 0)
+Server/Listener.cpp:        return NULL; // EAGAIN/EWOULDBLOCK — no client ready, not an error
+Server/Listener.cpp:    if (fcntl(clientFD, F_SETFL, O_NONBLOCK) < 0)
+Server/Listener.cpp:    {
+Server/Listener.cpp:        ::close(clientFD);
+Server/Listener.cpp:        throw ServerException("Listener","fcntl() failed for new client on port " + intToString(configs[0].port));
+Server/Listener.cpp:    }
+Server/Listener.cpp:    Client* client       = new Client(clientFD);
+Server/Listener.cpp:    clients[clientFD]    = client;
+Server/Listener.cpp:    return client;
+Server/Listener.cpp:}
+Server/Listener.cpp:
+Server/Listener.cpp:Client* Listener::getClient(int fd) const
+Server/Listener.cpp:{
+Server/Listener.cpp:    std::map<int, Client*>::const_iterator it = clients.find(fd);
+Server/Listener.cpp:    if (it != clients.end())
+Server/Listener.cpp:        return it->second;
+Server/Listener.cpp:    return NULL;
+Server/Listener.cpp:}
+Server/Listener.cpp:
+Server/Listener.cpp:void Listener::removeClient(int clientFD)
+Server/Listener.cpp:{
+Server/Listener.cpp:    std::map<int, Client*>::iterator it = clients.find(clientFD);
+Server/Listener.cpp:    if (it == clients.end())
+Server/Listener.cpp:        return;
+Server/Listener.cpp:    it->second->closeConnection();
+Server/Listener.cpp:    delete it->second;
+Server/Listener.cpp:    clients.erase(it);
+Server/Listener.cpp:}
+Server/Listener.cpp:
+Server/Listener.cpp:int Listener::getSocketFD() const { return socketFD; }
+Server/Listener.cpp:int Listener::getPort()     const { return configs[0].port; }
+Server/Listener.cpp:
+Server/Listener.cpp:IOState Listener::handleClientRead(Client* client)
+Server/Listener.cpp:{
+Server/Listener.cpp:    char buf[4096];
+Server/Listener.cpp:    int clientFD = client->getSocketFD();
+Server/Listener.cpp:    int bytes = recv(clientFD, buf, sizeof(buf), 0);
+Server/Listener.cpp:
+Server/Listener.cpp:    if (bytes == 0)
+Server/Listener.cpp:        return IO_DISCONNECTED;
+Server/Listener.cpp:    if (bytes < 0)
+Server/Listener.cpp:    {
+Server/Listener.cpp:        if (errno == EAGAIN || errno == EWOULDBLOCK)
+Server/Listener.cpp:            return IO_PENDING;
+Server/Listener.cpp:        return IO_DISCONNECTED;
+Server/Listener.cpp:    }
+Server/Listener.cpp:
+Server/Listener.cpp:    client->appendToReadBuffer(buf, bytes);
+Server/Listener.cpp:    std::string readBuffer = client->getReadBuffer();
+Server/Listener.cpp:
+Server/Listener.cpp:    HttpRequest& request = client->getRequest(); 
+Server/Listener.cpp:    
+Server/Listener.cpp:    int parseStatus = request.parse(readBuffer);
+Server/Listener.cpp:
+Server/Listener.cpp:    if (parseStatus == 0)
+Server/Listener.cpp:        return IO_PENDING;
+Server/Listener.cpp:
+Server/Listener.cpp:    HttpResponse response;
+Server/Listener.cpp:    HttpHandler handler;
+Server/Listener.cpp:    if (request.getErrorCode() != 0)
+Server/Listener.cpp:    {
+Server/Listener.cpp:        response = handler.process(request, configs[0]); 
+Server/Listener.cpp:    }
+Server/Listener.cpp:    else
+Server/Listener.cpp:    {
+Server/Listener.cpp:        std::cout << "[LISTENER] : Client FD " << clientFD
+Server/Listener.cpp:                  << " fully received request: " << request.getMethod() << " " << request.getTarget() << std::endl;
+Server/Listener.cpp:        
+Server/Listener.cpp:        std::string host = request.getHeader("host");
+Server/Listener.cpp:        const ServerConfig &selectedConfig = matchConfig(host);
+Server/Listener.cpp:        response = handler.process(request, selectedConfig);
+Server/Listener.cpp:    }
+Server/Listener.cpp:    client->appendToWriteBuffer(response.toString());
+Server/Listener.cpp:    client->consumeReadBuffer(request.getConsumedBytes());
+Server/Listener.cpp:    request.reset();
+Server/Listener.cpp:    return IO_READY;
+Server/Listener.cpp:}
+Server/Listener.cpp:
+Server/Listener.cpp:IOState Listener::handleClientWrite(Client* client)
+Server/Listener.cpp:{
+Server/Listener.cpp:    if (!client->hasPendingWrite())
+Server/Listener.cpp:        return IO_READY;
+Server/Listener.cpp:    int clientFD = client->getSocketFD();
+Server/Listener.cpp:    const std::string& buffer = client->getWriteBuffer();
+Server/Listener.cpp:    int bytes = send(clientFD, buffer.c_str(), buffer.size(), 0);
+Server/Listener.cpp:
+Server/Listener.cpp:    if (bytes < 0)
+Server/Listener.cpp:    {
+Server/Listener.cpp:        if (errno == EAGAIN || errno == EWOULDBLOCK)
+Server/Listener.cpp:            return IO_PENDING;
+Server/Listener.cpp:        return IO_DISCONNECTED;
+Server/Listener.cpp:    }
+Server/Listener.cpp:    client->consumeWriteBuffer(bytes);
+Server/Listener.cpp:    if (!client->hasPendingWrite())
+Server/Listener.cpp:    {
+Server/Listener.cpp:        // Note form mtaleb: For HTTP/1.1 Keep-Alive, you go back to reading.  For HTTP/1.0 Connection: close, you might actually return -1 here.
+Server/Listener.cpp:        return IO_READY; 
+Server/Listener.cpp:    }
+Server/Listener.cpp:    return IO_PENDING;
+Server/Listener.cpp:}
+Server/Server.cpp:#include "Server.hpp"
+Server/Server.cpp:// ─── Server.cpp ─────────────────────────────────────────────────────
+Server/Server.cpp:Server::Server() : epollFD(-1) {}
+Server/Server.cpp:
+Server/Server.cpp:Server::~Server() { shutdown(); }
+Server/Server.cpp:
+Server/Server.cpp:void Server::registerToEpoll(int fd, uint32_t events)
+Server/Server.cpp:{
+Server/Server.cpp:    epoll_event ev;
+Server/Server.cpp:    ev.events  = events;
+Server/Server.cpp:    ev.data.fd = fd;
+Server/Server.cpp:    if (epoll_ctl(epollFD, EPOLL_CTL_ADD, fd, &ev) < 0)
+Server/Server.cpp:    {
+Server/Server.cpp:        ::close(epollFD);
+Server/Server.cpp:        epollFD = -1;
+Server/Server.cpp:        throw ServerException("Server", "epoll_ctl ADD failed for fd " + intToString(fd));
+Server/Server.cpp:    }
+Server/Server.cpp:}
+Server/Server.cpp:
+Server/Server.cpp:void Server::init(std::vector<ServerConfig>& configs)
+Server/Server.cpp:{
+Server/Server.cpp:    epollFD = epoll_create(1024);
+Server/Server.cpp:    if (epollFD < 0)
+Server/Server.cpp:        throw ServerException("Server", "epoll_create() failed");
+Server/Server.cpp:    std::map<int, std::vector<ServerConfig> > groupedConfigs;
+Server/Server.cpp:    for (size_t i = 0; i < configs.size(); ++i) 
+Server/Server.cpp:    {
+Server/Server.cpp:        groupedConfigs[configs[i].port].push_back(configs[i]);
+Server/Server.cpp:    }
+Server/Server.cpp:    std::map<int, std::vector<ServerConfig> >::iterator it;
+Server/Server.cpp:    for (it = groupedConfigs.begin(); it != groupedConfigs.end(); ++it)
+Server/Server.cpp:    {
+Server/Server.cpp:        Listener* listener = new Listener(it->second); 
+Server/Server.cpp:        listeners[listener->getSocketFD()] = listener;
+Server/Server.cpp:        registerToEpoll(listener->getSocketFD(), EPOLLIN);
+Server/Server.cpp:    }
+Server/Server.cpp:}
+Server/Server.cpp:
+Server/Server.cpp:void Server::shutdown()
+Server/Server.cpp:{
+Server/Server.cpp:    for (map<int, Listener*>::iterator it = listeners.begin(); it != listeners.end(); ++it)
+Server/Server.cpp:    {
+Server/Server.cpp:        delete it->second;
+Server/Server.cpp:    }
+Server/Server.cpp:    listeners.clear();
+Server/Server.cpp:    if (epollFD >= 0)
+Server/Server.cpp:    {
+Server/Server.cpp:        ::close(epollFD);
+Server/Server.cpp:        epollFD = -1;
+Server/Server.cpp:    }
+Server/Server.cpp:}
+Server/Server.cpp:
+Server/Server.cpp:
+Server/Server.cpp:
+Server/Server.cpp:void Server::disconnectClient(Listener* listener, int clientFD)
+Server/Server.cpp:{
+Server/Server.cpp:    epoll_ctl(epollFD, EPOLL_CTL_DEL, clientFD, NULL); 
+Server/Server.cpp:    listener->removeClient(clientFD);
+Server/Server.cpp:    clientMap.erase(clientFD);
+Server/Server.cpp:}
+Server/Server.cpp:
+Server/Server.cpp:
+Server/Server.cpp:void Server::handleNewConnection(Listener* listener)
+Server/Server.cpp:{
+Server/Server.cpp:    Client* client = listener->acceptClient();
+Server/Server.cpp:    if (!client)
+Server/Server.cpp:        return;
+Server/Server.cpp:    int clientFD = client->getSocketFD();
+Server/Server.cpp:    clientMap[clientFD] = listener;
+Server/Server.cpp:    epoll_event ev;
+Server/Server.cpp:    ev.events  = EPOLLIN;
+Server/Server.cpp:    ev.data.fd = clientFD;
+Server/Server.cpp:    if (epoll_ctl(epollFD, EPOLL_CTL_ADD, clientFD, &ev) < 0)
+Server/Server.cpp:    {
+Server/Server.cpp:        logError("handleNewConnection", "epoll_ctl ADD failed for client fd " + intToString(clientFD));
+Server/Server.cpp:        listener->removeClient(clientFD);
+Server/Server.cpp:        clientMap.erase(clientFD); // Clean up if epoll fails
+Server/Server.cpp:        return;
+Server/Server.cpp:    }
+Server/Server.cpp:}
+Server/Server.cpp:
+Server/Server.cpp:void Server::handleConnection(Listener *listener, int clientFd, uint32_t event)
+Server/Server.cpp:{
+Server/Server.cpp:    Client* client = listener->getClient(clientFd);
+Server/Server.cpp:    if (event & (EPOLLHUP | EPOLLERR))
+Server/Server.cpp:    {
+Server/Server.cpp:        disconnectClient(listener, clientFd);
+Server/Server.cpp:        return ;
+Server/Server.cpp:    }
+Server/Server.cpp:    if (event & EPOLLIN)
+Server/Server.cpp:    {
+Server/Server.cpp:        IOState status = listener->handleClientRead(client);
+Server/Server.cpp:        if (status == IO_DISCONNECTED) 
+Server/Server.cpp:        {
+Server/Server.cpp:            disconnectClient(listener, clientFd);
+Server/Server.cpp:            return ;
+Server/Server.cpp:        }
+Server/Server.cpp:        if (status == IO_READY)
+Server/Server.cpp:        {
+Server/Server.cpp:            epoll_event ev;
+Server/Server.cpp:            ev.events  = EPOLLIN | EPOLLOUT;
+Server/Server.cpp:            ev.data.fd = clientFd;
+Server/Server.cpp:            epoll_ctl(epollFD, EPOLL_CTL_MOD, clientFd, &ev);
+Server/Server.cpp:        }
+Server/Server.cpp:        // If status == IO_PENDING, we do nothing and let the loop continue
+Server/Server.cpp:    }
+Server/Server.cpp:    if (event & EPOLLOUT)
+Server/Server.cpp:    {
+Server/Server.cpp:        IOState status = listener->handleClientWrite(client);
+Server/Server.cpp:        if (status == IO_DISCONNECTED)
+Server/Server.cpp:        {
+Server/Server.cpp:            disconnectClient(listener, clientFd);
+Server/Server.cpp:            return;
+Server/Server.cpp:        }
+Server/Server.cpp:        if (status == IO_READY) 
+Server/Server.cpp:        {
+Server/Server.cpp:            epoll_event ev;
+Server/Server.cpp:            ev.events  = EPOLLIN;
+Server/Server.cpp:            ev.data.fd = clientFd;
+Server/Server.cpp:            epoll_ctl(epollFD, EPOLL_CTL_MOD, clientFd, &ev);
+Server/Server.cpp:        }
+Server/Server.cpp:    }   
+Server/Server.cpp:}
+Server/Server.cpp:
+Server/Server.cpp:void Server::runEventLoop()
+Server/Server.cpp:{
+Server/Server.cpp:    const int MAX_EVENTS = 1024;
+Server/Server.cpp:    epoll_event readyEvents[MAX_EVENTS];
+Server/Server.cpp:    
+Server/Server.cpp:
+Server/Server.cpp:    while (true)
+Server/Server.cpp:    {
+Server/Server.cpp:        int ready = epoll_wait(epollFD, readyEvents, MAX_EVENTS, -1); // handling eppoll wait errors 
+Server/Server.cpp:
+Server/Server.cpp:        for (int i = 0; i < ready; ++i)
+Server/Server.cpp:        {
+Server/Server.cpp:            int fd = readyEvents[i].data.fd;
+Server/Server.cpp:            uint32_t currEvent = readyEvents[i].events;
+Server/Server.cpp:
+Server/Server.cpp:            std::map<int, Listener*>::iterator listenerIt = listeners.find(fd);
+Server/Server.cpp:            if (listenerIt != listeners.end())
+Server/Server.cpp:            {
+Server/Server.cpp:                handleNewConnection(listenerIt->second);
+Server/Server.cpp:                continue;
+Server/Server.cpp:            
+Server/Server.cpp:            }
+Server/Server.cpp:            std::map<int, Listener*>::iterator clientIt = clientMap.find(fd);
+Server/Server.cpp:            if (clientIt == clientMap.end()) 
+Server/Server.cpp:                continue;
+Server/Server.cpp:            Listener* parentListener = clientIt->second;
+Server/Server.cpp:            handleConnection(parentListener, fd, currEvent);
+Server/Server.cpp:        }
+Server/Server.cpp:    }
+Server/Server.cpp:}
+Server/Server.cpp:
+Server/Server.cpp:
+Server/Server.cpp:
+Server/Client.hpp:// ─── Client.hpp ─────────────────────────────────────────────────────
+Server/Client.hpp:#ifndef CLIENT_HPP
+Server/Client.hpp:#define CLIENT_HPP
+Server/Client.hpp:
+Server/Client.hpp:#include "../Lib.hpp"
+Server/Client.hpp:#include "../Helpers.hpp"
+Server/Client.hpp:#include "../HTTP/HttpRequest.hpp"
+Server/Client.hpp:
+Server/Client.hpp:class Client
+Server/Client.hpp:{
+Server/Client.hpp:private:
+Server/Client.hpp:    int         socketFD;
+Server/Client.hpp:    std::string readBuffer;
+Server/Client.hpp:    std::string writeBuffer;
+Server/Client.hpp:    HttpRequest request;
+Server/Client.hpp:
+Server/Client.hpp:    Client();
+Server/Client.hpp:    Client(const Client&);
+Server/Client.hpp:    Client& operator=(const Client&);
+Server/Client.hpp:
+Server/Client.hpp:public:
+Server/Client.hpp:    explicit Client(int fd);
+Server/Client.hpp:    ~Client();
+Server/Client.hpp:
+Server/Client.hpp:    void closeConnection();
+Server/Client.hpp:    bool isConnected()      const;
+Server/Client.hpp:
+Server/Client.hpp:    void appendToReadBuffer(const char* data, size_t size);
+Server/Client.hpp:    void consumeReadBuffer(size_t bytes);
+Server/Client.hpp:    const std::string getReadBuffer()                              const;
+Server/Client.hpp:    void               clearReadBuffer();
+Server/Client.hpp:
+Server/Client.hpp:    void               appendToWriteBuffer(const std::string& data);
+Server/Client.hpp:    const std::string getWriteBuffer()                             const;
+Server/Client.hpp:    void               consumeWriteBuffer(size_t bytes);
+Server/Client.hpp:    bool               hasPendingWrite()                            const;
+Server/Client.hpp:
+Server/Client.hpp:    HttpRequest& getRequest();
+Server/Client.hpp:    int  getSocketFD() const;
+Server/Client.hpp:};
+Server/Client.hpp:
+Server/Client.hpp:#endif
+Server/Listener.hpp:#ifndef LISTENER_HPP
+Server/Listener.hpp:#define LISTENER_HPP
+Server/Listener.hpp:#include "../Lib.hpp"
+Server/Listener.hpp:#include "../configParser/configParser.hpp"
+Server/Listener.hpp:#include "Client.hpp"
+Server/Listener.hpp:#include "../Errors.hpp"
+Server/Listener.hpp:#include "../HTTP/HttpRequest.hpp"
+Server/Listener.hpp:#include "../HTTP/HttpResponse.hpp"
+Server/Listener.hpp:#include "../HTTP/HttpHandler.hpp"
+Server/Listener.hpp:
+Server/Listener.hpp:enum IOState 
+Server/Listener.hpp:{
+Server/Listener.hpp:    IO_READY,        // Replaces 0: The operation finished, switch epoll state
+Server/Listener.hpp:    IO_PENDING,      // Replaces 1: The operation needs more time, wait for epoll
+Server/Listener.hpp:    IO_DISCONNECTED  // Replaces 2: The client dropped, kill the connection
+Server/Listener.hpp:};
+Server/Listener.hpp:
+Server/Listener.hpp:class Listener
+Server/Listener.hpp:{
+Server/Listener.hpp:    private:
+Server/Listener.hpp:        int                      socketFD;
+Server/Listener.hpp:        std::vector<ServerConfig> configs;
+Server/Listener.hpp:        std::map<int, Client*>   clients;
+Server/Listener.hpp:        void loadListener(const ServerConfig &conf);
+Server/Listener.hpp:        void closeListener(); 
+Server/Listener.hpp:        Listener();
+Server/Listener.hpp:        Listener(const Listener&);
+Server/Listener.hpp:        Listener& operator=(const Listener&);
+Server/Listener.hpp:
+Server/Listener.hpp:    public:
+Server/Listener.hpp:        Listener(const std::vector<ServerConfig>& confs);
+Server/Listener.hpp:        ~Listener();
+Server/Listener.hpp:        // client lifecycle — called by Server
+Server/Listener.hpp:        Client* acceptClient();
+Server/Listener.hpp:        Client* getClient(int fd) const;
+Server/Listener.hpp:        void    removeClient(int clientFD);
+Server/Listener.hpp:        const ServerConfig& matchConfig(const std::string& hostHeader) const;
+Server/Listener.hpp:        IOState handleClientRead(Client* client);
+Server/Listener.hpp:        IOState handleClientWrite(Client* client);
+Server/Listener.hpp:        int         getSocketFD() const;
+Server/Listener.hpp:        int         getPort()     const;
+Server/Listener.hpp:};
+Server/Listener.hpp:
+Server/Listener.hpp:#endif
+Server/Server.hpp:#ifndef SERVER_HPP
+Server/Server.hpp:#define SERVER_HPP
+Server/Server.hpp:
+Server/Server.hpp:#include "../configParser/configParser.hpp"
+Server/Server.hpp:#include "../Lib.hpp"
+Server/Server.hpp:#include "Listener.hpp"
+Server/Server.hpp:
+Server/Server.hpp:using namespace std;
+Server/Server.hpp:
+Server/Server.hpp:class Server
+Server/Server.hpp:{
+Server/Server.hpp:    private:
+Server/Server.hpp:        map<int, Listener*> listeners;
+Server/Server.hpp:        std::map<int, Listener*> clientMap;
+Server/Server.hpp:        int epollFD;
+Server/Server.hpp:        void registerToEpoll(int fd, uint32_t events);
+Server/Server.hpp:        void disconnectClient(Listener* listener, int clientFD);
+Server/Server.hpp:        void handleConnection(Listener *listener, int clientFd, uint32_t event);
+Server/Server.hpp:        void handleNewConnection(Listener* listener);
+Server/Server.hpp:
+Server/Server.hpp:    public:
+Server/Server.hpp:        Server();
+Server/Server.hpp:        ~Server();
+Server/Server.hpp:        void init(vector<ServerConfig>& configs);           // setup
+Server/Server.hpp:        void runEventLoop();                               // run
+Server/Server.hpp:        void shutdown(); 
+Server/Server.hpp:};
+Server/Server.hpp:
+Server/Server.hpp:#endif
+Server/Server.hpp:
+Server/Server.hpp:
+Server/Server.hpp:
+Server/Server.hpp:
+Server/Server.hpp:
+Server/Server.hpp:
+Server/Server.hpp:
+configParser/configParser.cpp:#include "configParser.hpp"
+configParser/configParser.cpp:#include <stdexcept>
+configParser/configParser.cpp:#include <iostream>
+configParser/configParser.cpp:#include <stdlib.h>
+configParser/configParser.cpp:#include <fstream>
+configParser/configParser.cpp:#include <sstream>
+configParser/configParser.cpp:
+configParser/configParser.cpp:std::vector<std::string> prepConf(const std::string& filepath)
+configParser/configParser.cpp:{
+configParser/configParser.cpp:    std::vector<std::string> tokens;
+configParser/configParser.cpp:    std::ifstream myconf(filepath.c_str());
+configParser/configParser.cpp:    std::string specials = "{;}";
+configParser/configParser.cpp:    std::string cleanConf;
+configParser/configParser.cpp:
+configParser/configParser.cpp:    if ( myconf.is_open() ) {
+configParser/configParser.cpp:        char mychar;
+configParser/configParser.cpp:        while ((mychar = myconf.get()) != -1) {
+configParser/configParser.cpp:            if (mychar == '#')
+configParser/configParser.cpp:            {
+configParser/configParser.cpp:                while ((mychar = myconf.get()) != -1)
+configParser/configParser.cpp:                {
+configParser/configParser.cpp:                    if (mychar == '\n')
+configParser/configParser.cpp:                        break;
+configParser/configParser.cpp:                }
+configParser/configParser.cpp:            }
+configParser/configParser.cpp:            else if (specials.find(mychar) < specials.length())
+configParser/configParser.cpp:            {
+configParser/configParser.cpp:                cleanConf += ' ';
+configParser/configParser.cpp:                cleanConf += mychar;
+configParser/configParser.cpp:                cleanConf += ' ';
+configParser/configParser.cpp:            }
+configParser/configParser.cpp:            else
+configParser/configParser.cpp:                cleanConf += mychar;
+configParser/configParser.cpp:        }
+configParser/configParser.cpp:        std::stringstream ss(cleanConf);
+configParser/configParser.cpp:        std::string buff;
+configParser/configParser.cpp:        while (ss >> buff)
+configParser/configParser.cpp:            tokens.push_back(buff);
+configParser/configParser.cpp:    }
+configParser/configParser.cpp:    else
+configParser/configParser.cpp:        std::cout << "Could not open config file" << std::endl; // or throw std::runtime_error("Could not open file");
+configParser/configParser.cpp:    return tokens;
+configParser/configParser.cpp:}
+configParser/configParser.cpp:
+configParser/configParser.cpp:Location parseLocation(std::vector<std::string> tokens, std::vector<std::string>::iterator &it)
+configParser/configParser.cpp:{
+configParser/configParser.cpp:    Location location;
+configParser/configParser.cpp:    
+configParser/configParser.cpp:    location.path = *(it++);
+configParser/configParser.cpp:    if (*it != "{")
+configParser/configParser.cpp:        throw std::runtime_error("No opening curly braces");
+configParser/configParser.cpp:    
+configParser/configParser.cpp:    for (it++; it != tokens.end(); it++)
+configParser/configParser.cpp:    {
+configParser/configParser.cpp:        if (*it == "}")
+configParser/configParser.cpp:            return location;
+configParser/configParser.cpp:        else if (*it == "methods")
+configParser/configParser.cpp:        {
+configParser/configParser.cpp:            it++;
+configParser/configParser.cpp:            while (*it != ";")
+configParser/configParser.cpp:                location.methods.push_back(*(it++));
+configParser/configParser.cpp:        }
+configParser/configParser.cpp:        else if (*it == "root")
+configParser/configParser.cpp:            location.root = *(++it);
+configParser/configParser.cpp:        else if (*it == "autoindex")
+configParser/configParser.cpp:            location.autoindex = *(++it);
+configParser/configParser.cpp:        else if (*it == "index")
+configParser/configParser.cpp:            location.index = *(++it);
+configParser/configParser.cpp:        else if (*it == "cgi_path")
+configParser/configParser.cpp:            location.cgiPath = *(++it);
+configParser/configParser.cpp:        else if (*it == "cgi_ext")
+configParser/configParser.cpp:            location.cgiExt = *(++it);
+configParser/configParser.cpp:    }
+configParser/configParser.cpp:
+configParser/configParser.cpp:    throw std::runtime_error("No matching curly braces");
+configParser/configParser.cpp:}
+configParser/configParser.cpp:
+configParser/configParser.cpp:ServerConfig parseServer(std::vector<std::string> tokens, std::vector<std::string>::iterator &it)
+configParser/configParser.cpp:{
+configParser/configParser.cpp:    ServerConfig serverConf;
+configParser/configParser.cpp:    
+configParser/configParser.cpp:    if (*it != "{")
+configParser/configParser.cpp:        throw std::runtime_error("No opening curly braces");
+configParser/configParser.cpp:    
+configParser/configParser.cpp:    for (it++; it != tokens.end(); it++)
+configParser/configParser.cpp:    {
+configParser/configParser.cpp:        if (*it == "}")
+configParser/configParser.cpp:            return serverConf;
+configParser/configParser.cpp:        else if (*it == "host")
+configParser/configParser.cpp:            serverConf.host = *(++it); // this is not readable
+configParser/configParser.cpp:        else if (*it == "listen")
+configParser/configParser.cpp:            serverConf.port = std::atoi((*(++it)).c_str());
+configParser/configParser.cpp:        else if (*it == "server_name")
+configParser/configParser.cpp:        {
+configParser/configParser.cpp:            it++;
+configParser/configParser.cpp:            while (*it != ";")
+configParser/configParser.cpp:                serverConf.serverName.push_back(*(it++));
+configParser/configParser.cpp:        }
+configParser/configParser.cpp:        else if (*it == "root")
+configParser/configParser.cpp:            serverConf.root = *(++it);
+configParser/configParser.cpp:        else if (*it == "location")
+configParser/configParser.cpp:        {
+configParser/configParser.cpp:            Location location = parseLocation(tokens, ++it);
+configParser/configParser.cpp:            serverConf.Locations.push_back(location);
+configParser/configParser.cpp:        }
+configParser/configParser.cpp:        else if (*it == "error_page")
+configParser/configParser.cpp:        {
+configParser/configParser.cpp:            std::vector<int> errorCodes;
+configParser/configParser.cpp:
+configParser/configParser.cpp:            while (true)
+configParser/configParser.cpp:            {
+configParser/configParser.cpp:                ++it;
+configParser/configParser.cpp:                if (it + 1 == tokens.end())
+configParser/configParser.cpp:                    throw std::runtime_error("ending semicolon not found.");
+configParser/configParser.cpp:                else if(*(it + 1) == ";")
+configParser/configParser.cpp:                    break;
+configParser/configParser.cpp:                errorCodes.push_back(std::atoi((*it).c_str()));
+configParser/configParser.cpp:            }
+configParser/configParser.cpp:            for (std::vector<int>::iterator tempIt = errorCodes.begin(); tempIt != errorCodes.end(); tempIt++)
+configParser/configParser.cpp:                serverConf.errorPage.insert(std::pair<int, std::string>(*tempIt, *it));
+configParser/configParser.cpp:            it++; // skip error page
+configParser/configParser.cpp:        }
+configParser/configParser.cpp:    }
+configParser/configParser.cpp:
+configParser/configParser.cpp:    throw std::runtime_error("No matching curly braces");
+configParser/configParser.cpp:}
+configParser/configParser.cpp:
+configParser/configParser.cpp:std::vector<ServerConfig> parseTokens(std::vector<std::string> tokens)
+configParser/configParser.cpp:{
+configParser/configParser.cpp:    std::vector<ServerConfig> allServers;
+configParser/configParser.cpp:    std::vector<std::string>::iterator it;
+configParser/configParser.cpp:    ServerConfig serverConf;
+configParser/configParser.cpp:
+configParser/configParser.cpp:    for (it = tokens.begin(); it != tokens.end(); it++)
+configParser/configParser.cpp:    {
+configParser/configParser.cpp:        if (*it != "server")
+configParser/configParser.cpp:            throw std::runtime_error("No server config found."); // change later to custom syntax/parsing exception
+configParser/configParser.cpp:        serverConf = parseServer(tokens, ++it);
+configParser/configParser.cpp:        allServers.push_back(serverConf);
+configParser/configParser.cpp:    }
+configParser/configParser.cpp:    return allServers;
+configParser/configParser.cpp:}
+configParser/configParser.cpp:
+configParser/configParser.cpp:
+configParser/configParser.cpp:std::vector<ServerConfig> GETconfig()
+configParser/configParser.cpp:{
+configParser/configParser.cpp:    std::vector<std::string> tokens = prepConf("server.conf");
+configParser/configParser.cpp:    std::vector<ServerConfig> allServers = parseTokens(tokens); 
+configParser/configParser.cpp:    return allServers;
+configParser/configParser.cpp:}
+configParser/configParser.cpp:
+configParser/configParser.cpp:
+configParser/configParser.cpp:// int main()
+configParser/configParser.cpp:// {
+configParser/configParser.cpp://     std::vector<std::string> tokens = prepConf("server.conf");
+configParser/configParser.cpp://     std::vector<ServerConfig> allServers = parseTokens(tokens);    
+configParser/configParser.cpp:    
+configParser/configParser.cpp://     // ServerConfig myServer = allServers[0];
+configParser/configParser.cpp://     // std::cout << myServer.host << std::endl;
+configParser/configParser.cpp://     // std::cout << myServer.port << std::endl;
+configParser/configParser.cpp://     // std::cout << "server names: ";
+configParser/configParser.cpp://     // for (std::vector<std::string>::iterator tempIt = myServer.serverName.begin(); tempIt != myServer.serverName.end(); tempIt++)
+configParser/configParser.cpp://     //     std::cout << *tempIt << " ";
+configParser/configParser.cpp://     // std::cout << std::endl;
+configParser/configParser.cpp://     // std::cout << myServer.root << std::endl;
+configParser/configParser.cpp://     // std::cout << "Locations:" << std::endl;
+configParser/configParser.cpp://     // for (std::vector<Location>::iterator tempIt = myServer.Locations.begin(); tempIt != myServer.Locations.end(); tempIt++)
+configParser/configParser.cpp://     // {
+configParser/configParser.cpp://     //     std::cout << "methodes: ";
+configParser/configParser.cpp://     //     for (std::vector<std::string>::iterator tempIt2 = (*tempIt).methods.begin(); tempIt2 != (*tempIt).methods.end(); tempIt2++)
+configParser/configParser.cpp://     //     {
+configParser/configParser.cpp://     //         std::cout << *tempIt2 << " ";
+configParser/configParser.cpp://     //     }
+configParser/configParser.cpp://     //     std::cout << std::endl;
+configParser/configParser.cpp://     //     std::cout << (*tempIt).path << std::endl;
+configParser/configParser.cpp://     //     std::cout << (*tempIt).root << std::endl;
+configParser/configParser.cpp://     //     std::cout << (*tempIt).autoindex << std::endl;
+configParser/configParser.cpp://     //     std::cout << (*tempIt).index << std::endl;
+configParser/configParser.cpp://     //     std::cout << (*tempIt).cgiPath << std::endl;
+configParser/configParser.cpp://     //     std::cout << (*tempIt).cgiExt << std::endl;
+configParser/configParser.cpp://     //     std::cout << "--------------------" << std::endl;
+configParser/configParser.cpp://     // }
+configParser/configParser.cpp://     // std::cout << "error pages:" << std::endl;
+configParser/configParser.cpp://     // for (std::map<int, std::string>::iterator tempIt = myServer.errorPage.begin(); tempIt != myServer.errorPage.end(); tempIt++)
+configParser/configParser.cpp://     // {
+configParser/configParser.cpp://     //     std::cout << (*tempIt).first << std::endl;
+configParser/configParser.cpp://     //     std::cout << (*tempIt).second << std::endl;
+configParser/configParser.cpp://     // }
+configParser/configParser.cpp:// }
+configParser/configParser.hpp:#pragma once
+configParser/configParser.hpp:#include <vector>
+configParser/configParser.hpp:#include <string>
+configParser/configParser.hpp:#include <map>
+configParser/configParser.hpp:
+configParser/configParser.hpp:struct Location
+configParser/configParser.hpp:{
+configParser/configParser.hpp:    std::vector<std::string> methods;
+configParser/configParser.hpp:    std::string path;
+configParser/configParser.hpp:    std::string root;
+configParser/configParser.hpp:    std::string autoindex;
+configParser/configParser.hpp:    std::string index;
+configParser/configParser.hpp:    std::string cgiPath;
+configParser/configParser.hpp:    std::string cgiExt;
+configParser/configParser.hpp:};
+configParser/configParser.hpp:
+configParser/configParser.hpp:struct ServerConfig
+configParser/configParser.hpp:{
+configParser/configParser.hpp:    std::string host;
+configParser/configParser.hpp:    int port;
+configParser/configParser.hpp:    std::vector<std::string> serverName;
+configParser/configParser.hpp:    std::string root;
+configParser/configParser.hpp:    std::vector<Location> Locations;
+configParser/configParser.hpp:    std::map<int, std::string> errorPage;
+configParser/configParser.hpp:
+configParser/configParser.hpp:    ServerConfig() : host("127.0.0.1"), port(80), root("./www") {}
+configParser/configParser.hpp:};
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:#include "HttpHandler.hpp"
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:HttpHandler::HttpHandler() {}
+HTTP/HttpHandler.cpp:HttpHandler::~HttpHandler() {}
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:std::string HttpHandler::detectContentType(const std::string& path)
+HTTP/HttpHandler.cpp:{
+HTTP/HttpHandler.cpp:    size_t extensionPos = path.find_last_of('.');
+HTTP/HttpHandler.cpp:    if (extensionPos == std::string::npos)
+HTTP/HttpHandler.cpp:        return "application/octet-stream";
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:    std::string fileExtension = toLower(path.substr(extensionPos));
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:    if (fileExtension == ".html" || fileExtension == ".htm") return "text/html";
+HTTP/HttpHandler.cpp:    if (fileExtension == ".css") return "text/css";
+HTTP/HttpHandler.cpp:    if (fileExtension == ".js") return "application/javascript";
+HTTP/HttpHandler.cpp:    if (fileExtension == ".json") return "application/json";
+HTTP/HttpHandler.cpp:    if (fileExtension == ".txt") return "text/plain";
+HTTP/HttpHandler.cpp:    if (fileExtension == ".png") return "image/png";
+HTTP/HttpHandler.cpp:    if (fileExtension == ".jpg" || fileExtension == ".jpeg") return "image/jpeg";
+HTTP/HttpHandler.cpp:    if (fileExtension == ".gif") return "image/gif";
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:    return "application/octet-stream";
+HTTP/HttpHandler.cpp:}
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:bool HttpHandler::readFile(const std::string& filePath, std::string& content)
+HTTP/HttpHandler.cpp:{
+HTTP/HttpHandler.cpp:    std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
+HTTP/HttpHandler.cpp:    if (!file.is_open())
+HTTP/HttpHandler.cpp:        return false;
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:    std::ostringstream fileBuffer;
+HTTP/HttpHandler.cpp:    fileBuffer << file.rdbuf();
+HTTP/HttpHandler.cpp:    content = fileBuffer.str();
+HTTP/HttpHandler.cpp:    return true;
+HTTP/HttpHandler.cpp:}
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:HttpResponse HttpHandler::buildError(int statusCode, const std::string& statusReason, const std::string& detail)
+HTTP/HttpHandler.cpp:{
+HTTP/HttpHandler.cpp:    HttpResponse response(statusCode, statusReason);
+HTTP/HttpHandler.cpp:    response.setBody(detail, "text/plain");
+HTTP/HttpHandler.cpp:    return response;
+HTTP/HttpHandler.cpp:}
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:std::string HttpHandler::stripQuery(const std::string& path)
+HTTP/HttpHandler.cpp:{
+HTTP/HttpHandler.cpp:    size_t queryStart = path.find('?');
+HTTP/HttpHandler.cpp:    if (queryStart != std::string::npos)
+HTTP/HttpHandler.cpp:        return path.substr(0, queryStart);
+HTTP/HttpHandler.cpp:    return path;
+HTTP/HttpHandler.cpp:}
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:const Location* HttpHandler::matchLocation(const std::string& path, const ServerConfig& config)
+HTTP/HttpHandler.cpp:{
+HTTP/HttpHandler.cpp:    const Location* bestMatch = NULL;
+HTTP/HttpHandler.cpp:    size_t longestLen = 0;
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:    for (size_t i = 0; i < config.Locations.size(); ++i)
+HTTP/HttpHandler.cpp:    {
+HTTP/HttpHandler.cpp:        const Location& loc = config.Locations[i];
+HTTP/HttpHandler.cpp:        if (path.compare(0, loc.path.size(), loc.path) == 0 && loc.path.size() >= longestLen)
+HTTP/HttpHandler.cpp:        {
+HTTP/HttpHandler.cpp:            bestMatch = &loc;
+HTTP/HttpHandler.cpp:            longestLen = loc.path.size();
+HTTP/HttpHandler.cpp:        }
+HTTP/HttpHandler.cpp:    }
+HTTP/HttpHandler.cpp:    return bestMatch;
+HTTP/HttpHandler.cpp:}
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:bool HttpHandler::isMethodAllowed(const std::string& method, const Location& loc)
+HTTP/HttpHandler.cpp:{
+HTTP/HttpHandler.cpp:    if (loc.methods.empty())
+HTTP/HttpHandler.cpp:        return true; 
+HTTP/HttpHandler.cpp:        
+HTTP/HttpHandler.cpp:    for (size_t i = 0; i < loc.methods.size(); ++i)
+HTTP/HttpHandler.cpp:    {
+HTTP/HttpHandler.cpp:        if (toUpper(loc.methods[i]) == method)
+HTTP/HttpHandler.cpp:            return true;
+HTTP/HttpHandler.cpp:    }
+HTTP/HttpHandler.cpp:    return false;
+HTTP/HttpHandler.cpp:}
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:HttpResponse HttpHandler::handle404(const ServerConfig& config)
+HTTP/HttpHandler.cpp:{
+HTTP/HttpHandler.cpp:    std::string errorPageContent;
+HTTP/HttpHandler.cpp:    std::string errorPath = config.root + "/Error.html"; 
+HTTP/HttpHandler.cpp:    
+HTTP/HttpHandler.cpp:    if (readFile(errorPath, errorPageContent))
+HTTP/HttpHandler.cpp:    {
+HTTP/HttpHandler.cpp:        HttpResponse response(404, "Not Found");
+HTTP/HttpHandler.cpp:        response.setBody(errorPageContent, detectContentType(errorPath));
+HTTP/HttpHandler.cpp:        return response;
+HTTP/HttpHandler.cpp:    }
+HTTP/HttpHandler.cpp:    return buildError(404, "Not Found", "File not found");
+HTTP/HttpHandler.cpp:}
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:HttpResponse HttpHandler::process(const HttpRequest& request, const ServerConfig& config)
+HTTP/HttpHandler.cpp:{
+HTTP/HttpHandler.cpp:    int errorCode = request.getErrorCode();
+HTTP/HttpHandler.cpp:    if (errorCode != 0)
+HTTP/HttpHandler.cpp:    {
+HTTP/HttpHandler.cpp:        if (errorCode == 505) return buildError(505, "HTTP Version Not Supported", "Unsupported HTTP version");
+HTTP/HttpHandler.cpp:        if (errorCode == 400) return buildError(400, "Bad Request", "Malformed request");
+HTTP/HttpHandler.cpp:        return buildError(errorCode, "Error", "Parsing failed");
+HTTP/HttpHandler.cpp:    }
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:    std::string method = request.getMethod();
+HTTP/HttpHandler.cpp:    if (method != "GET" && method != "POST" && method != "DELETE")
+HTTP/HttpHandler.cpp:        return buildError(405, "Method Not Allowed", "Unsupported method");
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:    std::string requestPath = stripQuery(request.getTarget());
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:    const Location* matchedLocation = matchLocation(requestPath, config);
+HTTP/HttpHandler.cpp:    if (!matchedLocation)
+HTTP/HttpHandler.cpp:        return handle404(config);
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:    if (!isMethodAllowed(method, *matchedLocation))
+HTTP/HttpHandler.cpp:        return buildError(405, "Method Not Allowed", "Method not allowed for route");
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:    if (method == "GET")
+HTTP/HttpHandler.cpp:        return handleGet(request, requestPath, config);
+HTTP/HttpHandler.cpp:    HttpResponse response(200, "OK");
+HTTP/HttpHandler.cpp:    response.setBody("Hello, World!", "text/plain");
+HTTP/HttpHandler.cpp:    return response;
+HTTP/HttpHandler.cpp:}
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:HttpResponse HttpHandler::handleGet(const HttpRequest& request, std::string requestPath, const ServerConfig& config)
+HTTP/HttpHandler.cpp:{
+HTTP/HttpHandler.cpp:    (void)request; 
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:    if (requestPath.empty() || requestPath == "/")
+HTTP/HttpHandler.cpp:        requestPath = "/index.html";
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:    std::string fullPath = config.root + requestPath;
+HTTP/HttpHandler.cpp:    std::string fileContent;
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:    bool isFound = readFile(fullPath, fileContent);
+HTTP/HttpHandler.cpp:
+HTTP/HttpHandler.cpp:    if (!isFound && requestPath == "/index.html")
+HTTP/HttpHandler.cpp:    {
+HTTP/HttpHandler.cpp:        fullPath = "./index.html";
+HTTP/HttpHandler.cpp:        isFound = readFile(fullPath, fileContent);
+HTTP/HttpHandler.cpp:    }
+HTTP/HttpHandler.cpp:    if (isFound)
+HTTP/HttpHandler.cpp:    {
+HTTP/HttpHandler.cpp:        HttpResponse response(200, "OK");
+HTTP/HttpHandler.cpp:        response.setBody(fileContent, detectContentType(fullPath));
+HTTP/HttpHandler.cpp:        return response;
+HTTP/HttpHandler.cpp:    }
+HTTP/HttpHandler.cpp:    return buildError(404, "Not Found", "File not found");
+HTTP/HttpHandler.cpp:}
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:#include "HttpRequest.hpp"
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:static bool parseChunkedBody(const std::string& rawInputData, std::string& decodedBody, size_t& totalConsumed)
+HTTP/HttpRequest.cpp:{
+HTTP/HttpRequest.cpp:    decodedBody.clear();
+HTTP/HttpRequest.cpp:    totalConsumed = 0;
+HTTP/HttpRequest.cpp:    
+HTTP/HttpRequest.cpp:    size_t currentPosition = 0;
+HTTP/HttpRequest.cpp:    const size_t CRLF_SIZE = 2;
+HTTP/HttpRequest.cpp:    const std::string CRLF = "\r\n";
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:    while (true)
+HTTP/HttpRequest.cpp:    {
+HTTP/HttpRequest.cpp:        size_t chunkHeaderEndPos = rawInputData.find(CRLF, currentPosition);
+HTTP/HttpRequest.cpp:        if (chunkHeaderEndPos == std::string::npos)
+HTTP/HttpRequest.cpp:            return false;
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:        std::string chunkHeader = rawInputData.substr(currentPosition, chunkHeaderEndPos - currentPosition);
+HTTP/HttpRequest.cpp:        size_t extensionStartPos = chunkHeader.find(';');
+HTTP/HttpRequest.cpp:        if (extensionStartPos != std::string::npos)
+HTTP/HttpRequest.cpp:            chunkHeader = chunkHeader.substr(0, extensionStartPos);
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:        size_t dataChunkSize = 0;
+HTTP/HttpRequest.cpp:        std::istringstream hexStream(chunkHeader);
+HTTP/HttpRequest.cpp:        hexStream >> std::hex >> dataChunkSize;
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:        if (hexStream.fail() || !hexStream.eof())
+HTTP/HttpRequest.cpp:            return false;
+HTTP/HttpRequest.cpp:        currentPosition = chunkHeaderEndPos + CRLF_SIZE;
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:        if (rawInputData.size() < currentPosition + dataChunkSize + CRLF_SIZE)
+HTTP/HttpRequest.cpp:            return false;
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:        if (dataChunkSize == 0)
+HTTP/HttpRequest.cpp:        {
+HTTP/HttpRequest.cpp:            if (rawInputData.compare(currentPosition, CRLF_SIZE, CRLF) != 0)
+HTTP/HttpRequest.cpp:                return false;
+HTTP/HttpRequest.cpp:            totalConsumed = currentPosition + CRLF_SIZE;
+HTTP/HttpRequest.cpp:            return true;
+HTTP/HttpRequest.cpp:        }
+HTTP/HttpRequest.cpp:        decodedBody.append(rawInputData, currentPosition, dataChunkSize);
+HTTP/HttpRequest.cpp:        currentPosition += dataChunkSize;
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:        if (rawInputData.compare(currentPosition, CRLF_SIZE, CRLF) != 0)
+HTTP/HttpRequest.cpp:            return false;
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:        currentPosition += CRLF_SIZE;
+HTTP/HttpRequest.cpp:    }
+HTTP/HttpRequest.cpp:}
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:HttpRequest::HttpRequest() : consumedBytes(0), errorCode(0) {}
+HTTP/HttpRequest.cpp:HttpRequest::~HttpRequest() {}
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:int HttpRequest::extractBody(const std::string& rawBodyData, size_t& bytesConsumed)
+HTTP/HttpRequest.cpp:{
+HTTP/HttpRequest.cpp:    // RETURN VALUES:
+HTTP/HttpRequest.cpp:    // 1 → success (body fully parsed)
+HTTP/HttpRequest.cpp:    // 0 → need more data (incomplete)
+HTTP/HttpRequest.cpp:    // -1 → error (invalid request)
+HTTP/HttpRequest.cpp:    std::map<std::string, std::string>::iterator te_it = headers.find("transfer-encoding");
+HTTP/HttpRequest.cpp:    std::map<std::string, std::string>::iterator cl_it = headers.find("content-length");
+HTTP/HttpRequest.cpp:    if (te_it != headers.end() && cl_it != headers.end())
+HTTP/HttpRequest.cpp:        return -1;
+HTTP/HttpRequest.cpp:    if (te_it != headers.end())
+HTTP/HttpRequest.cpp:    {
+HTTP/HttpRequest.cpp:        if (toLower(te_it->second) != "chunked")
+HTTP/HttpRequest.cpp:            return -1;
+HTTP/HttpRequest.cpp:        if (!parseChunkedBody(rawBodyData, body, bytesConsumed))
+HTTP/HttpRequest.cpp:            return 0;
+HTTP/HttpRequest.cpp:        return 1;
+HTTP/HttpRequest.cpp:    }
+HTTP/HttpRequest.cpp:    else if (cl_it != headers.end())
+HTTP/HttpRequest.cpp:    {
+HTTP/HttpRequest.cpp:        std::string lengthString = cl_it->second;
+HTTP/HttpRequest.cpp:        if (lengthString.empty())
+HTTP/HttpRequest.cpp:            return -1;
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:        std::istringstream sizeStream(lengthString);
+HTTP/HttpRequest.cpp:        size_t contentLength = 0;
+HTTP/HttpRequest.cpp:        sizeStream >> contentLength;
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:        if (sizeStream.fail() || !sizeStream.eof())
+HTTP/HttpRequest.cpp:            return -1;
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:        if (rawBodyData.size() < contentLength)
+HTTP/HttpRequest.cpp:            return 0;
+HTTP/HttpRequest.cpp:        body = rawBodyData.substr(0, contentLength);
+HTTP/HttpRequest.cpp:        bytesConsumed = contentLength;
+HTTP/HttpRequest.cpp:    }
+HTTP/HttpRequest.cpp:    return 1;
+HTTP/HttpRequest.cpp:}
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:bool HttpRequest::parseHeaders(std::istringstream &input)
+HTTP/HttpRequest.cpp:{
+HTTP/HttpRequest.cpp:    std::string line;
+HTTP/HttpRequest.cpp:    while (std::getline(input, line))
+HTTP/HttpRequest.cpp:    {
+HTTP/HttpRequest.cpp:        if (!line.empty() && line[line.size() - 1] == '\r')
+HTTP/HttpRequest.cpp:            line.erase(line.size() - 1);
+HTTP/HttpRequest.cpp:            
+HTTP/HttpRequest.cpp:        if (line.empty())
+HTTP/HttpRequest.cpp:            continue;
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:        size_t delimiterPos = line.find(':');
+HTTP/HttpRequest.cpp:        if (delimiterPos == std::string::npos)
+HTTP/HttpRequest.cpp:            return false;
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:        std::string headerKey = toLower(trim(line.substr(0, delimiterPos)));
+HTTP/HttpRequest.cpp:        std::string headerValue = trim(line.substr(delimiterPos + 1));
+HTTP/HttpRequest.cpp:        headers[headerKey] = headerValue;
+HTTP/HttpRequest.cpp:    }
+HTTP/HttpRequest.cpp:    return true;
+HTTP/HttpRequest.cpp:}
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:bool HttpRequest::parseRequestLine(std::istringstream &input)
+HTTP/HttpRequest.cpp:{
+HTTP/HttpRequest.cpp:    std::string line;
+HTTP/HttpRequest.cpp:    if (!std::getline(input, line))
+HTTP/HttpRequest.cpp:        return false;
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:    if (!line.empty() && line[line.size() - 1] == '\r')
+HTTP/HttpRequest.cpp:        line.erase(line.size() - 1);
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:    std::istringstream lineStream(line);
+HTTP/HttpRequest.cpp:    if (!(lineStream >> method >> target >> version))
+HTTP/HttpRequest.cpp:        return false;
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:    method = toUpper(method);
+HTTP/HttpRequest.cpp:    return true;
+HTTP/HttpRequest.cpp:}
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:int HttpRequest::parse(const std::string &rawRequestData)
+HTTP/HttpRequest.cpp:{
+HTTP/HttpRequest.cpp:    size_t headerEndIndex = rawRequestData.find("\r\n\r\n");
+HTTP/HttpRequest.cpp:    if (headerEndIndex == std::string::npos)
+HTTP/HttpRequest.cpp:        return 0;
+HTTP/HttpRequest.cpp:        
+HTTP/HttpRequest.cpp:    std::string headerSection = rawRequestData.substr(0, headerEndIndex);
+HTTP/HttpRequest.cpp:    std::istringstream headerStream(headerSection);
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:    if (!parseRequestLine(headerStream))
+HTTP/HttpRequest.cpp:    {
+HTTP/HttpRequest.cpp:        errorCode = 400;
+HTTP/HttpRequest.cpp:        return 1;
+HTTP/HttpRequest.cpp:    }
+HTTP/HttpRequest.cpp:    if (!parseHeaders(headerStream))
+HTTP/HttpRequest.cpp:    {
+HTTP/HttpRequest.cpp:        errorCode = 400;
+HTTP/HttpRequest.cpp:        return 1;
+HTTP/HttpRequest.cpp:    }
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:    if (version != "HTTP/1.1" && version != "HTTP/1.0")
+HTTP/HttpRequest.cpp:    {
+HTTP/HttpRequest.cpp:        errorCode = 505;
+HTTP/HttpRequest.cpp:        return 1;
+HTTP/HttpRequest.cpp:    }
+HTTP/HttpRequest.cpp:    if (version == "HTTP/1.1" && headers.find("host") == headers.end())
+HTTP/HttpRequest.cpp:    {
+HTTP/HttpRequest.cpp:        errorCode = 400;
+HTTP/HttpRequest.cpp:        return 1;
+HTTP/HttpRequest.cpp:    }
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:    size_t bytesConsumed = 0;
+HTTP/HttpRequest.cpp:    std::string bodyData = rawRequestData.substr(headerEndIndex + 4);
+HTTP/HttpRequest.cpp:    int bodyParseStatus = extractBody(bodyData, bytesConsumed);
+HTTP/HttpRequest.cpp:    if (bodyParseStatus == -1)
+HTTP/HttpRequest.cpp:    {
+HTTP/HttpRequest.cpp:        errorCode = 400;
+HTTP/HttpRequest.cpp:        return 1;
+HTTP/HttpRequest.cpp:    }
+HTTP/HttpRequest.cpp:    if (bodyParseStatus == 0)
+HTTP/HttpRequest.cpp:        return 0;
+HTTP/HttpRequest.cpp:    consumedBytes = headerEndIndex + 4 + bytesConsumed;
+HTTP/HttpRequest.cpp:    return 1;
+HTTP/HttpRequest.cpp:}
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:std::string HttpRequest::getMethod() const { return method; }
+HTTP/HttpRequest.cpp:std::string HttpRequest::getTarget() const { return target; }
+HTTP/HttpRequest.cpp:std::string HttpRequest::getVersion() const { return version; }
+HTTP/HttpRequest.cpp:std::string HttpRequest::getBody() const { return body; }
+HTTP/HttpRequest.cpp:size_t HttpRequest::getConsumedBytes() const { return consumedBytes; }
+HTTP/HttpRequest.cpp:int HttpRequest::getErrorCode() const { return errorCode; }
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:std::string HttpRequest::getHeader(const std::string& key) const
+HTTP/HttpRequest.cpp:{
+HTTP/HttpRequest.cpp:    std::map<std::string, std::string>::const_iterator it = headers.find(key);
+HTTP/HttpRequest.cpp:    if (it != headers.end())
+HTTP/HttpRequest.cpp:        return it->second;
+HTTP/HttpRequest.cpp:    return "";
+HTTP/HttpRequest.cpp:}
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:
+HTTP/HttpRequest.cpp:void HttpRequest::reset()
+HTTP/HttpRequest.cpp:{
+HTTP/HttpRequest.cpp:    method.clear();
+HTTP/HttpRequest.cpp:    target.clear();
+HTTP/HttpRequest.cpp:    version.clear();
+HTTP/HttpRequest.cpp:    headers.clear();
+HTTP/HttpRequest.cpp:    body.clear();
+HTTP/HttpRequest.cpp:    consumedBytes = 0;
+HTTP/HttpRequest.cpp:    errorCode = 0;
+HTTP/HttpRequest.cpp:}
+HTTP/HttpResponse.cpp:
+HTTP/HttpResponse.cpp:#include "HttpResponse.hpp"
+HTTP/HttpResponse.cpp:
+HTTP/HttpResponse.cpp:HttpResponse::HttpResponse() : statusCode(200), reasonPhrase("OK")
+HTTP/HttpResponse.cpp:{
+HTTP/HttpResponse.cpp:    headers["Connection"] = "keep-alive";
+HTTP/HttpResponse.cpp:}
+HTTP/HttpResponse.cpp:
+HTTP/HttpResponse.cpp:HttpResponse::HttpResponse(int code, const std::string& reason) : statusCode(code), reasonPhrase(reason)
+HTTP/HttpResponse.cpp:{
+HTTP/HttpResponse.cpp:    headers["Connection"] = "keep-alive";
+HTTP/HttpResponse.cpp:}
+HTTP/HttpResponse.cpp:
+HTTP/HttpResponse.cpp:HttpResponse::~HttpResponse() {}
+HTTP/HttpResponse.cpp:
+HTTP/HttpResponse.cpp:void HttpResponse::setHeader(const std::string& name, const std::string& value)
+HTTP/HttpResponse.cpp:{
+HTTP/HttpResponse.cpp:    headers[name] = value;
+HTTP/HttpResponse.cpp:}
+HTTP/HttpResponse.cpp:
+HTTP/HttpResponse.cpp:void HttpResponse::setBody(const std::string& content, const std::string& contentType)
+HTTP/HttpResponse.cpp:{
+HTTP/HttpResponse.cpp:    body = content;
+HTTP/HttpResponse.cpp:    headers["Content-Type"] = contentType;
+HTTP/HttpResponse.cpp:
+HTTP/HttpResponse.cpp:    std::ostringstream sizeStream;
+HTTP/HttpResponse.cpp:    sizeStream << body.size();
+HTTP/HttpResponse.cpp:    headers["Content-Length"] = sizeStream.str();
+HTTP/HttpResponse.cpp:}
+HTTP/HttpResponse.cpp:
+HTTP/HttpResponse.cpp:std::string HttpResponse::toString() const
+HTTP/HttpResponse.cpp:{
+HTTP/HttpResponse.cpp:    std::ostringstream responseStream;
+HTTP/HttpResponse.cpp:    responseStream << "HTTP/1.1 " << statusCode << " " << reasonPhrase << "\r\n";
+HTTP/HttpResponse.cpp:
+HTTP/HttpResponse.cpp:    std::map<std::string, std::string>::const_iterator headerIterator;
+HTTP/HttpResponse.cpp:    for (headerIterator = headers.begin(); headerIterator != headers.end(); ++headerIterator)
+HTTP/HttpResponse.cpp:    {
+HTTP/HttpResponse.cpp:        responseStream << headerIterator->first << ": " << headerIterator->second << "\r\n";
+HTTP/HttpResponse.cpp:    }
+HTTP/HttpResponse.cpp:    responseStream << "\r\n" << body;
+HTTP/HttpResponse.cpp:    return responseStream.str();
+HTTP/HttpResponse.cpp:}
+HTTP/HttpHandler.hpp:
+HTTP/HttpHandler.hpp:#ifndef HTTPHANDLER_HPP
+HTTP/HttpHandler.hpp:#define HTTPHANDLER_HPP
+HTTP/HttpHandler.hpp:
+HTTP/HttpHandler.hpp:#include "HttpRequest.hpp"
+HTTP/HttpHandler.hpp:#include "HttpResponse.hpp"
+HTTP/HttpHandler.hpp:#include "../configParser/configParser.hpp"
+HTTP/HttpHandler.hpp:#include <string>
+HTTP/HttpHandler.hpp:#include <fstream>
+HTTP/HttpHandler.hpp:#include <cctype>
+HTTP/HttpHandler.hpp:#include "../Helpers.hpp"
+HTTP/HttpHandler.hpp:class HttpHandler
+HTTP/HttpHandler.hpp:{
+HTTP/HttpHandler.hpp:    private:
+HTTP/HttpHandler.hpp:    std::string detectContentType(const std::string& path);
+HTTP/HttpHandler.hpp:    bool readFile(const std::string& filePath, std::string& content);
+HTTP/HttpHandler.hpp:    HttpResponse handleGet(const HttpRequest& req, std::string route, const ServerConfig& config);
+HTTP/HttpHandler.hpp:    std::string     stripQuery(const std::string& path);
+HTTP/HttpHandler.hpp:    const Location* matchLocation(const std::string& path, const ServerConfig& config);
+HTTP/HttpHandler.hpp:    bool            isMethodAllowed(const std::string& method, const Location& loc);
+HTTP/HttpHandler.hpp:    HttpResponse    handle404(const ServerConfig& config);
+HTTP/HttpHandler.hpp:    HttpResponse buildError(int code, const std::string& reason, const std::string& detail);
+HTTP/HttpHandler.hpp:    public:
+HTTP/HttpHandler.hpp:    HttpHandler();
+HTTP/HttpHandler.hpp:    ~HttpHandler();
+HTTP/HttpHandler.hpp:
+HTTP/HttpHandler.hpp:    HttpResponse process(const HttpRequest& req, const ServerConfig& config);
+HTTP/HttpHandler.hpp:};
+HTTP/HttpHandler.hpp:
+HTTP/HttpHandler.hpp:#endif
+HTTP/HttpRequest.hpp:
+HTTP/HttpRequest.hpp:#ifndef HTTPREQUEST_HPP
+HTTP/HttpRequest.hpp:#define HTTPREQUEST_HPP
+HTTP/HttpRequest.hpp:
+HTTP/HttpRequest.hpp:#include <string>
+HTTP/HttpRequest.hpp:#include <map>
+HTTP/HttpRequest.hpp:#include <sstream>
+HTTP/HttpRequest.hpp:#include <cctype>
+HTTP/HttpRequest.hpp:#include "../Helpers.hpp"
+HTTP/HttpRequest.hpp:
+HTTP/HttpRequest.hpp:class HttpRequest
+HTTP/HttpRequest.hpp:{
+HTTP/HttpRequest.hpp:private:
+HTTP/HttpRequest.hpp:    std::string method;
+HTTP/HttpRequest.hpp:    std::string target;
+HTTP/HttpRequest.hpp:    std::string version;
+HTTP/HttpRequest.hpp:    std::map<std::string, std::string> headers;
+HTTP/HttpRequest.hpp:    std::string body;
+HTTP/HttpRequest.hpp:    size_t consumedBytes;
+HTTP/HttpRequest.hpp:    int errorCode;
+HTTP/HttpRequest.hpp:
+HTTP/HttpRequest.hpp:public:
+HTTP/HttpRequest.hpp:    HttpRequest();
+HTTP/HttpRequest.hpp:    ~HttpRequest();
+HTTP/HttpRequest.hpp:    void reset();
+HTTP/HttpRequest.hpp:    int parse(const std::string& rawBuffer);
+HTTP/HttpRequest.hpp:
+HTTP/HttpRequest.hpp:    bool parseRequestLine(std::istringstream& headerStream);
+HTTP/HttpRequest.hpp:    bool parseHeaders(std::istringstream& headerStream);
+HTTP/HttpRequest.hpp:    int  extractBody(const std::string& payload, size_t& consumedBody);
+HTTP/HttpRequest.hpp:    
+HTTP/HttpRequest.hpp:    
+HTTP/HttpRequest.hpp:    
+HTTP/HttpRequest.hpp:    std::string getMethod() const;
+HTTP/HttpRequest.hpp:    std::string getTarget() const;
+HTTP/HttpRequest.hpp:    std::string getVersion() const;
+HTTP/HttpRequest.hpp:    std::string getHeader(const std::string& key) const;
+HTTP/HttpRequest.hpp:    std::string getBody() const;
+HTTP/HttpRequest.hpp:    size_t getConsumedBytes() const;
+HTTP/HttpRequest.hpp:    int getErrorCode() const;
+HTTP/HttpRequest.hpp:};
+HTTP/HttpRequest.hpp:
+HTTP/HttpRequest.hpp:#endif
+HTTP/HttpResponse.hpp:
+HTTP/HttpResponse.hpp:#ifndef HTTPRESPONSE_HPP
+HTTP/HttpResponse.hpp:#define HTTPRESPONSE_HPP
+HTTP/HttpResponse.hpp:
+HTTP/HttpResponse.hpp:#include <string>
+HTTP/HttpResponse.hpp:#include <map>
+HTTP/HttpResponse.hpp:#include <sstream>
+HTTP/HttpResponse.hpp:
+HTTP/HttpResponse.hpp:class HttpResponse
+HTTP/HttpResponse.hpp:{
+HTTP/HttpResponse.hpp:private:
+HTTP/HttpResponse.hpp:    int statusCode;
+HTTP/HttpResponse.hpp:    std::string reasonPhrase;
+HTTP/HttpResponse.hpp:    std::map<std::string, std::string> headers;
+HTTP/HttpResponse.hpp:    std::string body;
+HTTP/HttpResponse.hpp:
+HTTP/HttpResponse.hpp:public:
+HTTP/HttpResponse.hpp:    HttpResponse();
+HTTP/HttpResponse.hpp:    HttpResponse(int code, const std::string& reason);
+HTTP/HttpResponse.hpp:    ~HttpResponse();
+HTTP/HttpResponse.hpp:
+HTTP/HttpResponse.hpp:    void setHeader(const std::string& key, const std::string& value);
+HTTP/HttpResponse.hpp:    void setBody(const std::string& content, const std::string& contentType);
+HTTP/HttpResponse.hpp:    std::string toString() const;
+HTTP/HttpResponse.hpp:};
+HTTP/HttpResponse.hpp:
+HTTP/HttpResponse.hpp:#endif

@@ -65,8 +65,42 @@ HttpResponse HttpHandler::handle404()
     return buildError(404, "Not Found", "File not found");
 }
 
+HttpResponse HttpHandler::formatCgiResponse(const std::string& cgiOutput)
+{
+    HttpResponse response(200, "OK");
+    std::string contentType = "text/html";
+    
+    size_t delimiter = cgiOutput.find("\n\n");
+    if (delimiter == std::string::npos)
+        delimiter = cgiOutput.find("\r\n\r\n");
 
-HttpResponse HttpHandler::process(const HttpRequest& request)
+    if (delimiter == std::string::npos) {
+        response.setBody(cgiOutput, contentType);
+        return response;
+    }
+
+    std::string headersPart = cgiOutput.substr(0, delimiter);
+    std::string bodyPart = cgiOutput.substr(delimiter + (cgiOutput[delimiter+1] == '\r' ? 4 : 2));
+
+    std::stringstream ss(headersPart);
+    std::string line;
+    while (std::getline(ss, line)) {
+        if (!line.empty() && line[line.size() - 1] == '\r')
+            line.erase(line.size() - 1);
+
+        if (line.find("Content-Type: ") == 0) {
+            contentType = line.substr(14);
+        }
+        else if (line.find("Status: ") == 0) {
+            // later
+        }
+    }
+
+    response.setBody(bodyPart, contentType);
+    return response;
+}
+
+HttpResponse HttpHandler::process(const HttpRequest& request, const ServerConfig& config)
 {
     int errorCode = request.getErrorCode();
     if (errorCode != 0)
@@ -85,6 +119,25 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
     const Location* matchedLocation = matchLocation(requestPath);
     if (!matchedLocation)
         return handle404();
+
+    if (!matchedLocation->cgiExt.empty())
+    {
+        if (requestPath.size() >= matchedLocation->cgiExt.size() &&
+            requestPath.compare(requestPath.size() - matchedLocation->cgiExt.size(), 
+                                matchedLocation->cgiExt.size(), matchedLocation->cgiExt) == 0)
+        {
+            CgiHandler cgi;
+            try
+            {
+                std::string cgiOutput = cgi.execute(request, *matchedLocation, requestPath);
+                return formatCgiResponse(cgiOutput);
+            }
+            catch (const std::exception& e)
+            {
+                return buildError(500, "Internal Server Error", "CGI Execution Failed");
+            }
+        }
+    }
 
     if (!isMethodAllowed(method, *matchedLocation))
         return buildError(405, "Method Not Allowed", "Method not allowed for route");

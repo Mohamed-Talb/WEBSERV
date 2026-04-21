@@ -98,6 +98,7 @@ class HttpHandler
     bool 			isMethodAllowed(const std::string& method, const Location& loc);
     HttpResponse 	handle404();
     HttpResponse 	buildError(int code, const std::string& reason, const std::string& detail);
+    HttpResponse formatCgiResponse(const std::string& cgiOutput);
 	
 	// METHODS
     HttpResponse 	GET(const HttpRequest& req, std::string route);
