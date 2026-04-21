@@ -1,4 +1,4 @@
-#include "../HTTP/HttpRequest.hpp"
+#include "../HTTP/HttpHandler.hpp"
 
 class CgiHandler
 {

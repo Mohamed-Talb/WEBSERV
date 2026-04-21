@@ -1,4 +1,5 @@
 #include "HttpHandler.hpp"
+#include "../CGI/CGI.hpp"
 
 struct CompareLocations
 {
@@ -100,7 +101,7 @@ HttpResponse HttpHandler::formatCgiResponse(const std::string& cgiOutput)
     return response;
 }
 
-HttpResponse HttpHandler::process(const HttpRequest& request, const ServerConfig& config)
+HttpResponse HttpHandler::process(const HttpRequest& request)
 {
     int errorCode = request.getErrorCode();
     if (errorCode != 0)
@@ -149,4 +150,3 @@ HttpResponse HttpHandler::process(const HttpRequest& request, const ServerConfig
     response.setBody("Hello, World!", "text/plain");
     return response;
 }
-
