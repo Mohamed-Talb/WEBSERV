@@ -86,7 +86,7 @@ void Client::handleRead()
         appendToReadBuffer(buf, bytes);
         dataRead = true;
     }
-
+    
     if (!dataRead)
         return;
 
@@ -109,6 +109,8 @@ void Client::handleRead()
         HttpHandler handler(*selectedConfig); 
         HttpResponse response = handler.process(request);
         appendToWriteBuffer(response.toString());
+        std::cout << "REQUEST---------------\n"
+                 << readBuffer << std::endl;
         consumeReadBuffer(request.getConsumedBytes());
         request.reset(); 
     }
@@ -119,6 +121,8 @@ void Client::handleRead()
 void Client::handleWrite()
 {
     if (!hasPendingWrite()) return;
+    std::cout << "RESPONSE---------------\n"
+            << writeBuffer << std::endl;
     while (hasPendingWrite())
     {
         int bytes = send(socketFD, writeBuffer.c_str(), writeBuffer.size(), 0);

@@ -1,0 +1,21 @@
+<div class="container">
+    <h2>File Upload</h2>
+    <form action="/upload" method="POST" enctype="multipart/form-data">
+        <input type="file" name="file">
+        <button type="submit">Upload</button>
+    </form>
+    
+    <h3>Manage Files</h3>
+    <div id="file-list">
+        <div>example.txt <button class="btn-danger" onclick="deleteFile('example.txt')">Delete</button></div>
+    </div>
+</div>
+
+<script>
+async function deleteFile(filename) {
+    const response = await fetch(`/uploads/${filename}`, { method: 'DELETE' });
+    if (response.ok) alert('File deleted');
+    else alert('Failed to delete');
+    location.reload();
+}
+</script>

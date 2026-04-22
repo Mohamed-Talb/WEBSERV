@@ -99,7 +99,9 @@ void Server::runEventLoop()
                 continue;
             }
             if (currEvent & EPOLLIN)
+            {
                 handler->handleRead();
+            }
             if (currEvent & EPOLLOUT)
                 handler->handleWrite();
         }
