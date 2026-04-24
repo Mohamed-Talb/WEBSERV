@@ -70,7 +70,6 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
     {
         return HttpUtils::ErrorPage(request.getErrorCode(), "Bad Request", *Config);
     }
-
     std::string method = request.getMethod();
     std::string requestPath = HttpUtils::stripQuery(request.getTarget());
     

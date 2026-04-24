@@ -101,10 +101,19 @@ void Client::handleRead()
     
     if (!dataRead)
         return;
-
+    
     while (true)
     {
         int parseStatus = request.parse(readBuffer);
+        if (request.getErrorCode() != 0)
+        {
+            HttpResponse response = HttpUtils::ErrorPage(request.getErrorCode(), "Bad Request", configs[0]);
+            appendToWriteBuffer(response.toString());
+            state = SENDING_RESPONSE;
+            server->modifyHandler(this, EPOLLIN | EPOLLOUT);
+            request.reset();
+            return; 
+        }
         if (parseStatus == 0)
             break;
 
@@ -121,7 +130,7 @@ void Client::handleRead()
             std::string requestPath = HttpUtils::stripQuery(request.getTarget());
             CgiHandler* Cgi = new CgiHandler(this, server, request, *cgiLocation, requestPath);
             server->addHandler(Cgi, EPOLLIN);
-
+            
             consumeReadBuffer(request.getParsedSize());
             request.reset();
             break; 
@@ -159,6 +168,11 @@ void Client::handleWrite()
     }
     if (!hasPendingWrite())
     {
+        if (request.getErrorCode() != 0) 
+        {
+            server->removeHandler(socketFD);
+            return;
+        }
         state = READING_REQUEST; 
         server->modifyHandler(this, EPOLLIN);
     }
