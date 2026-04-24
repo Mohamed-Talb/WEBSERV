@@ -20,6 +20,13 @@ enum State
 	PARSE_ERROR
 };
 
+namespace HttpUtils
+{
+    std::string contentType(const std::string& path);
+    bool        readFile(const std::string& filePath, std::string& content);
+    std::string stripQuery(const std::string& path);
+}
+
 class HttpRequest 
 {
 
@@ -35,18 +42,15 @@ class HttpRequest
     int 	errorCode;
 
     void setError(int code);
-
+    int parseRequestLine(const std::string& raw);
+    int parseHeaders(const std::string& raw);
+    int parseBody(const std::string& raw);
 	public:
     HttpRequest();
     ~HttpRequest();
 
     void reset();
     int parse(const std::string& rawBuffer);
-
-    bool parseHeaders(std::istringstream& headerStream);
-    bool parseRequestLine(std::istringstream& headerStream);
-    int  extractBody(const std::string& payload, size_t& consumedBody);
-    
 
     int getErrorCode() const;
     std::string getBody() const;
@@ -84,18 +88,18 @@ class HttpHandler
 {
 	private:
     const ServerConfig 	*Config;
-
-    std::string 	contentType(const std::string& path);
-    bool 			readFile(const std::string& filePath, std::string& content);
-    std::string 	stripQuery(const std::string& path);
-    const Location* matchLocation(const std::string& path);
-    bool 			isMethodAllowed(const std::string& method, const Location& loc);
+    std::vector<Location> sortedLocations;
+    
+    const Location* matchLocation(const std::string &path);
+    bool 			isMethodAllowed(const std::string &method, const Location& loc);
     HttpResponse 	handle404();
     HttpResponse 	buildError(int code, const std::string& reason, const std::string& detail);
 	
 	// METHODS
-    HttpResponse 	GET(const HttpRequest& req, std::string route);
-	public:
+    HttpResponse    CGI(const HttpRequest &request, const Location &matchedLocation, const std::string &requestPath);
+    HttpResponse 	GET(const HttpRequest &request, std::string requestPath);
+	void    DELETE(const HttpRequest &request, std::string requestPath);
+    public:
     HttpHandler(const ServerConfig &serverConfig);
     ~HttpHandler();
 
@@ -103,55 +107,82 @@ class HttpHandler
 };
 
 
+namespace HttpUtils 
+{
 
+    std::string contentType(const std::string& path)
+    {
+        static std::map<std::string, std::string> mimeTypes;
+        if (mimeTypes.empty())
+        {
+            mimeTypes.insert(std::make_pair(".html", "text/html"));
+            mimeTypes.insert(std::make_pair(".htm", "text/html"));
+            mimeTypes.insert(std::make_pair(".css", "text/css"));
+            mimeTypes.insert(std::make_pair(".js", "application/javascript"));
+            mimeTypes.insert(std::make_pair(".json", "application/json"));
+            mimeTypes.insert(std::make_pair(".txt", "text/plain"));
+            mimeTypes.insert(std::make_pair(".png", "image/png"));
+            mimeTypes.insert(std::make_pair(".jpg", "image/jpeg"));
+            mimeTypes.insert(std::make_pair(".jpeg", "image/jpeg"));
+            mimeTypes.insert(std::make_pair(".gif", "image/gif"));
+        }
 
+        size_t pos = path.find_last_of('.');
+        if (pos == std::string::npos) 
+            return "application/octet-stream";
+        std::string ext = toLower(path.substr(pos));
+        std::map<std::string, std::string>::const_iterator it = mimeTypes.find(ext);
+        if (it != mimeTypes.end()) 
+            return it->second;
+        return "application/octet-stream";
+    }
+
+    bool readFile(const std::string& filePath, std::string& content)
+    {
+        std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
+        if (!file.is_open())
+            return false;
+        std::ostringstream buffer;
+        buffer << file.rdbuf();
+        content = buffer.str();
+        return true;
+    }
+
+    std::string stripQuery(const std::string& path)
+    {
+        size_t pos = path.find('?');
+        if (pos == std::string::npos) 
+            return path;
+        return path.substr(0, pos);
+    }
+}
 
 #include "HttpHandler.hpp"
 
-HttpResponse::HttpResponse() : statusCode(200), reasonPhrase("OK")
-{
-    headers["Connection"] = "keep-alive";
-}
-
-HttpResponse::HttpResponse(int code, const std::string& reason) : statusCode(code), reasonPhrase(reason)
-{
-    headers["Connection"] = "keep-alive";
-}
-
-HttpResponse::~HttpResponse() {}
-
-void HttpResponse::setHeader(const std::string& name, const std::string& value)
-{
-    headers[name] = value;
-}
-
-void HttpResponse::setBody(const std::string& content, const std::string& contentType)
-{
-    body = content;
-    headers["Content-Type"] = contentType;
-
-    std::ostringstream sizeStream;
-    sizeStream << body.size();
-    headers["Content-Length"] = sizeStream.str();
-}
-
-std::string HttpResponse::toString() const
-{
-    std::ostringstream responseStream;
-    responseStream << "HTTP/1.1 " << statusCode << " " << reasonPhrase << "\r\n";
-
-    std::map<std::string, std::string>::const_iterator headerIterator;
-    for (headerIterator = headers.begin(); headerIterator != headers.end(); ++headerIterator)
-    {
-        responseStream << headerIterator->first << ": " << headerIterator->second << "\r\n";
-    }
-    responseStream << "\r\n" << body;
-    return responseStream.str();
-}
-
-
 HttpRequest::HttpRequest() : state(PARSE_REQUEST_LINE), consumedBytes(0), errorCode(0) {}
 HttpRequest::~HttpRequest() {}
+
+std::string HttpRequest::getHeader(const std::string& key) const
+{
+    std::map<std::string, std::string>::const_iterator it = headers.find(key);
+    if (it != headers.end())
+        return it->second;
+    return "";
+}
+
+void HttpRequest::setError(int code)
+{
+    errorCode = code;
+    state = PARSE_ERROR;
+}
+
+std::string HttpRequest::getBody()		const { return body; }
+std::string HttpRequest::getMethod()	const { return method; }
+std::string HttpRequest::getTarget() 	const { return target; }
+std::string HttpRequest::getVersion()	const { return version; }
+int HttpRequest::getErrorCode()			const { return errorCode; }
+size_t HttpRequest::getConsumedBytes()	const { return consumedBytes; }
+
 
 void HttpRequest::reset() 
 {
@@ -210,50 +241,36 @@ static bool parseChunkedBody(const std::string& rawInputData, std::string& decod
     }
 }
 
-int HttpRequest::extractBody(const std::string& rawBodyData, size_t& bytesConsumed)
+int HttpRequest::parseRequestLine(const std::string& raw)
 {
-    // RETURN VALUES:
-    // 1 → success (body fully parsed)
-    // 0 → need more data (incomplete)
-    // -1 → error (invalid request)
-    std::map<std::string, std::string>::iterator te_it = headers.find("transfer-encoding");
-    std::map<std::string, std::string>::iterator cl_it = headers.find("content-length");
-    if (te_it != headers.end() && cl_it != headers.end())
-        return -1;
-    if (te_it != headers.end())
+    size_t crlf = raw.find("\r\n", consumedBytes);
+    if (crlf == std::string::npos) return 0; // Need more data
+
+    std::string line = raw.substr(consumedBytes, crlf - consumedBytes);
+    std::istringstream lineStream(line);
+    
+    if (!(lineStream >> method >> target >> version)) 
     {
-        if (toLower(te_it->second) != "chunked")
-            return -1;
-        if (!parseChunkedBody(rawBodyData, body, bytesConsumed))
-            return 0;
-        return 1;
+        setError(400);
+        return -1; 
     }
-    else if (cl_it != headers.end())
-    {
-        std::string lengthString = cl_it->second;
-        if (lengthString.empty())
-            return -1;
-
-        std::istringstream sizeStream(lengthString);
-        size_t contentLength = 0;
-        sizeStream >> contentLength;
-
-        if (sizeStream.fail() || !sizeStream.eof())
-            return -1;
-
-        if (rawBodyData.size() < contentLength)
-            return 0;
-        body = rawBodyData.substr(0, contentLength);
-        bytesConsumed = contentLength;
-    }
+    
+    method = toUpper(method);
+    consumedBytes = crlf + 2;
+    state = PARSE_HEADERS;
     return 1;
 }
 
-
-bool HttpRequest::parseHeaders(std::istringstream &input)
+int HttpRequest::parseHeaders(const std::string& raw)
 {
+    size_t headerEnd = raw.find("\r\n\r\n", consumedBytes);
+    if (headerEnd == std::string::npos) return 0; 
+
+    std::string headerSection = raw.substr(consumedBytes, headerEnd - consumedBytes);
+    std::istringstream headerStream(headerSection);
+    
     std::string line;
-    while (std::getline(input, line))
+    while (std::getline(headerStream, line))
     {
         if (!line.empty() && line[line.size() - 1] == '\r')
             line.erase(line.size() - 1);
@@ -263,108 +280,138 @@ bool HttpRequest::parseHeaders(std::istringstream &input)
 
         size_t delimiterPos = line.find(':');
         if (delimiterPos == std::string::npos)
-            return false;
+        {
+            setError(400);
+            return -1;
+        }
 
         std::string headerKey = toLower(trim(line.substr(0, delimiterPos)));
         std::string headerValue = trim(line.substr(delimiterPos + 1));
         headers[headerKey] = headerValue;
     }
-    return true;
+    
+    consumedBytes = headerEnd + 4;
+    state = PARSE_BODY;
+    return 1; 
 }
 
-bool HttpRequest::parseRequestLine(std::istringstream &input)
+int HttpRequest::parseBody(const std::string& raw)
 {
-    std::string line;
-    if (!std::getline(input, line))
-        return false;
+    std::string rawBodyData = raw.substr(consumedBytes);
+    size_t bodyConsumed = 0;
 
-    if (!line.empty() && line[line.size() - 1] == '\r')
-        line.erase(line.size() - 1);
-
-    std::istringstream lineStream(line);
-    if (!(lineStream >> method >> target >> version))
-        return false;
-
-    method = toUpper(method);
-    return true;
-}
-
-void HttpRequest::setError(int code)
-{
-    errorCode = code;
-    state = PARSE_ERROR;
+    std::map<std::string, std::string>::iterator te_it = headers.find("transfer-encoding");
+    std::map<std::string, std::string>::iterator cl_it = headers.find("content-length");
+    
+    if (te_it != headers.end() && cl_it != headers.end())
+    {
+        setError(400);
+        return -1;
+    }
+    if (te_it != headers.end())
+    {
+        if (toLower(te_it->second) != "chunked")
+        {
+            setError(400);
+            return -1;
+        }
+        if (!parseChunkedBody(rawBodyData, body, bodyConsumed))
+            return 0;
+    }
+    else if (cl_it != headers.end())
+    {
+        std::string lengthString = cl_it->second;
+        if (lengthString.empty())
+        {
+            setError(400);
+            return -1;
+        }
+        std::istringstream sizeStream(lengthString);
+        size_t contentLength = 0;
+        sizeStream >> contentLength;
+        if (sizeStream.fail() || !sizeStream.eof())
+        {
+            setError(400);
+            return -1;
+        }
+        if (rawBodyData.size() < contentLength)
+            return 0;  
+        body = rawBodyData.substr(0, contentLength);
+        bodyConsumed = contentLength;
+    }
+    consumedBytes += bodyConsumed;
+    state = PARSE_COMPLETE;
+    return 1;
 }
 
 int HttpRequest::parse(const std::string &rawRequestData)
 {
     while (state != PARSE_COMPLETE && state != PARSE_ERROR)
     {
-        if (state == PARSE_REQUEST_LINE)
+        int status = 0;
+        switch (state) 
         {
-            size_t crlf = rawRequestData.find("\r\n", consumedBytes);
-            if (crlf == std::string::npos) return 0; // Need more data
-
-            std::string line = rawRequestData.substr(consumedBytes, crlf - consumedBytes);
-            std::istringstream lineStream(line);
-            
-            if (!(lineStream >> method >> target >> version)) 
-			{
-                setError(400);
-                return 1; 
-            }
-            consumedBytes = crlf + 2;
-            state = PARSE_HEADERS;
-        }
-        else if (state == PARSE_HEADERS)
-        {
-            size_t headerEnd = rawRequestData.find("\r\n\r\n", consumedBytes);
-            if (headerEnd == std::string::npos) return 0; // Need more data
-
-            std::string headerSection = rawRequestData.substr(consumedBytes, headerEnd - consumedBytes);
-            std::istringstream headerStream(headerSection);
-            
-            if (!parseHeaders(headerStream)) 
-			{
-                setError(400);
+            case PARSE_REQUEST_LINE:
+                status = parseRequestLine(rawRequestData); break;
+            case PARSE_HEADERS:
+                status = parseHeaders(rawRequestData); break;
+            case PARSE_BODY:
+                status = parseBody(rawRequestData); break;
+            default: 
                 return 1;
-            }
-            
-            consumedBytes = headerEnd + 4;
-            state = PARSE_BODY;
         }
-        else if (state == PARSE_BODY)
-        {
-            std::string bodyData = rawRequestData.substr(consumedBytes);
-            size_t bodyConsumed = 0;
-            int status = extractBody(bodyData, bodyConsumed);
-            
-            if (status == 0) return 0;
-            if (status == -1)
-			{
-                setError(400);
-                return 1;
-            }
-            consumedBytes += bodyConsumed;
-            state = PARSE_COMPLETE;
-        }
+        if (status <= 0) return status; // 0 = Need more data, -1 = Error
     }
     return 1;
 }
 
-std::string HttpRequest::getHeader(const std::string& key) const
+
+
+
+
+#include "HttpHandler.hpp"
+
+HttpResponse::HttpResponse() : statusCode(200), reasonPhrase("OK")
 {
-    std::map<std::string, std::string>::const_iterator it = headers.find(key);
-    if (it != headers.end())
-        return it->second;
-    return "";
+    headers["Connection"] = "keep-alive";
 }
 
-std::string HttpRequest::getBody()		const { return body; }
-std::string HttpRequest::getMethod()	const { return method; }
-std::string HttpRequest::getTarget() 	const { return target; }
-std::string HttpRequest::getVersion()	const { return version; }
-int HttpRequest::getErrorCode()			const { return errorCode; }
-size_t HttpRequest::getConsumedBytes()	const { return consumedBytes; }
+HttpResponse::HttpResponse(int code, const std::string& reason) : statusCode(code), reasonPhrase(reason)
+{
+    headers["Connection"] = "keep-alive";
+}
+
+HttpResponse::~HttpResponse() {}
+
+void HttpResponse::setHeader(const std::string& name, const std::string& value)
+{
+    headers[name] = value;
+}
+
+void HttpResponse::setBody(const std::string& content, const std::string& contentType)
+{
+    body = content;
+    headers["Content-Type"] = contentType;
+
+    std::ostringstream sizeStream;
+    sizeStream << body.size();
+    headers["Content-Length"] = sizeStream.str();
+}
+
+std::string HttpResponse::toString() const
+{
+    std::ostringstream responseStream;
+    responseStream << "HTTP/1.1 " << statusCode << " " << reasonPhrase << "\r\n";
+
+    std::map<std::string, std::string>::const_iterator headerIterator;
+    for (headerIterator = headers.begin(); headerIterator != headers.end(); ++headerIterator)
+    {
+        responseStream << headerIterator->first << ": " << headerIterator->second << "\r\n";
+    }
+    responseStream << "\r\n" << body;
+    return responseStream.str();
+}
+
 
 #include "HttpHandler.hpp"
 
@@ -378,25 +425,33 @@ HttpResponse HttpHandler::GET(const HttpRequest& request, std::string requestPat
     std::string fullPath = Config->root + requestPath;
     std::string fileContent;
 
-    bool isFound = readFile(fullPath, fileContent);
+    bool isFound = HttpUtils::readFile(fullPath, fileContent);
 
     if (!isFound && requestPath == "/index.html")
     {
         fullPath = "./index.html";
-        isFound = readFile(fullPath, fileContent);
+        isFound = HttpUtils::readFile(fullPath, fileContent);
     }
     if (isFound)
     {
         HttpResponse response(200, "OK");
-        response.setBody(fileContent, contentType(fullPath));
+        response.setBody(fileContent, HttpUtils::contentType(fullPath));
         return response;
     }
     return handle404();
 }
 
 
+void HttpHandler::DELETE(const HttpRequest &request, std::string requestPath)
+{
+    std::cout << requestPath << std::endl;
+    (void)request;
+}
+
+
 
 #include "HttpHandler.hpp"
+#include "../CGI/CGI.hpp"
 
 struct CompareLocations
 {
@@ -409,41 +464,11 @@ struct CompareLocations
 
 HttpHandler::HttpHandler(const ServerConfig &serverConfig) : Config(&serverConfig)
 {
-    std::sort(Config->Locations.begin(), Config->Locations.end(), CompareLocations());
+    sortedLocations = Config->Locations;
+    std::sort(sortedLocations.begin(), sortedLocations.end(), CompareLocations());
 }
 
 HttpHandler::~HttpHandler() {}
-
-std::string HttpHandler::contentType(const std::string& path)
-{
-    size_t extensionPos = path.find_last_of('.');
-    if (extensionPos == std::string::npos) return "application/octet-stream";
-
-    std::string fileExtension = toLower(path.substr(extensionPos));
-
-    if (fileExtension == ".html" || fileExtension == ".htm") return "text/html";
-    if (fileExtension == ".css") return "text/css";
-    if (fileExtension == ".js") return "application/javascript";
-    if (fileExtension == ".json") return "application/json";
-    if (fileExtension == ".txt") return "text/plain";
-    if (fileExtension == ".png") return "image/png";
-    if (fileExtension == ".jpg" || fileExtension == ".jpeg") return "image/jpeg";
-    if (fileExtension == ".gif") return "image/gif";
-
-    return "application/octet-stream";
-}
-
-bool HttpHandler::readFile(const std::string& filePath, std::string& content)
-{
-    std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
-    if (!file.is_open())
-        return false;
-
-    std::ostringstream fileBuffer;
-    fileBuffer << file.rdbuf();
-    content = fileBuffer.str();
-    return true;
-}
 
 HttpResponse HttpHandler::buildError(int statusCode, const std::string& statusReason, const std::string& detail)
 {
@@ -452,19 +477,12 @@ HttpResponse HttpHandler::buildError(int statusCode, const std::string& statusRe
     return response;
 }
 
-std::string HttpHandler::stripQuery(const std::string& path)
-{
-    size_t queryStart = path.find('?');
-    if (queryStart != std::string::npos)
-        return path.substr(0, queryStart);
-    return path;
-}
 
 const Location* HttpHandler::matchLocation(const std::string& path)
 {
     for (size_t i = 0; i < Config->Locations.size(); ++i)
     {
-        const Location& loc = Config->Locations[i];
+        const Location &loc = sortedLocations[i];
         if (path.compare(0, loc.path.size(), loc.path) == 0)
         {
             return &loc;
@@ -491,15 +509,57 @@ HttpResponse HttpHandler::handle404()
     std::string errorPageContent;
     std::string errorPath = Config->root + "/Error.html"; 
     
-    if (readFile(errorPath, errorPageContent))
+    if (HttpUtils::readFile(errorPath, errorPageContent))
     {
         HttpResponse response(404, "Not Found");
-        response.setBody(errorPageContent, contentType(errorPath));
+        response.setBody(errorPageContent, HttpUtils::contentType(errorPath));
         return response;
     }
     return buildError(404, "Not Found", "File not found");
 }
 
+HttpResponse HttpHandler::CGI(const HttpRequest &request, const Location &matchedLocation, const std::string &requestPath)
+{
+    CgiHandler cgi;
+    std::string cgiOutput;
+    try
+    {
+        cgiOutput = cgi.execute(request, matchedLocation, requestPath);
+    }
+    catch (const std::exception& e)
+    {
+        return buildError(500, "Internal Server Error", "CGI Execution Failed");
+    }
+    HttpResponse response(200, "OK");
+    std::string contentType = "text/html";
+    
+    size_t delimiter = cgiOutput.find("\n\n");
+    if (delimiter == std::string::npos)
+        delimiter = cgiOutput.find("\r\n\r\n");
+
+    if (delimiter == std::string::npos) {
+        response.setBody(cgiOutput, contentType);
+        return response;
+    }
+    std::string headersPart = cgiOutput.substr(0, delimiter);
+    std::string bodyPart = cgiOutput.substr(delimiter + (cgiOutput[delimiter+1] == '\r' ? 4 : 2));
+
+    std::stringstream ss(headersPart);
+    std::string line;
+    while (std::getline(ss, line)) {
+        if (!line.empty() && line[line.size() - 1] == '\r')
+            line.erase(line.size() - 1);
+
+        if (line.find("Content-Type: ") == 0) {
+            contentType = line.substr(14);
+        }
+        else if (line.find("Status: ") == 0) {
+            // later
+        }
+    }
+    response.setBody(bodyPart, contentType);
+    return response;
+}
 
 HttpResponse HttpHandler::process(const HttpRequest& request)
 {
@@ -515,20 +575,32 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
     if (method != "GET" && method != "POST" && method != "DELETE")
         return buildError(405, "Method Not Allowed", "Unsupported method");
 
-    std::string requestPath = stripQuery(request.getTarget());
+    std::string requestPath = HttpUtils::stripQuery(request.getTarget());
 
     const Location* matchedLocation = matchLocation(requestPath);
     if (!matchedLocation)
         return handle404();
 
+if (!matchedLocation->cgiExt.empty())
+    {
+        if (requestPath.size() >= matchedLocation->cgiExt.size() &&
+            requestPath.compare(requestPath.size() - matchedLocation->cgiExt.size(), 
+                                matchedLocation->cgiExt.size(), matchedLocation->cgiExt) == 0)
+        {
+            return CGI(request, *matchedLocation, requestPath); 
+        }
+    }
     if (!isMethodAllowed(method, *matchedLocation))
         return buildError(405, "Method Not Allowed", "Method not allowed for route");
 
     if (method == "GET")
         return GET(request, requestPath);
-
+    if (method == "DELETE")
+    {
+        DELETE(request, requestPath);
+        return GET(request, requestPath);
+    }
     HttpResponse response(200, "OK");
     response.setBody("Hello, World!", "text/plain");
     return response;
 }
-

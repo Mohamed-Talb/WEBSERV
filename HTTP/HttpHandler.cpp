@@ -1,5 +1,7 @@
 #include "HttpHandler.hpp"
 #include "../CGI/CGI.hpp"
+#include "Methods.hpp" 
+#include "HttpUtils.hpp"
 
 struct CompareLocations
 {
@@ -9,7 +11,6 @@ struct CompareLocations
     }
 };
 
-
 HttpHandler::HttpHandler(const ServerConfig &serverConfig) : Config(&serverConfig)
 {
     sortedLocations = Config->Locations;
@@ -17,14 +18,6 @@ HttpHandler::HttpHandler(const ServerConfig &serverConfig) : Config(&serverConfi
 }
 
 HttpHandler::~HttpHandler() {}
-
-HttpResponse HttpHandler::buildError(int statusCode, const std::string& statusReason, const std::string& detail)
-{
-    HttpResponse response(statusCode, statusReason);
-    response.setBody(detail, "text/plain");
-    return response;
-}
-
 
 const Location* HttpHandler::matchLocation(const std::string& path)
 {
@@ -52,74 +45,12 @@ bool HttpHandler::isMethodAllowed(const std::string& method, const Location& loc
     return false;
 }
 
-HttpResponse HttpHandler::handle404()
+const Location *HttpHandler::getCgiLocation(const HttpRequest& request)
 {
-    std::string errorPageContent;
-    std::string errorPath = Config->root + "/Error.html"; 
-    
-    if (HttpUtils::readFile(errorPath, errorPageContent))
-    {
-        HttpResponse response(404, "Not Found");
-        response.setBody(errorPageContent, HttpUtils::contentType(errorPath));
-        return response;
-    }
-    return buildError(404, "Not Found", "File not found");
-}
-
-HttpResponse HttpHandler::formatCgiResponse(const std::string& cgiOutput)
-{
-    HttpResponse response(200, "OK");
-    std::string contentType = "text/html";
-    
-    size_t delimiter = cgiOutput.find("\n\n");
-    if (delimiter == std::string::npos)
-        delimiter = cgiOutput.find("\r\n\r\n");
-
-    if (delimiter == std::string::npos) {
-        response.setBody(cgiOutput, contentType);
-        return response;
-    }
-
-    std::string headersPart = cgiOutput.substr(0, delimiter);
-    std::string bodyPart = cgiOutput.substr(delimiter + (cgiOutput[delimiter+1] == '\r' ? 4 : 2));
-
-    std::stringstream ss(headersPart);
-    std::string line;
-    while (std::getline(ss, line)) {
-        if (!line.empty() && line[line.size() - 1] == '\r')
-            line.erase(line.size() - 1);
-
-        if (line.find("Content-Type: ") == 0) {
-            contentType = line.substr(14);
-        }
-        else if (line.find("Status: ") == 0) {
-            // later
-        }
-    }
-
-    response.setBody(bodyPart, contentType);
-    return response;
-}
-
-HttpResponse HttpHandler::process(const HttpRequest& request)
-{
-    int errorCode = request.getErrorCode();
-    if (errorCode != 0)
-    {
-        if (errorCode == 505) return buildError(505, "HTTP Version Not Supported", "Unsupported HTTP version");
-        if (errorCode == 400) return buildError(400, "Bad Request", "Malformed request");
-        return buildError(errorCode, "Error", "Parsing failed");
-    }
-
-    std::string method = request.getMethod();
-    if (method != "GET" && method != "POST" && method != "DELETE")
-        return buildError(405, "Method Not Allowed", "Unsupported method");
-
     std::string requestPath = HttpUtils::stripQuery(request.getTarget());
-
-    const Location* matchedLocation = matchLocation(requestPath);
-    if (!matchedLocation)
-        return handle404();
+    const Location *matchedLocation = matchLocation(requestPath);
+    
+    if (!matchedLocation) return NULL;
 
     if (!matchedLocation->cgiExt.empty())
     {
@@ -127,26 +58,32 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
             requestPath.compare(requestPath.size() - matchedLocation->cgiExt.size(), 
                                 matchedLocation->cgiExt.size(), matchedLocation->cgiExt) == 0)
         {
-            CgiHandler cgi;
-            try
-            {
-                std::string cgiOutput = cgi.execute(request, *matchedLocation, requestPath);
-                return formatCgiResponse(cgiOutput);
-            }
-            catch (const std::exception& e)
-            {
-                return buildError(500, "Internal Server Error", "CGI Execution Failed");
-            }
+            return matchedLocation;
         }
     }
+    return NULL;
+}
+
+HttpResponse HttpHandler::process(const HttpRequest& request)
+{
+    if (request.getErrorCode() != 0)
+    {
+        return HttpUtils::ErrorPage(request.getErrorCode(), "Bad Request", *Config);
+    }
+
+    std::string method = request.getMethod();
+    std::string requestPath = HttpUtils::stripQuery(request.getTarget());
+    
+    const Location* matchedLocation = matchLocation(requestPath);
+    if (!matchedLocation)
+        return HttpUtils::ErrorPage(404, "Not Found", *Config);
 
     if (!isMethodAllowed(method, *matchedLocation))
-        return buildError(405, "Method Not Allowed", "Method not allowed for route");
-
-    if (method == "GET")
-        return GET(request, requestPath);
-
-    HttpResponse response(200, "OK");
-    response.setBody("Hello, World!", "text/plain");
-    return response;
+        return HttpUtils::ErrorPage(405, "Method Not Allowed", *Config);
+    if (method == "GET") 
+        return HttpMethods::GET(Config->root, requestPath, *Config);
+    // if (method == "DELETE")
+    //     return HttpMethods::DELETE(Config->root, requestPath);
+    return HttpUtils::ErrorPage(501, "Not Implemented", *Config);
 }
+

@@ -10,6 +10,12 @@
 #include "../configParser/configParser.hpp"
 #include "../Errors.hpp"
 
+enum ClientState 
+{
+    READING_REQUEST,   // Normal state: reading and parsing HTTP
+    PROCESSING_CGI,    // Paused: waiting for CGI script to finish
+    SENDING_RESPONSE   // Writing the completed response to the socket
+};
 
 class Server
 {
@@ -62,7 +68,7 @@ class Client : public IEventHandler
     std::string readBuffer;
     std::string writeBuffer;
     std::vector<ServerConfig> configs;
-    
+    ClientState state;
 
     Client();
     Client(const Client&);
@@ -74,6 +80,7 @@ class Client : public IEventHandler
 
     void closeConnection();
     bool isConnected() const;
+    void onCgiDone(HttpResponse response);
 
     void clearReadBuffer();
     bool hasPendingWrite() const;

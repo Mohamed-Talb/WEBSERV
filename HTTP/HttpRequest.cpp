@@ -1,7 +1,7 @@
 
 #include "HttpHandler.hpp"
 
-HttpRequest::HttpRequest() : state(PARSE_REQUEST_LINE), consumedBytes(0), errorCode(0) {}
+HttpRequest::HttpRequest() : state(PARSE_REQUEST_LINE), parsedSize(0), errorCode(0) {}
 HttpRequest::~HttpRequest() {}
 
 std::string HttpRequest::getHeader(const std::string& key) const
@@ -23,14 +23,14 @@ std::string HttpRequest::getMethod()	const { return method; }
 std::string HttpRequest::getTarget() 	const { return target; }
 std::string HttpRequest::getVersion()	const { return version; }
 int HttpRequest::getErrorCode()			const { return errorCode; }
-size_t HttpRequest::getConsumedBytes()	const { return consumedBytes; }
+size_t HttpRequest::getParsedSize()	    const { return parsedSize; }
 
 
 void HttpRequest::reset() 
 {
     method.clear(); target.clear(); version.clear();
     headers.clear(); body.clear();
-    consumedBytes = 0; 
+    parsedSize = 0; 
     errorCode = 0;
     state = PARSE_REQUEST_LINE;
 }
@@ -85,10 +85,10 @@ static bool parseChunkedBody(const std::string& rawInputData, std::string& decod
 
 int HttpRequest::parseRequestLine(const std::string& raw)
 {
-    size_t crlf = raw.find("\r\n", consumedBytes);
+    size_t crlf = raw.find("\r\n", parsedSize);
     if (crlf == std::string::npos) return 0; // Need more data
 
-    std::string line = raw.substr(consumedBytes, crlf - consumedBytes);
+    std::string line = raw.substr(parsedSize, crlf - parsedSize);
     std::istringstream lineStream(line);
     
     if (!(lineStream >> method >> target >> version)) 
@@ -98,17 +98,17 @@ int HttpRequest::parseRequestLine(const std::string& raw)
     }
     
     method = toUpper(method);
-    consumedBytes = crlf + 2;
+    parsedSize = crlf + 2;
     state = PARSE_HEADERS;
     return 1;
 }
 
 int HttpRequest::parseHeaders(const std::string& raw)
 {
-    size_t headerEnd = raw.find("\r\n\r\n", consumedBytes);
+    size_t headerEnd = raw.find("\r\n\r\n", parsedSize);
     if (headerEnd == std::string::npos) return 0; 
 
-    std::string headerSection = raw.substr(consumedBytes, headerEnd - consumedBytes);
+    std::string headerSection = raw.substr(parsedSize, headerEnd - parsedSize);
     std::istringstream headerStream(headerSection);
     
     std::string line;
@@ -132,14 +132,14 @@ int HttpRequest::parseHeaders(const std::string& raw)
         headers[headerKey] = headerValue;
     }
     
-    consumedBytes = headerEnd + 4;
+    parsedSize = headerEnd + 4;
     state = PARSE_BODY;
     return 1; 
 }
 
 int HttpRequest::parseBody(const std::string& raw)
 {
-    std::string rawBodyData = raw.substr(consumedBytes);
+    std::string rawBodyData = raw.substr(parsedSize);
     size_t bodyConsumed = 0;
 
     std::map<std::string, std::string>::iterator te_it = headers.find("transfer-encoding");
@@ -181,7 +181,7 @@ int HttpRequest::parseBody(const std::string& raw)
         body = rawBodyData.substr(0, contentLength);
         bodyConsumed = contentLength;
     }
-    consumedBytes += bodyConsumed;
+    parsedSize += bodyConsumed;
     state = PARSE_COMPLETE;
     return 1;
 }
@@ -226,10 +226,10 @@ int HttpRequest::parse(const std::string &rawRequestData)
 //     {
 //         if (state == PARSE_REQUEST_LINE)
 //         {
-//             size_t crlf = rawRequestData.find("\r\n", consumedBytes);
+//             size_t crlf = rawRequestData.find("\r\n", parsedSize);
 //             if (crlf == std::string::npos) return 0; // Need more data
 
-//             std::string line = rawRequestData.substr(consumedBytes, crlf - consumedBytes);
+//             std::string line = rawRequestData.substr(parsedSize, crlf - parsedSize);
 //             std::istringstream lineStream(line);
             
 //             if (!(lineStream >> method >> target >> version)) 
@@ -237,15 +237,15 @@ int HttpRequest::parse(const std::string &rawRequestData)
 //                 setError(400);
 //                 return 1; 
 //             }
-//             consumedBytes = crlf + 2;
+//             parsedSize = crlf + 2;
 //             state = PARSE_HEADERS;
 //         }
 //         else if (state == PARSE_HEADERS)
 //         {
-//             size_t headerEnd = rawRequestData.find("\r\n\r\n", consumedBytes);
+//             size_t headerEnd = rawRequestData.find("\r\n\r\n", parsedSize);
 //             if (headerEnd == std::string::npos) return 0; // Need more data
 
-//             std::string headerSection = rawRequestData.substr(consumedBytes, headerEnd - consumedBytes);
+//             std::string headerSection = rawRequestData.substr(parsedSize, headerEnd - parsedSize);
 //             std::istringstream headerStream(headerSection);
             
 //             if (!parseHeaders(headerStream)) 
@@ -253,12 +253,12 @@ int HttpRequest::parse(const std::string &rawRequestData)
 //                 setError(400);
 //                 return 1;
 //             }
-//             consumedBytes = headerEnd + 4;
+//             parsedSize = headerEnd + 4;
 //             state = PARSE_BODY;
 //         }
 //         else if (state == PARSE_BODY)
 //         {
-//             std::string bodyData = rawRequestData.substr(consumedBytes);
+//             std::string bodyData = rawRequestData.substr(parsedSize);
 //             size_t bodyConsumed = 0;
 //             int status = extractBody(bodyData, bodyConsumed);
             
@@ -268,7 +268,7 @@ int HttpRequest::parse(const std::string &rawRequestData)
 //                 setError(400);
 //                 return 1;
 //             }
-//             consumedBytes += bodyConsumed;
+//             parsedSize += bodyConsumed;
 //             state = PARSE_COMPLETE;
 //         }
 //     }

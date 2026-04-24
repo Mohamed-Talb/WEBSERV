@@ -24,11 +24,12 @@ enum State
 	PARSE_ERROR
 };
 
-namespace HttpUtils
+namespace FileSystem
 {
-    std::string contentType(const std::string& path);
-    bool        readFile(const std::string& filePath, std::string& content);
-    std::string stripQuery(const std::string& path);
+    bool        fileExists(const std::string &filePath);
+    bool        readFile(const std::string &filePath);
+    bool        deleteFile(const std::string &filePath);
+    bool        writeToFile(const std::string &filePath, std::string &content);
 }
 
 class HttpRequest 
@@ -41,27 +42,27 @@ class HttpRequest
     std::map<std::string, std::string> headers;
     std::string body;
     
-    State state;
-    size_t consumedBytes;
-    int 	errorCode;
+    State   state;
+    size_t  parsedSize;
+    int     errorCode;
 
     void setError(int code);
-    int parseRequestLine(const std::string& raw);
-    int parseHeaders(const std::string& raw);
-    int parseBody(const std::string& raw);
+    int  parseBody(const std::string& raw);
+    int  parseHeaders(const std::string& raw);
+    int  parseRequestLine(const std::string& raw);
 	public:
     HttpRequest();
     ~HttpRequest();
 
     void reset();
-    int parse(const std::string& rawBuffer);
+    int  parse(const std::string &rawBuffer);
 
     int getErrorCode() const;
     std::string getBody() const;
+    size_t getParsedSize() const;
     std::string getMethod() const;
     std::string getTarget() const;
     std::string getVersion() const;
-    size_t getConsumedBytes() const;
     std::string getHeader(const std::string& key) const;
     
 
@@ -79,11 +80,11 @@ class HttpResponse
 
 	public:
     HttpResponse();
-    HttpResponse(int code, const std::string& reason);
+    HttpResponse(int code, const std::string &reason);
     ~HttpResponse();
 
-    void setHeader(const std::string& key, const std::string& value);
-    void setBody(const std::string& content, const std::string& contentType);
+    void setHeader(const std::string &key, const std::string &value);
+    void setBody(const std::string &content, const std::string &contentType);
     std::string toString() const;
 };
 
@@ -94,15 +95,11 @@ class HttpHandler
     const ServerConfig 	*Config;
     std::vector<Location> sortedLocations;
     
-    const Location* matchLocation(const std::string& path);
-    bool 			isMethodAllowed(const std::string& method, const Location& loc);
-    HttpResponse 	handle404();
-    HttpResponse 	buildError(int code, const std::string& reason, const std::string& detail);
-    HttpResponse formatCgiResponse(const std::string& cgiOutput);
-	
+    const Location* matchLocation(const std::string &path);
+    bool 			isMethodAllowed(const std::string &method, const Location& loc);
 	// METHODS
-    HttpResponse 	GET(const HttpRequest& req, std::string route);
-	public:
+    public:
+	const Location *getCgiLocation(const HttpRequest &request);
     HttpHandler(const ServerConfig &serverConfig);
     ~HttpHandler();
 

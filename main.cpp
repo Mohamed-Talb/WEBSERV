@@ -20,3 +20,4 @@ int main()
 
 // Timeout Management (The Slowloris Vulnerability)
 // in client handlRead if the httpparser return a error custo the error page for client config
+// sort the locations inside the config 
