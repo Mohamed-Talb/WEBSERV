@@ -78,7 +78,9 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
         return HttpUtils::ErrorPage(404, "Not Found", *Config);
 
     if (!isMethodAllowed(method, *matchedLocation))
+    {
         return HttpUtils::ErrorPage(405, "Method Not Allowed", *Config);
+    }
     if (method == "GET") 
         return HttpMethods::GET(Config->root, requestPath, *Config);
     if (method == "DELETE")

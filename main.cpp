@@ -21,3 +21,4 @@ int main()
 // Timeout Management (The Slowloris Vulnerability)
 // in client handlRead if the httpparser return a error custo the error page for client config
 // sort the locations inside the config 
+// 405 Method Not Allowed -> http://localhost:8080/upload.html;
