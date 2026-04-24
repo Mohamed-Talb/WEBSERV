@@ -34,17 +34,6 @@ namespace HttpUtils
         return "application/octet-stream";
     }
 
-    bool readFile(const std::string& filePath, std::string& content)
-    {
-        std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
-        if (!file.is_open())
-            return false;
-        std::ostringstream buffer;
-        buffer << file.rdbuf();
-        content = buffer.str();
-        return true;
-    }
-
     std::string stripQuery(const std::string& path)
     {
         size_t pos = path.find('?');
@@ -61,7 +50,7 @@ namespace HttpUtils
         if (it != config.errorPage.end()) {
             errorPath = config.root + it->second;
         }
-        if (!errorPath.empty() && readFile(errorPath, errorPageContent))
+        if (!errorPath.empty() && FileSystem::readFile(errorPath, errorPageContent))
         {
             HttpResponse response(statusCode, statusReason);
             response.setBody(errorPageContent, contentType(errorPath));

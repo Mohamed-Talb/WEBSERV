@@ -27,7 +27,7 @@ enum State
 namespace FileSystem
 {
     bool        fileExists(const std::string &filePath);
-    bool        readFile(const std::string &filePath);
+    bool        readFile(const std::string &filePath, std::string& content);
     bool        deleteFile(const std::string &filePath);
     bool        writeToFile(const std::string &filePath, std::string &content);
 }

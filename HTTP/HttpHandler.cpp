@@ -81,8 +81,8 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
         return HttpUtils::ErrorPage(405, "Method Not Allowed", *Config);
     if (method == "GET") 
         return HttpMethods::GET(Config->root, requestPath, *Config);
-    // if (method == "DELETE")
-    //     return HttpMethods::DELETE(Config->root, requestPath);
+    if (method == "DELETE")
+        return HttpMethods::DELETE(Config->root, requestPath, *Config);
     return HttpUtils::ErrorPage(501, "Not Implemented", *Config);
 }
 
