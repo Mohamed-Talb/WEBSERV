@@ -42,101 +42,140 @@ std::vector<std::string> prepConf(const std::string& filepath)
     return tokens;
 }
 
-Location parseLocation(std::vector<std::string> tokens, std::vector<std::string>::iterator &it)
+std::vector<std::string> prepConf(const std::string& filepath)
 {
-    Location location;
-    
-    location.path = *(it++);
-    if (*it != "{")
-        throw std::runtime_error("No opening curly braces");
-    
-    for (it++; it != tokens.end(); it++)
-    {
-        if (*it == "}")
-            return location;
-        else if (*it == "methods")
-        {
-            it++;
-            while (*it != ";")
-                location.methods.push_back(*(it++));
-        }
-        else if (*it == "root")
-            location.root = *(++it);
-        else if (*it == "autoindex")
-            location.autoindex = *(++it);
-        else if (*it == "index")
-            location.index = *(++it);
-        else if (*it == "cgi_path")
-            location.cgiPath = *(++it);
-        else if (*it == "cgi_ext")
-            location.cgiExt = *(++it);
-    }
+    std::vector<std::string> tokens;
+    std::ifstream file(filepath.c_str());
+	std::string specials = "{;}";
 
-    throw std::runtime_error("No matching curly braces");
+    if (!file.is_open())
+        throw std::runtime_error("Could not open config file: " + filepath);
+
+    std::string line;
+    while (std::getline(file, line)) 
+    {
+        size_t commentPos = line.find('#');
+        if (commentPos != std::string::npos)
+            line.erase(commentPos);
+        std::string processedLine;
+        for (size_t i = 0; i < line.size(); ++i) 
+        {
+            if (specials.find(line[i]) != std::string::npos) 
+            {
+                processedLine += ' ';
+                processedLine += line[i];
+                processedLine += ' ';
+            } 
+            else 
+            {
+                processedLine += line[i];
+            }
+        }
+        std::stringstream ss(processedLine);
+        std::string token;
+        while (ss >> token) 
+            tokens.push_back(token);
+    }
+    return tokens;
 }
 
-ServerConfig parseServer(std::vector<std::string> tokens, std::vector<std::string>::iterator &it)
+// Helper to get next token safely 
+std::string expect(std::vector<std::string>::iterator &it, const std::vector<std::string>& tokens, const std::string& err) 
 {
-    ServerConfig serverConf;
-    
-    if (*it != "{")
-        throw std::runtime_error("No opening curly braces");
-    
-    for (it++; it != tokens.end(); it++)
-    {
-        if (*it == "}")
-            return serverConf;
-        else if (*it == "host")
-            serverConf.host = *(++it); // this is not readable
-        else if (*it == "listen")
-            serverConf.port = std::atoi((*(++it)).c_str());
-        else if (*it == "server_name")
-        {
-            it++;
-            while (*it != ";")
-                serverConf.serverName.push_back(*(it++));
-        }
-        else if (*it == "root")
-            serverConf.root = *(++it);
-        else if (*it == "location")
-        {
-            Location location = parseLocation(tokens, ++it);
-            serverConf.Locations.push_back(location);
-        }
-        else if (*it == "error_page")
-        {
-            std::vector<int> errorCodes;
+    if (it == tokens.end())
+        throw std::runtime_error(err);
+    return *it++;
+}
 
-            while (true)
-            {
-                ++it;
-                if (it + 1 == tokens.end())
-                    throw std::runtime_error("ending semicolon not found.");
-                else if(*(it + 1) == ";")
-                    break;
-                errorCodes.push_back(std::atoi((*it).c_str()));
-            }
-            for (std::vector<int>::iterator tempIt = errorCodes.begin(); tempIt != errorCodes.end(); tempIt++)
-                serverConf.errorPage.insert(std::pair<int, std::string>(*tempIt, *it));
-            it++; // skip error page
+Location parseLocation(const std::vector<std::string>& tokens, std::vector<std::string>::iterator &it)
+{
+    Location loc;
+    loc.path = expect(it, tokens, "Missing path for location");
+    
+    if (expect(it, tokens, "Expected '{'") != "{") 
+        throw std::runtime_error("Expected '{'");
+
+    for (; it != tokens.end(); ++it)
+    {
+        if (*it == "}") 
+            return loc;
+        
+        std::string key = *it;
+        if (key == "methods") 
+        {
+            for (++it; it != tokens.end() && *it != ";"; ++it) 
+                loc.methods.push_back(*it);
+        } 
+        else if (key == "root")      loc.root = expect(++it, tokens, "Missing root path");
+        else if (key == "autoindex") loc.autoindex = expect(++it, tokens, "Missing autoindex value");
+        else if (key == "index")     loc.index = expect(++it, tokens, "Missing index value");
+        else if (key == "cgi_path")  loc.cgiPath = expect(++it, tokens, "Missing cgi_path");
+        else if (key == "cgi_ext")   loc.cgiExt = expect(++it, tokens, "Missing cgi_ext");
+        
+        if (it == tokens.end()) break;
+    }
+    throw std::runtime_error("Unclosed location block");
+}
+
+void parseErrorPage(ServerConfig &conf, std::vector<std::string>::iterator &it, const std::vector<std::string> &tokens)
+{
+    std::vector<std::string> codes;
+    for (++it; it != tokens.end() && *it != ";"; ++it)
+        codes.push_back(*it);
+        
+    if (codes.size() < 2)
+        throw std::runtime_error("Invalid error_page syntax: missing codes or path.");
+        
+    std::string path = codes.back();
+    for (size_t i = 0; i < codes.size() - 1; ++i)
+    {
+        try 
+        {
+            int code = std::stoi(codes[i]);
+            conf.errorPage[code] = path;
+        } catch (...) 
+        {
+            throw std::runtime_error("Invalid error code in config: " + codes[i]);
         }
     }
+}
 
-    throw std::runtime_error("No matching curly braces");
+ServerConfig parseServer(const std::vector<std::string>& tokens, std::vector<std::string>::iterator &it)
+{
+    ServerConfig conf;
+    if (expect(it, tokens, "Expected '{'") != "{") 
+        throw std::runtime_error("Expected '{'");
+
+    for (; it != tokens.end(); ++it)
+    {
+        if (*it == "}") 
+            return conf;
+            
+        std::string key = *it;
+        if (key == "host")            conf.host = expect(++it, tokens, "Missing host");
+        else if (key == "listen")     conf.port = std::stoi(expect(++it, tokens, "Missing port"));
+        else if (key == "root")       conf.root = expect(++it, tokens, "Missing root");
+        else if (key == "server_name") 
+        {
+            for (++it; it != tokens.end() && *it != ";"; ++it) 
+                conf.serverName.push_back(*it);
+        }
+        else if (key == "location")   conf.Locations.push_back(parseLocation(tokens, ++it));
+        else if (key == "error_page") parseErrorPage(conf, it, tokens);
+    }
+    throw std::runtime_error("Unclosed server block");
 }
 
 std::vector<ServerConfig> parseTokens(std::vector<std::string> tokens)
 {
     std::vector<ServerConfig> allServers;
-    std::vector<std::string>::iterator it;
-    ServerConfig serverConf;
-
-    for (it = tokens.begin(); it != tokens.end(); it++)
+    std::vector<std::string>::iterator it = tokens.begin(); 
+    
+    while (it != tokens.end()) 
     {
-        if (*it != "server")
-            throw std::runtime_error("No server config found."); // change later to custom syntax/parsing exception
-        serverConf = parseServer(tokens, ++it);
-        allServers.push_back(serverConf);
+        if (*it != "server") 
+            throw std::runtime_error("Expected 'server' keyword"); 
+        allServers.push_back(parseServer(tokens, ++it));
     }
     return allServers;
 }
@@ -148,42 +187,3 @@ std::vector<ServerConfig> GETconfig()
     std::vector<ServerConfig> allServers = parseTokens(tokens); 
     return allServers;
 }
-
-
-// int main()
-// {
-//     std::vector<std::string> tokens = prepConf("server.conf");
-//     std::vector<ServerConfig> allServers = parseTokens(tokens);    
-    
-//     // ServerConfig myServer = allServers[0];
-//     // std::cout << myServer.host << std::endl;
-//     // std::cout << myServer.port << std::endl;
-//     // std::cout << "server names: ";
-//     // for (std::vector<std::string>::iterator tempIt = myServer.serverName.begin(); tempIt != myServer.serverName.end(); tempIt++)
-//     //     std::cout << *tempIt << " ";
-//     // std::cout << std::endl;
-//     // std::cout << myServer.root << std::endl;
-//     // std::cout << "Locations:" << std::endl;
-//     // for (std::vector<Location>::iterator tempIt = myServer.Locations.begin(); tempIt != myServer.Locations.end(); tempIt++)
-//     // {
-//     //     std::cout << "methodes: ";
-//     //     for (std::vector<std::string>::iterator tempIt2 = (*tempIt).methods.begin(); tempIt2 != (*tempIt).methods.end(); tempIt2++)
-//     //     {
-//     //         std::cout << *tempIt2 << " ";
-//     //     }
-//     //     std::cout << std::endl;
-//     //     std::cout << (*tempIt).path << std::endl;
-//     //     std::cout << (*tempIt).root << std::endl;
-//     //     std::cout << (*tempIt).autoindex << std::endl;
-//     //     std::cout << (*tempIt).index << std::endl;
-//     //     std::cout << (*tempIt).cgiPath << std::endl;
-//     //     std::cout << (*tempIt).cgiExt << std::endl;
-//     //     std::cout << "--------------------" << std::endl;
-//     // }
-//     // std::cout << "error pages:" << std::endl;
-//     // for (std::map<int, std::string>::iterator tempIt = myServer.errorPage.begin(); tempIt != myServer.errorPage.end(); tempIt++)
-//     // {
-//     //     std::cout << (*tempIt).first << std::endl;
-//     //     std::cout << (*tempIt).second << std::endl;
-//     // }
-// }

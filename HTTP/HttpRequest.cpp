@@ -35,7 +35,7 @@ void HttpRequest::reset()
     state = PARSE_REQUEST_LINE;
 }
 
-static bool parseChunkedBody(const std::string& rawInputData, std::string& decodedBody, size_t& totalConsumed)
+static bool parseChunkedBody(const std::string &rawInputData, std::string& decodedBody, size_t& totalConsumed)
 {
     decodedBody.clear();
     totalConsumed = 0;
@@ -83,7 +83,7 @@ static bool parseChunkedBody(const std::string& rawInputData, std::string& decod
     }
 }
 
-int HttpRequest::parseRequestLine(const std::string& raw)
+int HttpRequest::parseRequestLine(const std::string &raw)
 {
     size_t crlf = raw.find("\r\n", parsedSize);
     if (crlf == std::string::npos) return 0; // Need more data
@@ -103,7 +103,7 @@ int HttpRequest::parseRequestLine(const std::string& raw)
     return 1;
 }
 
-int HttpRequest::parseHeaders(const std::string& raw)
+int HttpRequest::parseHeaders(const std::string &raw)
 {
     size_t headerEnd = raw.find("\r\n\r\n", parsedSize);
     if (headerEnd == std::string::npos) return 0; 
@@ -126,7 +126,6 @@ int HttpRequest::parseHeaders(const std::string& raw)
             setError(400);
             return -1;
         }
-
         std::string headerKey = toLower(trim(line.substr(0, delimiterPos)));
         std::string headerValue = trim(line.substr(delimiterPos + 1));
         headers[headerKey] = headerValue;
@@ -137,7 +136,7 @@ int HttpRequest::parseHeaders(const std::string& raw)
     return 1; 
 }
 
-int HttpRequest::parseBody(const std::string& raw)
+int HttpRequest::parseBody(const std::string &raw, ServerConfig &config)
 {
     std::string rawBodyData = raw.substr(parsedSize);
     size_t bodyConsumed = 0;

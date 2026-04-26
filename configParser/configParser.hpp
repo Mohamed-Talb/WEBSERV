@@ -22,6 +22,6 @@ struct ServerConfig
     std::string root;
     std::vector<Location> Locations;
     std::map<int, std::string> errorPage;
-
+	size_t client_max_body_size;
     ServerConfig() : host("127.0.0.1"), port(80), root("./www") {}
 };

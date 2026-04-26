@@ -1,4 +1,3 @@
-
 #ifndef HTTPHANDLER_HPP
 #define HTTPHANDLER_HPP
 
@@ -47,9 +46,9 @@ class HttpRequest
     int     errorCode;
 
     void setError(int code);
-    int  parseBody(const std::string& raw);
-    int  parseHeaders(const std::string& raw);
-    int  parseRequestLine(const std::string& raw);
+    int  parseBody(const std::string &raw, ServerConfig &config);
+    int  parseHeaders(const std::string &raw);
+    int  parseRequestLine(const std::string &raw);
 	public:
     HttpRequest();
     ~HttpRequest();
@@ -63,7 +62,7 @@ class HttpRequest
     std::string getMethod() const;
     std::string getTarget() const;
     std::string getVersion() const;
-    std::string getHeader(const std::string& key) const;
+    std::string getHeader(const std::string &key) const;
     
 
     State getState() const { return state; }
