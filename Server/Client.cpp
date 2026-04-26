@@ -119,7 +119,21 @@ void Client::handleRead()
 
         const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
         if (!selectedConfig) selectedConfig = &configs[0];
-        HttpHandler handler(*selectedConfig); 
+        std::string cl = request.getHeader("Content-Length");
+		if (!cl.empty())
+		{
+			size_t bodySize = std::stoul(cl);
+			if (bodySize > selectedConfig->client_max_body_size)
+			{
+				HttpResponse err = HttpUtils::ErrorPage(413, "Payload Too Large", *selectedConfig);
+				appendToWriteBuffer(err.toString());
+				state = SENDING_RESPONSE;
+				server->modifyHandler(this, EPOLLIN | EPOLLOUT);
+				request.reset();
+				return;
+			}
+		}
+		HttpHandler handler(*selectedConfig); 
 
         const Location* cgiLocation = handler.getCgiLocation(request);
 
