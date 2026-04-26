@@ -162,6 +162,17 @@ ServerConfig parseServer(const std::vector<std::string>& tokens, std::vector<std
         }
         else if (key == "location")   conf.Locations.push_back(parseLocation(tokens, ++it));
         else if (key == "error_page") parseErrorPage(conf, it, tokens);
+		else if (key == "client_max_body_size") 
+		{
+			std::string val = expect(++it, tokens, "Missing body size value");
+			try 
+			{
+				conf.client_max_body_size = std::stoul(val);
+			} catch (...) 
+			{
+				throw std::runtime_error("Invalid client_max_body_size value: " + val);
+			}
+		}
     }
     throw std::runtime_error("Unclosed server block");
 }
