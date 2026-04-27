@@ -3,27 +3,16 @@
 #include "Methods.hpp" 
 #include "HttpUtils.hpp"
 
-struct CompareLocations
-{
-    bool operator()(const Location& a, const Location& b) const
-    {
-        return a.path.size() > b.path.size();
-    }
-};
 
-HttpHandler::HttpHandler(const ServerConfig &serverConfig) : Config(&serverConfig)
-{
-    sortedLocations = Config->Locations;
-    std::sort(sortedLocations.begin(), sortedLocations.end(), CompareLocations());
-}
+HttpHandler::HttpHandler(const ServerConfig &serverConfig) : serverConfig(&serverConfig) {}
 
 HttpHandler::~HttpHandler() {}
 
-const Location* HttpHandler::matchLocation(const std::string& path)
+const Location *HttpHandler::matchLocation(const std::string& path)
 {
-    for (size_t i = 0; i < Config->Locations.size(); ++i)
+    for (size_t i = 0; i < serverConfig->Locations.size(); ++i)
     {
-        const Location &loc = sortedLocations[i];
+        const Location &loc = serverConfig->Locations[i];
         if (path.compare(0, loc.path.size(), loc.path) == 0)
         {
             return &loc;
@@ -35,8 +24,7 @@ const Location* HttpHandler::matchLocation(const std::string& path)
 bool HttpHandler::isMethodAllowed(const std::string& method, const Location& loc)
 {
     if (loc.methods.empty())
-        return true; 
-        
+        return true;   
     for (size_t i = 0; i < loc.methods.size(); ++i)
     {
         if (toUpper(loc.methods[i]) == method)
@@ -64,27 +52,27 @@ const Location *HttpHandler::getCgiLocation(const HttpRequest& request)
     return NULL;
 }
 
-HttpResponse HttpHandler::process(const HttpRequest& request)
+HttpResponse HttpHandler::process(const HttpRequest &request)
 {
     if (request.getErrorCode() != 0)
     {
-        return HttpUtils::ErrorPage(request.getErrorCode(), "Bad Request", *Config);
+        return HttpUtils::ErrorPage(request.getErrorCode(), "Bad Request", *serverConfig);
     }
     std::string method = request.getMethod();
     std::string requestPath = HttpUtils::stripQuery(request.getTarget());
     
     const Location* matchedLocation = matchLocation(requestPath);
     if (!matchedLocation)
-        return HttpUtils::ErrorPage(404, "Not Found", *Config);
+        return HttpUtils::ErrorPage(404, "Not Found", *serverConfig);
 
     if (!isMethodAllowed(method, *matchedLocation))
     {
-        return HttpUtils::ErrorPage(405, "Method Not Allowed", *Config);
+        return HttpUtils::ErrorPage(405, "Method Not Allowed", *serverConfig);
     }
     if (method == "GET") 
-        return HttpMethods::GET(Config->root, requestPath, *Config);
+        return HttpMethods::GET(serverConfig->root, requestPath, *serverConfig);
     if (method == "DELETE")
-        return HttpMethods::DELETE(Config->root, requestPath, *Config);
-    return HttpUtils::ErrorPage(501, "Not Implemented", *Config);
+        return HttpMethods::DELETE(serverConfig->root, requestPath, *serverConfig);
+    return HttpUtils::ErrorPage(501, "Not Implemented", *serverConfig);
 }
 

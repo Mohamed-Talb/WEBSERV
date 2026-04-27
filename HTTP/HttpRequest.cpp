@@ -86,8 +86,8 @@ static bool parseChunkedBody(const std::string &rawInputData, std::string& decod
 int HttpRequest::parseRequestLine(const std::string &raw)
 {
     size_t crlf = raw.find("\r\n", parsedSize);
-    if (crlf == std::string::npos) return 0; // Need more data
-
+    if (crlf == std::string::npos) 
+		return 0;
     std::string line = raw.substr(parsedSize, crlf - parsedSize);
     std::istringstream lineStream(line);
     

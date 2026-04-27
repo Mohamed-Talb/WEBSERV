@@ -1,11 +1,19 @@
 #include "Methods.hpp"
 #include "HttpUtils.hpp"
+#include <sys/stat.h>
 
 HttpResponse HttpMethods::GET(const std::string &rootDirectory, std::string requestPath, const ServerConfig &config)
 { 
+	struct stat S;
 	std::cout << requestPath << std::endl;
-    if (requestPath.empty() || requestPath == "/")
-        requestPath = "/index.html";
+    if (stat(requestPath.c_str(), &S) == 0)
+	{
+		if (S_ISDIR(S.st_mode))
+		{
+			requestPath = "/index.html";
+		}
+
+	}
         
     std::string fullPath = rootDirectory + requestPath;
     std::string fileContent;

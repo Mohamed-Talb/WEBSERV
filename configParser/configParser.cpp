@@ -5,6 +5,7 @@
 #include <fstream>
 #include <sstream>
 #include "../Helpers.hpp"
+#include <algorithm>
 
 // std::vector<std::string> prepConf(const std::string& filepath)
 // {
@@ -141,6 +142,15 @@ void parseErrorPage(ServerConfig &conf, std::vector<std::string>::iterator &it, 
     }
 }
 
+struct CompareLocations
+{
+    bool operator()(const Location &a, const Location &b) const
+    {
+        return a.path.size() > b.path.size();
+    }
+};
+
+
 ServerConfig parseServer(const std::vector<std::string>& tokens, std::vector<std::string>::iterator &it)
 {
     ServerConfig conf;
@@ -184,13 +194,15 @@ std::vector<ServerConfig> parseTokens(std::vector<std::string> tokens)
 {
     std::vector<ServerConfig> allServers;
     std::vector<std::string>::iterator it = tokens.begin(); 
-    
+    ServerConfig currServerConfig;
     while (it != tokens.end()) 
     {
 		std::cout << *it << std::endl;
         if (*it != "server") 
             throw std::runtime_error("Expected 'server' keyword"); 
-        allServers.push_back(parseServer(tokens, ++it));
+        currServerConfig = parseServer(tokens, ++it);
+		std::sort(currServerConfig.Locations.begin(), currServerConfig.Locations.end(), CompareLocations());
+		allServers.push_back(currServerConfig);
 		it++;
     }
     return allServers;
@@ -203,3 +215,7 @@ std::vector<ServerConfig> GETconfig()
 	std::vector<ServerConfig> allServers = parseTokens(tokens); 
     return allServers;
 }
+
+
+// sortedLocations = Config->Locations;
+// 

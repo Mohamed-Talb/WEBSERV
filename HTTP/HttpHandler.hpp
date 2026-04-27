@@ -91,8 +91,7 @@ class HttpResponse
 class HttpHandler 
 {
 	private:
-    const ServerConfig 	*Config;
-    std::vector<Location> sortedLocations;
+    const ServerConfig 	*serverConfig;
     
     const Location* matchLocation(const std::string &path);
     bool 			isMethodAllowed(const std::string &method, const Location& loc);
