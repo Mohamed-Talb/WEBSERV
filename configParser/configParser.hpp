@@ -18,7 +18,7 @@ typedef Tokens::iterator TokenIt;
 std::string parseErrorPagePath(const std::string &raw);
 int         parsePort(TokenIt &it, const Tokens &tokens);
 std::string parseRoot(TokenIt &it, const Tokens &tokens);
-std::string parseIndex(TokenIt &it, const Tokens &tokens);
+std::vector<std::string> parseIndexes(TokenIt &it, const Tokens &tokens);
 std::string parseCgiExt(TokenIt &it, const Tokens &tokens);
 size_t      parseBodySize(TokenIt &it, const Tokens &tokens);
 std::string parseLocationPath(TokenIt &it, const Tokens &tokens);
@@ -31,7 +31,7 @@ struct Location
     std::string path;
     std::string root;
     std::string autoindex;
-    std::string index;
+    std::vector<std::string> indexes;
     std::string cgiPath;
     std::string cgiExt;
 };
@@ -42,7 +42,7 @@ struct ServerConfig
     int port;
     std::vector<std::string> serverName;
     std::string root;
-    std::string index;
+   	std::vector<std::string> indexes;
     std::vector<Location> Locations;
     std::map<int, std::string> errorPage;
 	ssize_t client_max_body_size;

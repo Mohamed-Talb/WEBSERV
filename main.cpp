@@ -1,11 +1,11 @@
 #include "Server/Server.hpp"
 
-std::vector<ServerConfig> GETconfig();
+std::vector<ServerConfig> parseConfig();
 int main()
 {
     try
     {
-        std::vector<ServerConfig> configs = GETconfig();
+        std::vector<ServerConfig> configs = parseConfig();
         Server server;
         server.init(configs);
         server.runEventLoop();

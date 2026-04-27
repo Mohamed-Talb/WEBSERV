@@ -52,13 +52,15 @@ const Location *HttpHandler::getCgiLocation(const HttpRequest& request)
     return NULL;
 }
 
-std::string HttpHandler::resolveIndexFile(const Location *loc)
+std::vector<std::string> HttpHandler::resolveIndexFiles(const Location *loc)
 {
-    if (loc && !loc->index.empty())
-        return loc->index;
-    if (!serverConfig->index.empty())
-        return serverConfig->index;
-    return "index.html";
+    if (loc && !loc->indexes.empty())
+        return loc->indexes;
+    if (!serverConfig->indexes.empty())
+        return serverConfig->indexes;
+    std::vector<std::string> defaults;
+    defaults.push_back("index.html");
+    return defaults;
 }
 
 HttpResponse HttpHandler::process(const HttpRequest &request)
@@ -82,17 +84,27 @@ HttpResponse HttpHandler::process(const HttpRequest &request)
     struct stat S;
     if (stat(fullPath.c_str(), &S) == 0 && S_ISDIR(S.st_mode))
     {
-        std::string index = resolveIndexFile(matchedLocation);
-        fullPath = joinPath(fullPath, index);
-        requestPath = joinPath(requestPath, index);
+        std::vector<std::string> indexes = resolveIndexFiles(matchedLocation);
+        bool foundIndex = false;
+        for (size_t i = 0; i < indexes.size(); ++i)
+        {
+            std::string candidatePath = joinPath(fullPath, indexes[i]);
+            if (FileSystem::fileExists(candidatePath))
+            {
+                requestPath = joinPath(requestPath, indexes[i]);
+                foundIndex = true;
+                break;
+            }
+        }
+        if (!foundIndex)
+        {
+            return HttpUtils::ErrorPage(403, "Forbidden", *serverConfig);
+        }
     }
-
     if (method == "GET")
         return HttpMethods::GET(root, requestPath, *serverConfig);
-
     if (method == "DELETE")
         return HttpMethods::DELETE(root, requestPath, *serverConfig);
-
     return HttpUtils::ErrorPage(501, "Not Implemented", *serverConfig);
 }
 

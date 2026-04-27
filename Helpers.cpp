@@ -32,7 +32,7 @@ std::string trim(const std::string &value)
     return value.substr(start, end - start);
 }
 
-ssize_t myStoul(const std::string &str) 
+ssize_t myStold(const std::string &str) 
 {
 	if (str[0] == '-')
 		return -1;
@@ -60,4 +60,28 @@ std::string joinPath(std::string left, std::string right)
         return left;
 
     return left + "/" + right;
+}
+
+
+std::string mergeSlashes(const std::string &path)
+{
+    std::string result;
+    bool lastSlash = false;
+
+    for (size_t i = 0; i < path.size(); ++i)
+    {
+        if (path[i] == '/')
+        {
+            if (!lastSlash)
+                result += '/';
+            lastSlash = true;
+        }
+        else
+        {
+            result += path[i];
+            lastSlash = false;
+        }
+    }
+
+    return result;
 }

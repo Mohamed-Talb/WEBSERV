@@ -103,8 +103,7 @@ std::vector<std::string> prepConf(const std::string& filepath)
     return tokens;
 }
 
-Location parseLocation(const std::vector<std::string> &tokens,
-                       std::vector<std::string>::iterator &it)
+Location parseLocation(const std::vector<std::string> &tokens, std::vector<std::string>::iterator &it)
 {
     Location loc;
 
@@ -150,8 +149,8 @@ Location parseLocation(const std::vector<std::string> &tokens,
         }
         else if (key == "index")
         {
-            loc.index = parseIndex(++it, tokens);
-            expectSemicolon(it, tokens, "index");
+			++it;
+			loc.indexes = parseIndexes(it, tokens);
         }
         else if (key == "cgi_path")
         {
@@ -190,7 +189,7 @@ void parseErrorPage(ServerConfig &conf, std::vector<std::string>::iterator &it, 
         unsigned long code;
         try
         {
-            code = myStoul(values[i]);
+            code = myStold(values[i]);
         }
         catch (...)
         {
@@ -210,14 +209,12 @@ struct CompareLocations
     }
 };
 
-ServerConfig parseServer(const std::vector<std::string>& tokens,
-                         std::vector<std::string>::iterator &it)
+ServerConfig parseServer(const std::vector<std::string>& tokens, std::vector<std::string>::iterator &it)
 {
     ServerConfig conf;
 
     if (expect(it, tokens, "Expected '{'") != "{")
         throw std::runtime_error("Expected '{'");
-
     while (it != tokens.end())
     {
         if (*it == "}")
@@ -226,7 +223,6 @@ ServerConfig parseServer(const std::vector<std::string>& tokens,
             return conf;
         }
         std::string key = *it;
-
         if (key == "host")
         {
             conf.host = expect(++it, tokens, "Missing host");
@@ -258,8 +254,8 @@ ServerConfig parseServer(const std::vector<std::string>& tokens,
         }
         else if (key == "index")
         {
-            conf.index = parseIndex(++it, tokens);
-            expectSemicolon(it, tokens, "index");
+           	++it;
+			conf.indexes = parseIndexes(it, tokens);
         }
         else if (key == "error_page")
         {
@@ -301,7 +297,7 @@ std::vector<ServerConfig> parseTokens(std::vector<std::string> tokens)
 }
 
 
-std::vector<ServerConfig> GETconfig()
+std::vector<ServerConfig> parseConfig()
 {
     std::vector<std::string> tokens = prepConf("server.conf");
 	std::vector<ServerConfig> allServers = parseTokens(tokens); 
