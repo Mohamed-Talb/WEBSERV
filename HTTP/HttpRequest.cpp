@@ -136,7 +136,7 @@ int HttpRequest::parseHeaders(const std::string &raw)
     return 1; 
 }
 
-int HttpRequest::parseBody(const std::string &raw, ServerConfig &config)
+int HttpRequest::parseBody(const std::string &raw)
 {
     std::string rawBodyData = raw.substr(parsedSize);
     size_t bodyConsumed = 0;

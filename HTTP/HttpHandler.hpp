@@ -46,7 +46,7 @@ class HttpRequest
     int     errorCode;
 
     void setError(int code);
-    int  parseBody(const std::string &raw, ServerConfig &config);
+    int  parseBody(const std::string &raw);
     int  parseHeaders(const std::string &raw);
     int  parseRequestLine(const std::string &raw);
 	public:

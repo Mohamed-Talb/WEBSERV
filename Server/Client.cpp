@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <iostream>
+#include <cstdlib>
 
 Client::Client(int fd, Server *srv, const std::vector<ServerConfig> &confs) 
     : socketFD(fd), server(srv), configs(confs), state(READING_REQUEST) {}
@@ -122,8 +123,8 @@ void Client::handleRead()
         std::string cl = request.getHeader("Content-Length");
 		if (!cl.empty())
 		{
-			size_t bodySize = std::stoul(cl);
-			if (bodySize > selectedConfig->client_max_body_size)
+			ssize_t bodySize = myStoul(cl);
+			if (bodySize < 0 || bodySize > selectedConfig->client_max_body_size)
 			{
 				HttpResponse err = HttpUtils::ErrorPage(413, "Payload Too Large", *selectedConfig);
 				appendToWriteBuffer(err.toString());
@@ -136,7 +137,6 @@ void Client::handleRead()
 		HttpHandler handler(*selectedConfig); 
 
         const Location* cgiLocation = handler.getCgiLocation(request);
-
         if (cgiLocation != NULL) 
         {
             state = PROCESSING_CGI; 

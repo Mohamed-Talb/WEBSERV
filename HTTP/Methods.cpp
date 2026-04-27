@@ -3,6 +3,7 @@
 
 HttpResponse HttpMethods::GET(const std::string &rootDirectory, std::string requestPath, const ServerConfig &config)
 { 
+	std::cout << requestPath << std::endl;
     if (requestPath.empty() || requestPath == "/")
         requestPath = "/index.html";
         

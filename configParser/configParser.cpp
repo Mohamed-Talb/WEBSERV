@@ -4,43 +4,44 @@
 #include <stdlib.h>
 #include <fstream>
 #include <sstream>
+#include "../Helpers.hpp"
 
-std::vector<std::string> prepConf(const std::string& filepath)
-{
-    std::vector<std::string> tokens;
-    std::ifstream myconf(filepath.c_str());
-    std::string specials = "{;}";
-    std::string cleanConf;
+// std::vector<std::string> prepConf(const std::string& filepath)
+// {
+//     std::vector<std::string> tokens;
+//     std::ifstream myconf(filepath.c_str());
+//     std::string specials = "{;}";
+//     std::string cleanConf;
 
-    if ( myconf.is_open() ) {
-        char mychar;
-        while ((mychar = myconf.get()) != -1) {
-            if (mychar == '#')
-            {
-                while ((mychar = myconf.get()) != -1)
-                {
-                    if (mychar == '\n')
-                        break;
-                }
-            }
-            else if (specials.find(mychar) < specials.length())
-            {
-                cleanConf += ' ';
-                cleanConf += mychar;
-                cleanConf += ' ';
-            }
-            else
-                cleanConf += mychar;
-        }
-        std::stringstream ss(cleanConf);
-        std::string buff;
-        while (ss >> buff)
-            tokens.push_back(buff);
-    }
-    else
-        std::cout << "Could not open config file" << std::endl; // or throw std::runtime_error("Could not open file");
-    return tokens;
-}
+//     if ( myconf.is_open() ) {
+//         char mychar;
+//         while ((mychar = myconf.get()) != -1) {
+//             if (mychar == '#')
+//             {
+//                 while ((mychar = myconf.get()) != -1)
+//                 {
+//                     if (mychar == '\n')
+//                         break;
+//                 }
+//             }
+//             else if (specials.find(mychar) < specials.length())
+//             {
+//                 cleanConf += ' ';
+//                 cleanConf += mychar;
+//                 cleanConf += ' ';
+//             }
+//             else
+//                 cleanConf += mychar;
+//         }
+//         std::stringstream ss(cleanConf);
+//         std::string buff;
+//         while (ss >> buff)
+//             tokens.push_back(buff);
+//     }
+//     else
+//         std::cout << "Could not open config file" << std::endl; // or throw std::runtime_error("Could not open file");
+//     return tokens;
+// }
 
 std::vector<std::string> prepConf(const std::string& filepath)
 {
@@ -80,7 +81,7 @@ std::vector<std::string> prepConf(const std::string& filepath)
 }
 
 // Helper to get next token safely 
-std::string expect(std::vector<std::string>::iterator &it, const std::vector<std::string>& tokens, const std::string& err) 
+std::string expect(std::vector<std::string>::iterator &it, const std::vector<std::string> &tokens, const std::string &err) 
 {
     if (it == tokens.end())
         throw std::runtime_error(err);
@@ -131,7 +132,7 @@ void parseErrorPage(ServerConfig &conf, std::vector<std::string>::iterator &it, 
     {
         try 
         {
-            int code = std::stoi(codes[i]);
+            int code = std::atoi(codes[i].c_str());
             conf.errorPage[code] = path;
         } catch (...) 
         {
@@ -153,7 +154,7 @@ ServerConfig parseServer(const std::vector<std::string>& tokens, std::vector<std
             
         std::string key = *it;
         if (key == "host")            conf.host = expect(++it, tokens, "Missing host");
-        else if (key == "listen")     conf.port = std::stoi(expect(++it, tokens, "Missing port"));
+        else if (key == "listen")     conf.port = std::atoi(expect(++it, tokens, "Missing port").c_str());
         else if (key == "root")       conf.root = expect(++it, tokens, "Missing root");
         else if (key == "server_name") 
         {
@@ -167,7 +168,9 @@ ServerConfig parseServer(const std::vector<std::string>& tokens, std::vector<std
 			std::string val = expect(++it, tokens, "Missing body size value");
 			try 
 			{
-				conf.client_max_body_size = std::stoul(val);
+				conf.client_max_body_size = myStoul(val);
+				if (conf.client_max_body_size < 0)
+					throw std::runtime_error("Invalid client_max_body_size value: " + val);
 			} catch (...) 
 			{
 				throw std::runtime_error("Invalid client_max_body_size value: " + val);
@@ -184,9 +187,11 @@ std::vector<ServerConfig> parseTokens(std::vector<std::string> tokens)
     
     while (it != tokens.end()) 
     {
+		std::cout << *it << std::endl;
         if (*it != "server") 
             throw std::runtime_error("Expected 'server' keyword"); 
         allServers.push_back(parseServer(tokens, ++it));
+		it++;
     }
     return allServers;
 }
@@ -195,6 +200,6 @@ std::vector<ServerConfig> parseTokens(std::vector<std::string> tokens)
 std::vector<ServerConfig> GETconfig()
 {
     std::vector<std::string> tokens = prepConf("server.conf");
-    std::vector<ServerConfig> allServers = parseTokens(tokens); 
+	std::vector<ServerConfig> allServers = parseTokens(tokens); 
     return allServers;
 }
