@@ -20,6 +20,7 @@ struct ServerConfig
     int port;
     std::vector<std::string> serverName;
     std::string root;
+    std::string index;
     std::vector<Location> Locations;
     std::map<int, std::string> errorPage;
 	ssize_t client_max_body_size;

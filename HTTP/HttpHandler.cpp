@@ -2,7 +2,7 @@
 #include "../CGI/CGI.hpp"
 #include "Methods.hpp" 
 #include "HttpUtils.hpp"
-
+#include <sys/stat.h>
 
 HttpHandler::HttpHandler(const ServerConfig &serverConfig) : serverConfig(&serverConfig) {}
 
@@ -12,7 +12,7 @@ const Location *HttpHandler::matchLocation(const std::string& path)
 {
     for (size_t i = 0; i < serverConfig->Locations.size(); ++i)
     {
-        const Location &loc = serverConfig->Locations[i];
+        const Location& loc = serverConfig->Locations[i];
         if (path.compare(0, loc.path.size(), loc.path) == 0)
         {
             return &loc;
@@ -52,6 +52,15 @@ const Location *HttpHandler::getCgiLocation(const HttpRequest& request)
     return NULL;
 }
 
+std::string HttpHandler::resolveIndexFile(const Location *loc)
+{
+    if (loc && !loc->index.empty())
+        return loc->index;
+    if (!serverConfig->index.empty())
+        return serverConfig->index;
+    return "index.html";
+}
+
 HttpResponse HttpHandler::process(const HttpRequest &request)
 {
     if (request.getErrorCode() != 0)
@@ -60,8 +69,7 @@ HttpResponse HttpHandler::process(const HttpRequest &request)
     }
     std::string method = request.getMethod();
     std::string requestPath = HttpUtils::stripQuery(request.getTarget());
-    
-    const Location* matchedLocation = matchLocation(requestPath);
+    const Location *matchedLocation = matchLocation(requestPath);
     if (!matchedLocation)
         return HttpUtils::ErrorPage(404, "Not Found", *serverConfig);
 
@@ -69,6 +77,10 @@ HttpResponse HttpHandler::process(const HttpRequest &request)
     {
         return HttpUtils::ErrorPage(405, "Method Not Allowed", *serverConfig);
     }
+	struct stat S;
+    if (stat(requestPath.c_str(), &S) == 0)
+		if (S_ISDIR(S.st_mode))
+			requestPath = resolveIndexFile(matchedLocation);
     if (method == "GET") 
         return HttpMethods::GET(serverConfig->root, requestPath, *serverConfig);
     if (method == "DELETE")

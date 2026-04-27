@@ -172,6 +172,7 @@ ServerConfig parseServer(const std::vector<std::string>& tokens, std::vector<std
                 conf.serverName.push_back(*it);
         }
         else if (key == "location")   conf.Locations.push_back(parseLocation(tokens, ++it));
+        else if (key == "index")   	  conf.index = expect(++it, tokens, "Missing host");
         else if (key == "error_page") parseErrorPage(conf, it, tokens);
 		else if (key == "client_max_body_size") 
 		{

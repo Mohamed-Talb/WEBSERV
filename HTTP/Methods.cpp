@@ -1,21 +1,12 @@
 #include "Methods.hpp"
 #include "HttpUtils.hpp"
-#include <sys/stat.h>
+
 
 HttpResponse HttpMethods::GET(const std::string &rootDirectory, std::string requestPath, const ServerConfig &config)
-{ 
-	struct stat S;
-	std::cout << requestPath << std::endl;
-    if (stat(requestPath.c_str(), &S) == 0)
-	{
-		if (S_ISDIR(S.st_mode))
-		{
-			requestPath = "/index.html";
-		}
-
-	}
-        
-    std::string fullPath = rootDirectory + requestPath;
+{        
+	std::cout << requestPath << std::endl; 
+    std::string fullPath = rootDirectory + '/' + requestPath;
+	std::cout << fullPath << std::endl; 
     std::string fileContent;
     
     bool isFound = FileSystem::readFile(fullPath, fileContent);
@@ -30,7 +21,7 @@ HttpResponse HttpMethods::GET(const std::string &rootDirectory, std::string requ
         response.setBody(fileContent, HttpUtils::contentType(fullPath));
         return response;
     }
-       return HttpUtils::ErrorPage(404, "Not Found", config);
+    return HttpUtils::ErrorPage(404, "Not Found", config);
 } 
 
 

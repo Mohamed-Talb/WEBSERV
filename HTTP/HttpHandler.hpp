@@ -97,6 +97,7 @@ class HttpHandler
     bool 			isMethodAllowed(const std::string &method, const Location& loc);
 	// METHODS
     public:
+	std::string resolveIndexFile(const Location *loc);
 	const Location *getCgiLocation(const HttpRequest &request);
     HttpHandler(const ServerConfig &serverConfig);
     ~HttpHandler();
