@@ -122,7 +122,7 @@ void Client::handleRead()
 			std::string cl = request.getHeader("content-length");
 			if (!cl.empty())
 			{
-				ssize_t bodySize = myStoul(cl);
+				ssize_t bodySize = myStold(cl);
 				if (bodySize > selectedConfig->client_max_body_size)
 				{
 					HttpResponse err = HttpUtils::ErrorPage(413,"Payload Too Large",*selectedConfig);
