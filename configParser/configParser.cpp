@@ -1,5 +1,71 @@
 #include "configParser.hpp"
 
+/*
+===============================================================================
+ PATH HANDLING RULES (CONFIG PARSER + HTTP RESOLUTION)
+===============================================================================
+
+We follow Postel’s Law:
+→ Accept flexible input
+→ Normalize internally for consistency and safety
+
+------------------------------------------------------------------------------
+| ELEMENT          | ACCEPTED INPUT              | STORED FORMAT              |
+------------------------------------------------------------------------------
+| root             | "./www", "./www/"           | "./www"                    |
+| location.path    | "/", "/img", "/img/"        | "/", "/img"                |
+| index            | "index.html", "/index.html" | "index.html"               |
+| cgi_path         | "./cgi-bin", "./cgi-bin/"   | "./cgi-bin"                |
+| cgi_ext          | ".py", "py"                 | ".py"                      |
+| error_page path  | "404.html", "/404.html"     | "/404.html"                |
+------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------
+ NORMALIZATION RULES
+------------------------------------------------------------------------------
+
+1. ROOT
+   - Remove trailing slashes
+   - Example:
+        "./www/" → "./www"
+
+2. LOCATION PATH
+   - Must start with '/'
+   - Remove trailing slash (except "/")
+   - Example:
+        "/images/" → "/images"
+
+3. INDEX
+   - Remove leading slashes
+   - Must be relative to root
+   - Reject ".." (security)
+   - Example:
+        "/index.html" → "index.html"
+
+4. CGI EXT
+   - Must start with '.'
+   - Example:
+        "py" → ".py"
+
+5. ERROR PAGE PATH
+   - Must start with '/'
+   - Reject ".."
+   - Example:
+        "404.html" → "/404.html"
+
+------------------------------------------------------------------------------
+ SECURITY RULES
+------------------------------------------------------------------------------
+
+- Reject any path containing ".." (directory traversal)
+- Never allow escaping the root directory
+
+Multiple slashes should be collapsed:
+
+    "///img//cat.png" → "/img/cat.png"
+*/
+
+
 std::vector<std::string> prepConf(const std::string& filepath)
 {
     std::vector<std::string> tokens;
@@ -37,24 +103,36 @@ std::vector<std::string> prepConf(const std::string& filepath)
     return tokens;
 }
 
-Location parseLocation(const std::vector<std::string> &tokens, std::vector<std::string>::iterator &it)
+Location parseLocation(const std::vector<std::string> &tokens,
+                       std::vector<std::string>::iterator &it)
 {
     Location loc;
 
     loc.path = parseLocationPath(it, tokens);
+
     if (expect(it, tokens, "Expected '{'") != "{")
         throw std::runtime_error("Expected '{'");
-    for (; it != tokens.end(); ++it)
+
+    while (it != tokens.end())
     {
         if (*it == "}")
+        {
+            ++it;
             return loc;
+        }
         std::string key = *it;
+
         if (key == "methods")
         {
-            for (++it; it != tokens.end() && *it != ";"; ++it)
-                loc.methods.push_back(*it);
+            ++it;
+
+            while (it != tokens.end() && *it != ";")
+                loc.methods.push_back(*it++);
+
             if (it == tokens.end())
                 throw std::runtime_error("Missing ';' after methods");
+
+            ++it;
         }
         else if (key == "root")
         {
@@ -64,8 +142,10 @@ Location parseLocation(const std::vector<std::string> &tokens, std::vector<std::
         else if (key == "autoindex")
         {
             loc.autoindex = expect(++it, tokens, "Missing autoindex value");
+
             if (loc.autoindex != "on" && loc.autoindex != "off")
                 throw std::runtime_error("autoindex must be 'on' or 'off'");
+
             expectSemicolon(it, tokens, "autoindex");
         }
         else if (key == "index")
@@ -130,19 +210,23 @@ struct CompareLocations
     }
 };
 
-ServerConfig parseServer(const std::vector<std::string>& tokens,  std::vector<std::string>::iterator &it)
+ServerConfig parseServer(const std::vector<std::string>& tokens,
+                         std::vector<std::string>::iterator &it)
 {
     ServerConfig conf;
 
     if (expect(it, tokens, "Expected '{'") != "{")
         throw std::runtime_error("Expected '{'");
 
-    for (; it != tokens.end(); ++it)
+    while (it != tokens.end())
     {
         if (*it == "}")
+        {
+            ++it;
             return conf;
-
+        }
         std::string key = *it;
+
         if (key == "host")
         {
             conf.host = expect(++it, tokens, "Missing host");
@@ -160,18 +244,30 @@ ServerConfig parseServer(const std::vector<std::string>& tokens,  std::vector<st
         }
         else if (key == "server_name")
         {
-            for (++it; it != tokens.end() && *it != ";"; ++it)
-                conf.serverName.push_back(*it);
+            ++it;
+            while (it != tokens.end() && *it != ";")
+                conf.serverName.push_back(*it++);
             if (it == tokens.end())
                 throw std::runtime_error("Missing ';' after server_name");
+            ++it;
         }
-        else if (key == "location") conf.Locations.push_back(parseLocation(tokens, ++it));
+        else if (key == "location")
+        {
+            ++it;
+            conf.Locations.push_back(parseLocation(tokens, it));
+        }
         else if (key == "index")
         {
             conf.index = parseIndex(++it, tokens);
             expectSemicolon(it, tokens, "index");
         }
-        else if (key == "error_page") parseErrorPage(conf, it, tokens);
+        else if (key == "error_page")
+        {
+            parseErrorPage(conf, it, tokens);
+			if (it == tokens.end())
+    			throw std::runtime_error("Missing ';' after error_page");
+            ++it;
+        }
         else if (key == "client_max_body_size")
         {
             conf.client_max_body_size = parseBodySize(++it, tokens);
@@ -192,13 +288,14 @@ std::vector<ServerConfig> parseTokens(std::vector<std::string> tokens)
     {
         if (*it != "server")
             throw std::runtime_error("Expected 'server' keyword");
-        ServerConfig currServerConfig = parseServer(tokens, ++it);
-        std::sort( currServerConfig.Locations.begin(),
+        ++it;
+        ServerConfig currServerConfig = parseServer(tokens, it);
+        std::sort(
+            currServerConfig.Locations.begin(),
             currServerConfig.Locations.end(),
             CompareLocations()
         );
         allServers.push_back(currServerConfig);
-        ++it;
     }
     return allServers;
 }

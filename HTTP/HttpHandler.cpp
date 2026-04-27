@@ -64,27 +64,35 @@ std::string HttpHandler::resolveIndexFile(const Location *loc)
 HttpResponse HttpHandler::process(const HttpRequest &request)
 {
     if (request.getErrorCode() != 0)
-    {
         return HttpUtils::ErrorPage(request.getErrorCode(), "Bad Request", *serverConfig);
-    }
+
     std::string method = request.getMethod();
     std::string requestPath = HttpUtils::stripQuery(request.getTarget());
+
     const Location *matchedLocation = matchLocation(requestPath);
     if (!matchedLocation)
         return HttpUtils::ErrorPage(404, "Not Found", *serverConfig);
 
     if (!isMethodAllowed(method, *matchedLocation))
-    {
         return HttpUtils::ErrorPage(405, "Method Not Allowed", *serverConfig);
+
+    std::string root = matchedLocation->root.empty() ? serverConfig->root : matchedLocation->root;
+    std::string fullPath = joinPath(root, requestPath);
+
+    struct stat S;
+    if (stat(fullPath.c_str(), &S) == 0 && S_ISDIR(S.st_mode))
+    {
+        std::string index = resolveIndexFile(matchedLocation);
+        fullPath = joinPath(fullPath, index);
+        requestPath = joinPath(requestPath, index);
     }
-	struct stat S;
-    if (stat(requestPath.c_str(), &S) == 0)
-		if (S_ISDIR(S.st_mode))
-			requestPath = resolveIndexFile(matchedLocation);
-    if (method == "GET") 
-        return HttpMethods::GET(serverConfig->root, requestPath, *serverConfig);
+
+    if (method == "GET")
+        return HttpMethods::GET(root, requestPath, *serverConfig);
+
     if (method == "DELETE")
-        return HttpMethods::DELETE(serverConfig->root, requestPath, *serverConfig);
+        return HttpMethods::DELETE(root, requestPath, *serverConfig);
+
     return HttpUtils::ErrorPage(501, "Not Implemented", *serverConfig);
 }
 

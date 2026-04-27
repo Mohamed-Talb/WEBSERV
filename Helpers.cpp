@@ -43,3 +43,21 @@ ssize_t myStoul(const std::string &str)
     	return -1;
     return value;
 }
+
+
+std::string joinPath(std::string left, std::string right)
+{
+    if (left.empty())
+        return right;
+
+    while (left.size() > 1 && left[left.size() - 1] == '/')
+        left.erase(left.size() - 1);
+
+    while (!right.empty() && right[0] == '/')
+        right.erase(0, 1);
+
+    if (right.empty())
+        return left;
+
+    return left + "/" + right;
+}

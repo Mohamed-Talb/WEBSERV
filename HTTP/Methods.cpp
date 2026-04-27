@@ -2,27 +2,22 @@
 #include "HttpUtils.hpp"
 
 
-HttpResponse HttpMethods::GET(const std::string &rootDirectory, std::string requestPath, const ServerConfig &config)
-{        
-	std::cout << requestPath << std::endl; 
-    std::string fullPath = rootDirectory + '/' + requestPath;
-	std::cout << fullPath << std::endl; 
+HttpResponse HttpMethods::GET(const std::string &rootDirectory,
+                              std::string requestPath,
+                              const ServerConfig &config)
+{
+    std::string fullPath = joinPath(rootDirectory, requestPath);
     std::string fileContent;
-    
-    bool isFound = FileSystem::readFile(fullPath, fileContent);
-    if (!isFound && requestPath == "/index.html")
-    {
-        fullPath = "./index.html";
-        isFound = FileSystem::readFile(fullPath, fileContent);
-    }
-    if (isFound)
+
+    if (FileSystem::readFile(fullPath, fileContent))
     {
         HttpResponse response(200, "OK");
         response.setBody(fileContent, HttpUtils::contentType(fullPath));
         return response;
     }
+
     return HttpUtils::ErrorPage(404, "Not Found", config);
-} 
+}
 
 
 #include "Methods.hpp"

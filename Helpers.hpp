@@ -8,4 +8,5 @@ std::string toUpper(std::string value);
 std::string toLower(std::string value);
 std::string trim(const std::string &value);
 ssize_t myStoul(const std::string &str);
+std::string joinPath(std::string left, std::string right);
 #endif
