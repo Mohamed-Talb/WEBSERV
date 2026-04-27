@@ -99,10 +99,9 @@ void Client::handleRead()
         appendToReadBuffer(buf, bytes);
         dataRead = true;
     }
-    
+    std::cout << readBuffer << std::endl;
     if (!dataRead)
         return;
-    
     while (true)
     {
         int parseStatus = request.parse(readBuffer);
@@ -115,25 +114,31 @@ void Client::handleRead()
             request.reset();
             return; 
         }
-        if (parseStatus == 0)
-            break;
-
-        const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
-        if (!selectedConfig) selectedConfig = &configs[0];
-        std::string cl = request.getHeader("Content-Length");
-		if (!cl.empty())
+		if (request.getState() == PARSE_BODY || request.getState() == PARSE_COMPLETE)
 		{
-			ssize_t bodySize = myStoul(cl);
-			if (bodySize < 0 || bodySize > selectedConfig->client_max_body_size)
+			const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
+			if (!selectedConfig)
+				selectedConfig = &configs[0];
+			std::string cl = request.getHeader("content-length");
+			if (!cl.empty())
 			{
-				HttpResponse err = HttpUtils::ErrorPage(413, "Payload Too Large", *selectedConfig);
-				appendToWriteBuffer(err.toString());
-				state = SENDING_RESPONSE;
-				server->modifyHandler(this, EPOLLIN | EPOLLOUT);
-				request.reset();
-				return;
+				ssize_t bodySize = myStoul(cl);
+				if (bodySize > selectedConfig->client_max_body_size)
+				{
+					HttpResponse err = HttpUtils::ErrorPage(413,"Payload Too Large",*selectedConfig);
+					appendToWriteBuffer(err.toString());
+					state = SENDING_RESPONSE;
+					server->modifyHandler(this, EPOLLIN | EPOLLOUT);
+					request.reset();
+					readBuffer.clear();
+					return ;
+				}
 			}
 		}
+        if (parseStatus == 0)
+            break;
+        const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
+        if (!selectedConfig) selectedConfig = &configs[0];
 		HttpHandler handler(*selectedConfig); 
 
         const Location* cgiLocation = handler.getCgiLocation(request);
