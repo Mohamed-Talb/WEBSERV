@@ -1,11 +1,12 @@
 #include "Server/Server.hpp"
 
-std::vector<ServerConfig> parseConfig();
-int main()
+std::vector<ServerConfig> parseConfig(std::string configFile);
+int main(int ac, char **av)
 {
+    (void)ac;
     try
     {
-        std::vector<ServerConfig> configs = parseConfig();
+        std::vector<ServerConfig> configs = parseConfig(av[1]);
         Server server;
         server.init(configs);
         server.runEventLoop();

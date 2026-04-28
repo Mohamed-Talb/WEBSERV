@@ -27,7 +27,7 @@ int parsePort(TokenIt &it, const Tokens &tokens)
     {
         throw std::runtime_error("Invalid port: " + value);
     }
-    if (0 < port || port > 65535)
+    if (0 > port || port > 65535)
         throw std::runtime_error("Invalid port: " + value);
     return static_cast<int>(port);
 }

@@ -27,24 +27,28 @@ void        expectSemicolon(TokenIt &it, const Tokens &tokens, const std::string
 
 struct Location
 {
-    std::vector<std::string> methods;
     std::string path;
     std::string root;
-    std::string autoindex;
-    std::vector<std::string> indexes;
-    std::string cgiPath;
+    int redirectCode;
     std::string cgiExt;
+    std::string cgiPath;
+    std::string autoindex;
+    std::string redirectTarget;
+    std::string uploadEnabled;
+    std::string uploadPath;
+    std::vector<std::string> indexes;
+    std::vector<std::string> methods;
 };
 
 struct ServerConfig
 {
-    std::string host;
     int port;
-    std::vector<std::string> serverName;
+    std::string host;
     std::string root;
-   	std::vector<std::string> indexes;
-    std::vector<Location> Locations;
-    std::map<int, std::string> errorPage;
 	ssize_t client_max_body_size;
-    ServerConfig() : host("127.0.0.1"), port(80), root("./www") {}
+    std::vector<Location> Locations;
+    std::vector<std::string> indexes;
+    std::vector<std::string> serverName;
+    std::map<int, std::string> errorPage;
+    ServerConfig() : port(80), host("127.0.0.1"), root("./www") {}
 };

@@ -20,10 +20,6 @@ HttpResponse HttpMethods::GET(const std::string &rootDirectory,
 }
 
 
-#include "Methods.hpp"
-#include "HttpUtils.hpp"
-
-
 HttpResponse HttpMethods::DELETE(const std::string &rootDirectory, std::string requestPath, const ServerConfig &config)
 {
     if (requestPath.find("..") != std::string::npos)

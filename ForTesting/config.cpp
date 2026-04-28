@@ -1,69 +1,55 @@
-#include "configParser.hpp"
 
-/*
-===============================================================================
- PATH HANDLING RULES (CONFIG PARSER + HTTP RESOLUTION)
-===============================================================================
+#include <vector>
+#include <string>
+#include <map>
+#include <unistd.h>
+#include <stdexcept>
+#include <iostream>
+#include <stdlib.h>
+#include <fstream>
+#include <sstream>
+#include "../Helpers.hpp"
+#include <algorithm>
 
-We follow Postel’s Law:
-→ Accept flexible input
-→ Normalize internally for consistency and safety
 
-------------------------------------------------------------------------------
-| ELEMENT          | ACCEPTED INPUT              | STORED FORMAT              |
-------------------------------------------------------------------------------
-| root             | "./www", "./www/"           | "./www"                    |
-| location.path    | "/", "/img", "/img/"        | "/", "/img"                |
-| index            | "index.html", "/index.html" | "index.html"               |
-| cgi_path         | "./cgi-bin", "./cgi-bin/"   | "./cgi-bin"                |
-| cgi_ext          | ".py", "py"                 | ".py"                      |
-| error_page path  | "404.html", "/404.html"     | "/404.html"                |
-------------------------------------------------------------------------------
+typedef std::vector<std::string> Tokens;
+typedef Tokens::iterator TokenIt;
 
-------------------------------------------------------------------------------
- NORMALIZATION RULES
-------------------------------------------------------------------------------
+std::string parseErrorPagePath(const std::string &raw);
+int         parsePort(TokenIt &it, const Tokens &tokens);
+std::string parseRoot(TokenIt &it, const Tokens &tokens);
+std::vector<std::string> parseIndexes(TokenIt &it, const Tokens &tokens);
+std::string parseCgiExt(TokenIt &it, const Tokens &tokens);
+size_t      parseBodySize(TokenIt &it, const Tokens &tokens);
+std::string parseLocationPath(TokenIt &it, const Tokens &tokens);
+std::string expect(TokenIt &it, const Tokens &tokens, const std::string &err);
+void        expectSemicolon(TokenIt &it, const Tokens &tokens, const std::string &directive);
 
-1. ROOT
-   - Remove trailing slashes
-   - Example:
-        "./www/" → "./www"
+struct Location
+{
+    std::vector<std::string> methods;
+    std::string path;
+    std::string root;
+    std::string autoindex;
+    std::vector<std::string> indexes;
+    std::string cgiPath;
+    std::string cgiExt;
+};
 
-2. LOCATION PATH
-   - Must start with '/'
-   - Remove trailing slash (except "/")
-   - Example:
-        "/images/" → "/images"
+struct ServerConfig
+{
+    std::string host;
+    int port;
+    std::vector<std::string> serverName;
+    std::string root;
+   	std::vector<std::string> indexes;
+    std::vector<Location> Locations;
+    std::map<int, std::string> errorPage;
+	ssize_t client_max_body_size;
+    ServerConfig() : host("127.0.0.1"), port(80), root("./www") {}
+};
 
-3. INDEX
-   - Remove leading slashes
-   - Must be relative to root
-   - Reject ".." (security)
-   - Example:
-        "/index.html" → "index.html"
 
-4. CGI EXT
-   - Must start with '.'
-   - Example:
-        "py" → ".py"
-
-5. ERROR PAGE PATH
-   - Must start with '/'
-   - Reject ".."
-   - Example:
-        "404.html" → "/404.html"
-
-------------------------------------------------------------------------------
- SECURITY RULES
-------------------------------------------------------------------------------
-
-- Reject any path containing ".." (directory traversal)
-- Never allow escaping the root directory
-
-Multiple slashes should be collapsed:
-
-    "///img//cat.png" → "/img/cat.png"
-*/
 
 
 std::vector<std::string> prepConf(const std::string& filepath)
@@ -116,10 +102,6 @@ Location parseLocation(const std::vector<std::string> &tokens, std::vector<std::
     {
         if (*it == "}")
         {
-            if (loc.uploadEnabled == "on" && loc.uploadPath.empty())
-                throw std::runtime_error("upload on requires upload_path");
-            if (loc.uploadEnabled == "off" && !loc.uploadPath.empty())
-                throw std::runtime_error("upload_path set but upload is off");
             ++it;
             return loc;
         }
@@ -165,44 +147,6 @@ Location parseLocation(const std::vector<std::string> &tokens, std::vector<std::
         {
             loc.cgiExt = parseCgiExt(++it, tokens);
             expectSemicolon(it, tokens, "cgi_ext");
-        }
-        else if (key == "redirect")
-        {
-            if (loc.redirectCode != 0)
-                throw std::runtime_error("duplicate redirect directive");
-
-            loc.redirectCode = std::atoi(expect(++it, tokens, "Missing redirect code").c_str());
-
-            if (loc.redirectCode != 301 && loc.redirectCode != 302)
-                throw std::runtime_error("Invalid redirect code");
-
-            loc.redirectTarget = expect(it, tokens, "Missing redirect target");
-
-            if (loc.redirectTarget.empty())
-                throw std::runtime_error("Missing redirect target");
-
-            expectSemicolon(it, tokens, "redirect");
-        }
-        else if (key == "upload")
-        {
-            if (!loc.uploadEnabled.empty())
-                throw std::runtime_error("duplicate upload directive");
-
-            loc.uploadEnabled = expect(++it, tokens, "Missing upload value");
-
-            if (loc.uploadEnabled != "on" && loc.uploadEnabled != "off")
-                throw std::runtime_error("upload must be 'on' or 'off'");
-
-            expectSemicolon(it, tokens, "upload");
-        }
-        else if (key == "upload_path")
-        {
-            if (!loc.uploadPath.empty())
-                throw std::runtime_error("duplicate upload_path directive");
-
-            loc.uploadPath = parseRoot(++it, tokens);
-
-            expectSemicolon(it, tokens, "upload_path");
         }
         else
         {
