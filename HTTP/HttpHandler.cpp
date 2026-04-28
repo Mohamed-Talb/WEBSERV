@@ -107,4 +107,3 @@ HttpResponse HttpHandler::process(const HttpRequest &request)
         return HttpMethods::DELETE(root, requestPath, *serverConfig);
     return HttpUtils::ErrorPage(501, "Not Implemented", *serverConfig);
 }
-

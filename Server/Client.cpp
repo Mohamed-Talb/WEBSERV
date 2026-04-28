@@ -171,7 +171,7 @@ void Client::handleWrite()
 {
     if (!hasPendingWrite()) return;
     
-    std::cout << "RESPONSE---------------\n" << writeBuffer << std::endl;
+    // std::cout << "RESPONSE---------------\n" << writeBuffer << std::endl;
     
     while (hasPendingWrite())
     {
