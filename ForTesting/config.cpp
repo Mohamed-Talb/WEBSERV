@@ -25,32 +25,185 @@ std::string parseLocationPath(TokenIt &it, const Tokens &tokens);
 std::string expect(TokenIt &it, const Tokens &tokens, const std::string &err);
 void        expectSemicolon(TokenIt &it, const Tokens &tokens, const std::string &directive);
 
+struct ListenConfig
+{
+    std::string host;
+    int port;
+};
+
 struct Location
 {
-    std::vector<std::string> methods;
     std::string path;
     std::string root;
-    std::string autoindex;
-    std::vector<std::string> indexes;
-    std::string cgiPath;
+    int redirectCode;
     std::string cgiExt;
+    std::string cgiPath;
+    std::string autoindex;
+    std::string redirectTarget;
+    std::string uploadEnabled;
+    std::string uploadPath;
+    std::vector<std::string> indexes;
+    std::vector<std::string> methods;
+    Location() : redirectCode(0), autoindex("off"), uploadEnabled("off") {}
 };
 
 struct ServerConfig
 {
-    std::string host;
     int port;
-    std::vector<std::string> serverName;
+    std::string host;
     std::string root;
-   	std::vector<std::string> indexes;
-    std::vector<Location> Locations;
-    std::map<int, std::string> errorPage;
 	ssize_t client_max_body_size;
-    ServerConfig() : host("127.0.0.1"), port(80), root("./www") {}
+    std::vector<Location> Locations;
+    std::vector<std::string> indexes;
+    std::vector<std::string> serverName;
+    std::map<int, std::string> errorPage;
+    ServerConfig() : port(80), host("127.0.0.1"), root("./www") {}
 };
 
 
 
+#include "configParser.hpp"
+
+std::string expect(TokenIt &it, const Tokens &tokens, const std::string &err)
+{
+    if (it == tokens.end())
+        throw std::runtime_error(err);
+    return *it++;
+}
+
+void expectSemicolon(TokenIt &it, const Tokens &tokens, const std::string &directive)
+{
+    if (expect(it, tokens, "Missing ';' after " + directive) != ";")
+        throw std::runtime_error("Expected ';' after " + directive);
+}
+
+int parsePort(TokenIt &it, const Tokens &tokens)
+{
+    std::string value = expect(it, tokens, "Missing port");
+	if (value.size() > 5)
+        throw std::runtime_error("Invalid port: " + value);
+    int port;
+    try
+    {
+        port = std::atoi(value.c_str());
+    }
+    catch (...)
+    {
+        throw std::runtime_error("Invalid port: " + value);
+    }
+    if (0 > port || port > 65535)
+        throw std::runtime_error("Invalid port: " + value);
+    return static_cast<int>(port);
+}
+
+size_t parseBodySize(TokenIt &it, const Tokens &tokens)
+{
+    std::string value = expect(it, tokens, "Missing body size value");
+    try
+    {
+        return myStold(value);
+    }
+    catch (...)
+    {
+        throw std::runtime_error("Invalid client_max_body_size value: " + value);
+    }
+}
+
+std::string parseRoot(TokenIt &it, const Tokens &tokens)
+{
+    std::string root = expect(it, tokens, "Missing root");
+
+    root = mergeSlashes(root);
+
+    while (root.size() > 1 && root[root.size() - 1] == '/')
+        root.erase(root.size() - 1);
+
+    if (root.empty())
+        throw std::runtime_error("Invalid root path");
+
+    if (root.find("..") != std::string::npos)
+        throw std::runtime_error("Invalid root path: directory traversal");
+
+    return root;
+}
+
+std::string parseLocationPath(TokenIt &it, const Tokens &tokens)
+{
+    std::string path = expect(it, tokens, "Missing location path");
+
+    path = mergeSlashes(path);
+
+    if (path.empty() || path[0] != '/')
+        throw std::runtime_error("Location path must start with '/'");
+
+    while (path.size() > 1 && path[path.size() - 1] == '/')
+        path.erase(path.size() - 1);
+
+    if (path.find("..") != std::string::npos)
+        throw std::runtime_error("Invalid location path: directory traversal");
+
+    return path;
+}
+
+std::vector<std::string> parseIndexes(TokenIt &it, const Tokens &tokens)
+{
+    std::vector<std::string> indexes;
+    while (it != tokens.end() && *it != ";")
+    {
+        std::string index = expect(it, tokens, "Missing index value");
+
+        index = mergeSlashes(index);
+
+        while (!index.empty() && index[0] == '/')
+            index.erase(0, 1);
+
+        if (index.empty())
+            throw std::runtime_error("Index cannot be empty");
+		
+        if (index.find("..") != std::string::npos)
+            throw std::runtime_error("Invalid index path: directory traversal");
+
+        indexes.push_back(index);
+    }
+    if (it == tokens.end())
+        throw std::runtime_error("Missing ';' after index");
+
+    if (indexes.empty())
+        throw std::runtime_error("index directive requires at least one file");
+    ++it;
+    return indexes;
+}
+
+std::string parseCgiExt(TokenIt &it, const Tokens &tokens)
+{
+    std::string ext = expect(it, tokens, "Missing cgi_ext");
+
+    if (ext.empty())
+        throw std::runtime_error("Invalid cgi_ext");
+    if (ext.find("..") != std::string::npos || ext.find("/") != std::string::npos)
+        throw std::runtime_error("Invalid cgi_ext");
+    if (ext[0] != '.')
+        ext = "." + ext;
+    return ext;
+}
+
+std::string parseErrorPagePath(const std::string& raw)
+{
+    std::string path = mergeSlashes(raw);
+
+    if (path.empty())
+        throw std::runtime_error("Invalid error_page path");
+
+    if (path.find("..") != std::string::npos)
+        throw std::runtime_error("Invalid error_page path");
+
+    if (path[0] != '/')
+        path = "/" + path;
+
+    return path;
+}
+
+#include "configParser.hpp"
 
 std::vector<std::string> prepConf(const std::string& filepath)
 {
@@ -102,6 +255,18 @@ Location parseLocation(const std::vector<std::string> &tokens, std::vector<std::
     {
         if (*it == "}")
         {
+            if (loc.uploadEnabled == "on" && loc.uploadPath.empty())
+                throw std::runtime_error("upload on requires upload_path");
+
+            if (loc.uploadEnabled == "off" && !loc.uploadPath.empty())
+                throw std::runtime_error("upload_path set but upload is off");
+
+            if (!loc.cgiExt.empty() && loc.cgiPath.empty())
+                throw std::runtime_error("cgi_ext requires cgi_path");
+
+            if (!loc.cgiPath.empty() && loc.cgiExt.empty())
+                throw std::runtime_error("cgi_path requires cgi_ext");
+
             ++it;
             return loc;
         }
@@ -147,6 +312,47 @@ Location parseLocation(const std::vector<std::string> &tokens, std::vector<std::
         {
             loc.cgiExt = parseCgiExt(++it, tokens);
             expectSemicolon(it, tokens, "cgi_ext");
+        }
+        else if (key == "redirect")
+        {
+            if (loc.redirectCode != 0)
+                throw std::runtime_error("duplicate redirect directive");
+
+            loc.redirectCode = std::atoi(expect(++it, tokens, "Missing redirect code").c_str());
+
+            if (loc.redirectCode != 301 && loc.redirectCode != 302)
+                throw std::runtime_error("Invalid redirect code");
+
+            loc.redirectTarget = expect(it, tokens, "Missing redirect target");
+
+            if (loc.redirectTarget.empty())
+                throw std::runtime_error("Missing redirect target");
+            if (loc.redirectTarget.find("..") != std::string::npos)
+                throw std::runtime_error("Invalid redirect target");
+            if (loc.redirectTarget[0] != '/' && loc.redirectTarget.find("http://") != 0 && loc.redirectTarget.find("https://") != 0)
+                throw std::runtime_error("redirect target must be path or URL");
+            expectSemicolon(it, tokens, "redirect");
+        }
+        else if (key == "upload")
+        {
+            if (!loc.uploadEnabled.empty())
+                throw std::runtime_error("duplicate upload directive");
+
+            loc.uploadEnabled = expect(++it, tokens, "Missing upload value");
+
+            if (loc.uploadEnabled != "on" && loc.uploadEnabled != "off")
+                throw std::runtime_error("upload must be 'on' or 'off'");
+
+            expectSemicolon(it, tokens, "upload");
+        }
+        else if (key == "upload_path")
+        {
+            if (!loc.uploadPath.empty())
+                throw std::runtime_error("duplicate upload_path directive");
+
+            loc.uploadPath = parseRoot(++it, tokens);
+
+            expectSemicolon(it, tokens, "upload_path");
         }
         else
         {

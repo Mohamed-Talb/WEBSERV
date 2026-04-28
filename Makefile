@@ -1,6 +1,6 @@
 WEBSERV_SRC = main.cpp Helpers.cpp Errors.cpp\
 			Server/Server.cpp Server/Listener.cpp Server/Client.cpp \
-			configParser/configParser.cpp configParser/configHelpers.cpp \
+			configParser/configParser.cpp configParser/Lexer.cpp configParser/configParser-handlers.cpp configParser/configParser-parsers.cpp\
 			HTTP/HttpHandler.cpp  HTTP/HttpRequest.cpp  HTTP/HttpResponse.cpp HTTP/FileSystem.cpp HTTP/Methods.cpp HTTP/HttpUtils.cpp \
 			CGI/CGI.cpp
 

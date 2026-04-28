@@ -10,4 +10,5 @@ std::string trim(const std::string &value);
 ssize_t myStold(const std::string &str);
 std::string joinPath(std::string left, std::string right);
 std::string mergeSlashes(const std::string &path);
+bool isOnlyDigits(const std::string &s);
 #endif

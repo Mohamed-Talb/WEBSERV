@@ -1,54 +1,76 @@
-#pragma once
-#include <vector>
+#ifndef CONFIG_ENTITIES_HPP
+#define CONFIG_ENTITIES_HPP
+
 #include <string>
+#include <vector>
 #include <map>
-#include <unistd.h>
 #include <stdexcept>
-#include <iostream>
-#include <stdlib.h>
-#include <fstream>
-#include <sstream>
+#include <cstdlib>
+#include <sys/types.h>
 #include "../Helpers.hpp"
-#include <algorithm>
+#include "config.hpp"
 
-
-typedef std::vector<std::string> Tokens;
-typedef Tokens::iterator TokenIt;
-
-std::string parseErrorPagePath(const std::string &raw);
-int         parsePort(TokenIt &it, const Tokens &tokens);
-std::string parseRoot(TokenIt &it, const Tokens &tokens);
-std::vector<std::string> parseIndexes(TokenIt &it, const Tokens &tokens);
-std::string parseCgiExt(TokenIt &it, const Tokens &tokens);
-size_t      parseBodySize(TokenIt &it, const Tokens &tokens);
-std::string parseLocationPath(TokenIt &it, const Tokens &tokens);
-std::string expect(TokenIt &it, const Tokens &tokens, const std::string &err);
-void        expectSemicolon(TokenIt &it, const Tokens &tokens, const std::string &directive);
-
-struct Location
+std::vector<std::string> tokenize(const std::string &filepath);
+struct CompareLocations 
 {
-    std::string path;
-    std::string root;
-    int redirectCode;
-    std::string cgiExt;
-    std::string cgiPath;
-    std::string autoindex;
-    std::string redirectTarget;
-    std::string uploadEnabled;
-    std::string uploadPath;
-    std::vector<std::string> indexes;
-    std::vector<std::string> methods;
+    bool operator()(const Location &a, const Location &b) const 
+    {
+        return a.path.size() > b.path.size();
+    }
 };
 
-struct ServerConfig
+#include "tokenStream.hpp"
+
+class ConfigParser 
 {
-    int port;
-    std::string host;
-    std::string root;
-	ssize_t client_max_body_size;
-    std::vector<Location> Locations;
-    std::vector<std::string> indexes;
-    std::vector<std::string> serverName;
-    std::map<int, std::string> errorPage;
-    ServerConfig() : port(80), host("127.0.0.1"), root("./www") {}
+    private:
+    TokenStream tokens;
+
+    typedef void (ConfigParser::*ServerHandler)(ServerConfig &);
+    typedef void (ConfigParser::*LocationHandler)(Location &);
+
+    std::map<std::string, ServerHandler> serverDispatch;
+    std::map<std::string, LocationHandler> locationDispatch;
+
+    void parseServerBlock(ServerConfig& conf);
+    void parseLocationBlock(Location& loc);
+
+    std::string parseRootPath();
+    std::string parseLocationPathStr();
+    std::vector<std::string> parseIndexesList();
+
+    // Server Handlers
+    void handleHost(ServerConfig &conf);
+    void handleListen(ServerConfig &conf);
+    void handleRoot(ServerConfig &conf);
+    void handleServerName(ServerConfig &conf);
+    void handleLocation(ServerConfig &conf);
+    void handleIndex(ServerConfig &conf);
+    void handleErrorPage(ServerConfig &conf);
+    void handleClientMaxBodySize(ServerConfig &conf);
+
+    // Location Handlers
+    void handleLocMethods(Location &loc);
+    void handleLocRoot(Location &loc);
+    void handleLocAutoindex(Location &loc);
+    void handleLocIndex(Location &loc);
+    void handleLocCgiPath(Location &loc);
+    void handleLocCgiExt(Location &loc);
+    void handleLocRedirect(Location &loc);
+    void handleLocUpload(Location &loc);
+    void handleLocUploadPath(Location &loc);
+
+    std::string parseRedirectTargetValue(const std::string &target);
+    std::string parseCgiExtValue(const std::string &raw);
+    std::string parseErrorPagePathValue(const std::string &raw);
+    size_t      parseBodySizeValue(const std::string &value);
+    int         parsePortValue(const std::string &value);
+
+    public:
+    ConfigParser(const std::vector<std::string> &tokens);
+    std::vector<ServerConfig> parse();
 };
+
+std::vector<ServerConfig> parseConfig(const std::string &configFile);
+
+#endif

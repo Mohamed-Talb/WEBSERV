@@ -1,348 +1,107 @@
 #include "configParser.hpp"
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
+#include <cstdlib>
+#include <algorithm>
+#include "../Helpers.hpp"
 
-/*
-===============================================================================
- PATH HANDLING RULES (CONFIG PARSER + HTTP RESOLUTION)
-===============================================================================
-
-We follow Postel’s Law:
-→ Accept flexible input
-→ Normalize internally for consistency and safety
-
-------------------------------------------------------------------------------
-| ELEMENT          | ACCEPTED INPUT              | STORED FORMAT              |
-------------------------------------------------------------------------------
-| root             | "./www", "./www/"           | "./www"                    |
-| location.path    | "/", "/img", "/img/"        | "/", "/img"                |
-| index            | "index.html", "/index.html" | "index.html"               |
-| cgi_path         | "./cgi-bin", "./cgi-bin/"   | "./cgi-bin"                |
-| cgi_ext          | ".py", "py"                 | ".py"                      |
-| error_page path  | "404.html", "/404.html"     | "/404.html"                |
-------------------------------------------------------------------------------
-
-------------------------------------------------------------------------------
- NORMALIZATION RULES
-------------------------------------------------------------------------------
-
-1. ROOT
-   - Remove trailing slashes
-   - Example:
-        "./www/" → "./www"
-
-2. LOCATION PATH
-   - Must start with '/'
-   - Remove trailing slash (except "/")
-   - Example:
-        "/images/" → "/images"
-
-3. INDEX
-   - Remove leading slashes
-   - Must be relative to root
-   - Reject ".." (security)
-   - Example:
-        "/index.html" → "index.html"
-
-4. CGI EXT
-   - Must start with '.'
-   - Example:
-        "py" → ".py"
-
-5. ERROR PAGE PATH
-   - Must start with '/'
-   - Reject ".."
-   - Example:
-        "404.html" → "/404.html"
-
-------------------------------------------------------------------------------
- SECURITY RULES
-------------------------------------------------------------------------------
-
-- Reject any path containing ".." (directory traversal)
-- Never allow escaping the root directory
-
-Multiple slashes should be collapsed:
-
-    "///img//cat.png" → "/img/cat.png"
-*/
-
-
-std::vector<std::string> prepConf(const std::string& filepath)
+ConfigParser::ConfigParser(const std::vector<std::string> &tokens) : tokens(tokens)
 {
-    std::vector<std::string> tokens;
-    std::ifstream file(filepath.c_str());
-	std::string specials = "{;}";
+    serverDispatch["host"] = &ConfigParser::handleHost;
+    serverDispatch["listen"] = &ConfigParser::handleListen;
+    serverDispatch["root"] = &ConfigParser::handleRoot;
+    serverDispatch["server_name"] = &ConfigParser::handleServerName;
+    serverDispatch["location"] = &ConfigParser::handleLocation;
+    serverDispatch["index"] = &ConfigParser::handleIndex;
+    serverDispatch["error_page"] = &ConfigParser::handleErrorPage;
+    serverDispatch["client_max_body_size"] = &ConfigParser::handleClientMaxBodySize;
 
-    if (!file.is_open())
-        throw std::runtime_error("Could not open config file: " + filepath);
-
-    std::string line;
-    while (std::getline(file, line)) 
-    {
-        size_t commentPos = line.find('#');
-        if (commentPos != std::string::npos)
-            line.erase(commentPos);
-        std::string processedLine;
-        for (size_t i = 0; i < line.size(); ++i) 
-        {
-            if (specials.find(line[i]) != std::string::npos) 
-            {
-                processedLine += ' ';
-                processedLine += line[i];
-                processedLine += ' ';
-            } 
-            else 
-            {
-                processedLine += line[i];
-            }
-        }
-        std::stringstream ss(processedLine);
-        std::string token;
-        while (ss >> token) 
-            tokens.push_back(token);
-    }
-    return tokens;
+    locationDispatch["methods"] = &ConfigParser::handleLocMethods;
+    locationDispatch["root"] = &ConfigParser::handleLocRoot;
+    locationDispatch["autoindex"] = &ConfigParser::handleLocAutoindex;
+    locationDispatch["index"] = &ConfigParser::handleLocIndex;
+    locationDispatch["cgi_path"] = &ConfigParser::handleLocCgiPath;
+    locationDispatch["cgi_ext"] = &ConfigParser::handleLocCgiExt;
+    locationDispatch["redirect"] = &ConfigParser::handleLocRedirect;
+    locationDispatch["upload"] = &ConfigParser::handleLocUpload;
+    locationDispatch["upload_path"] = &ConfigParser::handleLocUploadPath;
 }
 
-Location parseLocation(const std::vector<std::string> &tokens, std::vector<std::string>::iterator &it)
+ 
+void ConfigParser::parseLocationBlock(Location& loc)
 {
-    Location loc;
+    loc.path = parseLocationPathStr();
 
-    loc.path = parseLocationPath(it, tokens);
-
-    if (expect(it, tokens, "Expected '{'") != "{")
+    if (tokens.expect("Expected '{'") != "{")
         throw std::runtime_error("Expected '{'");
 
-    while (it != tokens.end())
+    while (tokens.hasMore())
     {
-        if (*it == "}")
+        if (tokens.current() == "}")
         {
-            if (loc.uploadEnabled == "on" && loc.uploadPath.empty())
-                throw std::runtime_error("upload on requires upload_path");
-            if (loc.uploadEnabled == "off" && !loc.uploadPath.empty())
-                throw std::runtime_error("upload_path set but upload is off");
-            ++it;
-            return loc;
+            tokens.expect("Expected '}'");
+            // loc.validate();
+            return;
         }
-        std::string key = *it;
 
-        if (key == "methods")
-        {
-            ++it;
+        std::string key = tokens.current();
 
-            while (it != tokens.end() && *it != ";")
-                loc.methods.push_back(*it++);
+        std::map<std::string, LocationHandler>::iterator handler;
+        handler = locationDispatch.find(key);
 
-            if (it == tokens.end())
-                throw std::runtime_error("Missing ';' after methods");
-
-            ++it;
-        }
-        else if (key == "root")
-        {
-            loc.root = parseRoot(++it, tokens);
-            expectSemicolon(it, tokens, "root");
-        }
-        else if (key == "autoindex")
-        {
-            loc.autoindex = expect(++it, tokens, "Missing autoindex value");
-
-            if (loc.autoindex != "on" && loc.autoindex != "off")
-                throw std::runtime_error("autoindex must be 'on' or 'off'");
-
-            expectSemicolon(it, tokens, "autoindex");
-        }
-        else if (key == "index")
-        {
-			++it;
-			loc.indexes = parseIndexes(it, tokens);
-        }
-        else if (key == "cgi_path")
-        {
-            loc.cgiPath = parseRoot(++it, tokens);
-            expectSemicolon(it, tokens, "cgi_path");
-        }
-        else if (key == "cgi_ext")
-        {
-            loc.cgiExt = parseCgiExt(++it, tokens);
-            expectSemicolon(it, tokens, "cgi_ext");
-        }
-        else if (key == "redirect")
-        {
-            if (loc.redirectCode != 0)
-                throw std::runtime_error("duplicate redirect directive");
-
-            loc.redirectCode = std::atoi(expect(++it, tokens, "Missing redirect code").c_str());
-
-            if (loc.redirectCode != 301 && loc.redirectCode != 302)
-                throw std::runtime_error("Invalid redirect code");
-
-            loc.redirectTarget = expect(it, tokens, "Missing redirect target");
-
-            if (loc.redirectTarget.empty())
-                throw std::runtime_error("Missing redirect target");
-
-            expectSemicolon(it, tokens, "redirect");
-        }
-        else if (key == "upload")
-        {
-            if (!loc.uploadEnabled.empty())
-                throw std::runtime_error("duplicate upload directive");
-
-            loc.uploadEnabled = expect(++it, tokens, "Missing upload value");
-
-            if (loc.uploadEnabled != "on" && loc.uploadEnabled != "off")
-                throw std::runtime_error("upload must be 'on' or 'off'");
-
-            expectSemicolon(it, tokens, "upload");
-        }
-        else if (key == "upload_path")
-        {
-            if (!loc.uploadPath.empty())
-                throw std::runtime_error("duplicate upload_path directive");
-
-            loc.uploadPath = parseRoot(++it, tokens);
-
-            expectSemicolon(it, tokens, "upload_path");
-        }
-        else
-        {
+        if (handler == locationDispatch.end())
             throw std::runtime_error("Unknown location directive: " + key);
-        }
+
+        (this->*(handler->second))(loc);
     }
+
     throw std::runtime_error("Unclosed location block");
 }
-void parseErrorPage(ServerConfig &conf, std::vector<std::string>::iterator &it, const std::vector<std::string> &tokens)
+
+void ConfigParser::parseServerBlock(ServerConfig& conf)
 {
-    std::vector<std::string> values;
+    if (tokens.expect("Expected server") != "server")
+        throw std::runtime_error("Expected server block");
 
-    for (++it; it != tokens.end() && *it != ";"; ++it)
-        values.push_back(*it);
-
-    if (it == tokens.end())
-        throw std::runtime_error("Missing ';' after error_page");
-
-    if (values.size() < 2)
-        throw std::runtime_error("Invalid error_page syntax: missing codes or path.");
-
-    std::string path = parseErrorPagePath(values.back());
-
-    for (size_t i = 0; i < values.size() - 1; ++i)
-    {
-        unsigned long code;
-        try
-        {
-            code = myStold(values[i]);
-        }
-        catch (...)
-        {
-            throw std::runtime_error("Invalid error code in config: " + values[i]);
-        }
-        if (code < 300 || code > 599)
-            throw std::runtime_error("Invalid error code in config: " + values[i]);
-        conf.errorPage[static_cast<int>(code)] = path;
-    }
-}
-
-struct CompareLocations
-{
-    bool operator()(const Location &a, const Location &b) const
-    {
-        return a.path.size() > b.path.size();
-    }
-};
-
-ServerConfig parseServer(const std::vector<std::string>& tokens, std::vector<std::string>::iterator &it)
-{
-    ServerConfig conf;
-
-    if (expect(it, tokens, "Expected '{'") != "{")
+    if (tokens.expect("Expected '{'") != "{")
         throw std::runtime_error("Expected '{'");
-    while (it != tokens.end())
+
+    while (tokens.hasMore())
     {
-        if (*it == "}")
+        if (tokens.current() == "}")
         {
-            ++it;
-            return conf;
+            tokens.expect("Expected '}'");
+            conf.validate();
+            return;
         }
-        std::string key = *it;
-        if (key == "host")
-        {
-            conf.host = expect(++it, tokens, "Missing host");
-            expectSemicolon(it, tokens, "host");
-        }
-        else if (key == "listen")
-        {
-            conf.port = parsePort(++it, tokens);
-            expectSemicolon(it, tokens, "listen");
-        }
-        else if (key == "root")
-        {
-            conf.root = parseRoot(++it, tokens);
-            expectSemicolon(it, tokens, "root");
-        }
-        else if (key == "server_name")
-        {
-            ++it;
-            while (it != tokens.end() && *it != ";")
-                conf.serverName.push_back(*it++);
-            if (it == tokens.end())
-                throw std::runtime_error("Missing ';' after server_name");
-            ++it;
-        }
-        else if (key == "location")
-        {
-            ++it;
-            conf.Locations.push_back(parseLocation(tokens, it));
-        }
-        else if (key == "index")
-        {
-           	++it;
-			conf.indexes = parseIndexes(it, tokens);
-        }
-        else if (key == "error_page")
-        {
-            parseErrorPage(conf, it, tokens);
-			if (it == tokens.end())
-    			throw std::runtime_error("Missing ';' after error_page");
-            ++it;
-        }
-        else if (key == "client_max_body_size")
-        {
-            conf.client_max_body_size = parseBodySize(++it, tokens);
-            expectSemicolon(it, tokens, "client_max_body_size");
-        }
-        else
+
+        std::string key = tokens.current();
+
+        std::map<std::string, ServerHandler>::iterator handler;
+        handler = serverDispatch.find(key);
+
+        if (handler == serverDispatch.end())
             throw std::runtime_error("Unknown server directive: " + key);
+
+        (this->*(handler->second))(conf);
     }
     throw std::runtime_error("Unclosed server block");
 }
 
-std::vector<ServerConfig> parseTokens(std::vector<std::string> tokens)
+std::vector<ServerConfig> ConfigParser::parse()
 {
-    std::vector<ServerConfig> allServers;
-    std::vector<std::string>::iterator it = tokens.begin();
+    std::vector<ServerConfig> servers;
 
-    while (it != tokens.end())
+    while (tokens.hasMore())
     {
-        if (*it != "server")
-            throw std::runtime_error("Expected 'server' keyword");
-        ++it;
-        ServerConfig currServerConfig = parseServer(tokens, it);
-        std::sort(
-            currServerConfig.Locations.begin(),
-            currServerConfig.Locations.end(),
-            CompareLocations()
-        );
-        allServers.push_back(currServerConfig);
+        if (tokens.current() != "server")
+            throw std::runtime_error("Expected server block");
+
+        ServerConfig conf;
+        parseServerBlock(conf);
+
+        servers.push_back(conf);
     }
-    return allServers;
+    return servers;
 }
-
-
-std::vector<ServerConfig> parseConfig(std::string configFile)
-{
-    std::vector<std::string> tokens = prepConf(configFile);
-	std::vector<ServerConfig> allServers = parseTokens(tokens); 
-    return allServers;
-}
-

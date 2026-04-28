@@ -1,6 +1,12 @@
 #include "Server/Server.hpp"
 
-std::vector<ServerConfig> parseConfig(std::string configFile);
+std::vector<ServerConfig> parseConfig(const std::string &configFile)
+{
+    std::vector<std::string> tokens = tokenize(configFile);
+    ConfigParser parser(tokens);
+    return parser.parse();
+}
+
 int main(int ac, char **av)
 {
     (void)ac;
