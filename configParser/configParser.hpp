@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include "../Helpers.hpp"
 #include "config.hpp"
+#include <algorithm>
 
 std::vector<std::string> tokenize(const std::string &filepath);
 

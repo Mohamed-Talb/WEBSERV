@@ -97,3 +97,48 @@ bool isOnlyDigits(const std::string &s)
     }
     return true;
 }
+
+
+bool isValidHost(const std::string &host)
+{
+    if (host == "localhost")
+        return true;
+
+    if (host.empty())
+        return false;
+
+    int dots = 0;
+    std::string part;
+
+    for (size_t i = 0; i <= host.size(); ++i)
+    {
+        if (i == host.size() || host[i] == '.')
+        {
+            if (part.empty())
+                return false;
+
+            if (part.size() > 3)
+                return false;
+
+            for (size_t j = 0; j < part.size(); ++j)
+            {
+                if (!std::isdigit(part[j]))
+                    return false;
+            }
+
+            int value = std::atoi(part.c_str());
+
+            if (value < 0 || value > 255)
+                return false;
+
+            ++dots;
+            part.clear();
+        }
+        else
+        {
+            part += host[i];
+        }
+    }
+
+    return dots == 4;
+}

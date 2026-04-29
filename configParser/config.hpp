@@ -21,6 +21,7 @@ struct Location
     std::vector<std::string> indexes;
     std::vector<std::string> methods;
     std::map<std::string, bool> seenDirectives;
+    std::vector<std::string> allowedMethods;
     Location();
     void validateLocation() const;
 };

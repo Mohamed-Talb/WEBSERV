@@ -35,7 +35,6 @@ class TokenStream
 
         std::string value = *it;
         ++it;
-
         return value;
     }
 

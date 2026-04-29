@@ -6,10 +6,11 @@ void ConfigParser::handleHost(ServerConfig &conf)
 {
     if (conf.seenDirectives["host"])
         throw std::runtime_error("duplicate host directive");
-
     conf.seenDirectives["host"] = true;
     tokens.expect("Expected host");
     conf.host = tokens.expect("Missing host");
+    if (!isValidHost(conf.host))
+        throw std::runtime_error("Invalid host: " + conf.host);
     tokens.expectSemicolon("host");
 }
 
@@ -112,7 +113,12 @@ void ConfigParser::handleErrorPage(ServerConfig &conf)
         if (code < 300 || code > 599)
             throw std::runtime_error("Invalid error code in config: " + values[i]);
 
-        conf.errorPage[static_cast<int>(code)] = path;
+        int errorCode = static_cast<int>(code);
+
+        if (conf.errorPage.count(errorCode))
+            throw std::runtime_error("duplicate error_page code: " + values[i]);
+
+        conf.errorPage[errorCode] = path;
     }
 
     tokens.expectSemicolon("error_page");
@@ -139,12 +145,23 @@ void ConfigParser::handleLocMethods(Location &loc)
 {
     if (loc.seenDirectives["methods"])
         throw std::runtime_error("duplicate methods directive");
-
     loc.seenDirectives["methods"] = true;
     tokens.expect("Expected methods");
-
+    std::vector<std::string> &allowedMethods = loc.allowedMethods; 
+    std::string currMethod;
     while (tokens.hasMore() && tokens.current() != ";")
-        loc.methods.push_back(tokens.expect("Missing method value"));
+    {   
+        currMethod = tokens.expect("Missing method value");
+
+        if (std::find(allowedMethods.begin(), allowedMethods.end(), currMethod) == allowedMethods.end())
+            throw std::runtime_error("unsupported method: " + currMethod);
+
+        if (std::find(loc.methods.begin(), loc.methods.end(), currMethod) != loc.methods.end())
+            throw std::runtime_error("duplicate method: " + currMethod);
+
+        loc.methods.push_back(currMethod);
+        
+    }
 
     if (!tokens.hasMore())
         throw std::runtime_error("Missing ';' after methods");

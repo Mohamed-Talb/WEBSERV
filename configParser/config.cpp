@@ -1,6 +1,11 @@
 #include "config.hpp"
 
-Location::Location() : redirectCode(0), autoindex("off"), uploadEnabled("") {};
+Location::Location() : redirectCode(0), autoindex("off"), uploadEnabled("") 
+{
+    allowedMethods.push_back("GET");
+    allowedMethods.push_back("DELETE");
+    allowedMethods.push_back("POST");
+};
 
 void Location::validateLocation() const 
 {
