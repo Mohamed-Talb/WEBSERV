@@ -20,6 +20,7 @@ struct Location
     std::string uploadPath;
     std::vector<std::string> indexes;
     std::vector<std::string> methods;
+    std::map<std::string, bool> seenDirectives;
     Location();
     void validateLocation() const;
 };
@@ -34,6 +35,7 @@ struct ServerConfig
     std::vector<std::string> indexes;
     std::vector<std::string> serverName;
     std::map<int, std::string> errorPage;
+    std::map<std::string, bool> seenDirectives;
     ServerConfig();
     void validate() const;
 };

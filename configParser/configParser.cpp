@@ -29,7 +29,7 @@ ConfigParser::ConfigParser(const std::vector<std::string> &tokens) : tokens(toke
 }
 
  
-void ConfigParser::parseLocationBlock(Location& loc)
+void ConfigParser::parseLocationBlock(Location &loc)
 {
     loc.path = parseLocationPathStr();
 
@@ -41,12 +41,11 @@ void ConfigParser::parseLocationBlock(Location& loc)
         if (tokens.current() == "}")
         {
             tokens.expect("Expected '}'");
-            // loc.validate();
+            loc.validateLocation();
             return;
         }
 
         std::string key = tokens.current();
-
         std::map<std::string, LocationHandler>::iterator handler;
         handler = locationDispatch.find(key);
 
@@ -59,7 +58,7 @@ void ConfigParser::parseLocationBlock(Location& loc)
     throw std::runtime_error("Unclosed location block");
 }
 
-void ConfigParser::parseServerBlock(ServerConfig& conf)
+void ConfigParser::parseServerBlock(ServerConfig &conf)
 {
     if (tokens.expect("Expected server") != "server")
         throw std::runtime_error("Expected server block");
@@ -92,7 +91,8 @@ void ConfigParser::parseServerBlock(ServerConfig& conf)
 std::vector<ServerConfig> ConfigParser::parse()
 {
     std::vector<ServerConfig> servers;
-
+    if (!tokens.hasMore())
+        throw std::runtime_error("Empty config file");
     while (tokens.hasMore())
     {
         if (tokens.current() != "server")
