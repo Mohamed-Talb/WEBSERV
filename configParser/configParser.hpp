@@ -11,7 +11,10 @@
 #include "config.hpp"
 
 std::vector<std::string> tokenize(const std::string &filepath);
-struct CompareLocations 
+
+
+
+struct CompareLocations
 {
     bool operator()(const Location &a, const Location &b) const 
     {
