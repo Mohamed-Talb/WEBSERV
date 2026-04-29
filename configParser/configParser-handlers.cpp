@@ -1,7 +1,7 @@
 #include "configParser.hpp"
 
 
-
+// SERVER CONFIG HANDLERS
 void ConfigParser::handleHost(ServerConfig &conf)
 {
     if (conf.seenDirectives["host"])
@@ -120,7 +120,6 @@ void ConfigParser::handleErrorPage(ServerConfig &conf)
 
         conf.errorPage[errorCode] = path;
     }
-
     tokens.expectSemicolon("error_page");
 }
 
@@ -134,13 +133,12 @@ void ConfigParser::handleClientMaxBodySize(ServerConfig &conf)
 
     std::string value = tokens.expect("Missing body size value");
     conf.client_max_body_size = parseBodySizeValue(value);
-
+    if (conf.client_max_body_size == 0)
+        throw std::runtime_error("Invalide client_max_body_size");
     tokens.expectSemicolon("client_max_body_size");
 }
 
-
-
-
+// LOCATIONS CONFIG HANDLERS
 void ConfigParser::handleLocMethods(Location &loc)
 {
     if (loc.seenDirectives["methods"])
@@ -218,9 +216,10 @@ void ConfigParser::handleLocCgiPath(Location &loc)
         throw std::runtime_error("duplicate cgi_path directive");
 
     loc.seenDirectives["cgi_path"] = true;
+
     tokens.expect("Expected cgi_path");
 
-    loc.cgiPath = parseRootPath();
+    loc.cgiPath = parseCgiPathValue();
 
     tokens.expectSemicolon("cgi_path");
 }
@@ -301,6 +300,3 @@ void ConfigParser::handleLocUploadPath(Location &loc)
 
     tokens.expectSemicolon("upload_path");
 }
-
-
-

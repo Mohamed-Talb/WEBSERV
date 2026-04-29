@@ -132,7 +132,8 @@ std::string ConfigParser::parseRedirectTargetValue(const std::string &target)
     if (target.find("..") != std::string::npos)
         throw std::runtime_error("Invalid redirect target");
 
-    if (target[0] != '/' && target.find("http://") != 0)
+    if (target[0] != '/' && target.find("http://") != 0  &&
+        target.find("https://") != 0)
         throw std::runtime_error("redirect target must be path or URL");
 
     return target;
@@ -203,4 +204,24 @@ std::vector<std::string> ConfigParser::parseIndexesList()
         throw std::runtime_error("index directive requires at least one file");
     tokens.expectSemicolon("index");
     return indexes;
+}
+
+
+
+std::string ConfigParser::parseCgiPathValue()
+{
+    std::string path = tokens.expect("Missing cgi_path");
+
+    path = mergeSlashes(path);
+
+    while (path.size() > 1 && path[path.size() - 1] == '/')
+        path.erase(path.size() - 1);
+
+    if (path.empty())
+        throw std::runtime_error("Invalid cgi_path");
+
+    if (path.find("..") != std::string::npos)
+        throw std::runtime_error("Invalid cgi_path: directory traversal");
+
+    return path;
 }

@@ -35,7 +35,7 @@ void Location::validateLocation() const
         if (redirectTarget.find("..") != std::string::npos)
             throw std::runtime_error("Invalid redirect target");
 
-        if (redirectTarget[0] != '/' && redirectTarget.find("http://") != 0)
+        if (redirectTarget[0] != '/' && redirectTarget.find("http://") != 0 && redirectTarget.find("https://") != 0)
         {
             throw std::runtime_error("redirect target must be path or URL");
         }

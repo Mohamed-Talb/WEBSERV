@@ -69,7 +69,7 @@ class ConfigParser
     std::string parseErrorPagePathValue(const std::string &raw);
     size_t      parseBodySizeValue(const std::string &value);
     int         parsePortValue(const std::string &value);
-
+    std::string parseCgiPathValue();
     public:
     ConfigParser(const std::vector<std::string> &tokens);
     std::vector<ServerConfig> parse();
