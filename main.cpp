@@ -9,10 +9,15 @@ std::vector<ServerConfig> parseConfig(const std::string &configFile)
 
 int main(int ac, char **av)
 {
-    (void)ac;
+    if (ac != 2)
+    {
+        std::cout << "Usage: ./program pathToConfig" << std::endl;
+        return EXIT_FAILURE;
+    }
     try
     {
         std::vector<ServerConfig> configs = parseConfig(av[1]);
+        signal(SIGPIPE, SIG_IGN);
         Server server;
         server.init(configs);
         server.runEventLoop();
@@ -23,7 +28,6 @@ int main(int ac, char **av)
         return 1;
     }
 }
-
 
 // Timeout Management (The Slowloris Vulnerability)
 // in client handlRead if the httpparser return a error custo the error page for client config

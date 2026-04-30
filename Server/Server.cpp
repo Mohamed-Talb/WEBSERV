@@ -76,6 +76,24 @@ const std::vector<ServerConfig>& Server::getConfigs() const
     return configs;
 }
 
+void Server::checkTimeout()
+{
+    time_t curr_time = time(NULL);
+    for (std::map<int, IEventHandler *>::iterator i = fdHandlers.begin(); i != fdHandlers.end();)
+    {
+        Client *client = dynamic_cast<Client *>(i->second);
+        if (client != NULL) // ieventhandler is actually a client
+        {
+            if (client->state != PROCESSING_CGI && difftime(curr_time, client->timeout) > 30) // hardcoded to 30 sec for now
+            {
+                removeHandler(i++->first); // Note: iterators are kinda like linkedlists, cant free then increment its pointer because you need the "next"
+                continue;
+            }
+        }
+        i++;
+    }
+}
+
 void Server::runEventLoop()
 {
     const int MAX_EVENTS = 1024;
@@ -83,8 +101,7 @@ void Server::runEventLoop()
 
     while (true)
     {
-        int ready = epoll_wait(epollFD, readyEvents, MAX_EVENTS, -1);
-        
+        int ready = epoll_wait(epollFD, readyEvents, MAX_EVENTS, 1000);
         for (int i = 0; i < ready; ++i)
         {
             int fd = readyEvents[i].data.fd;
@@ -105,5 +122,7 @@ void Server::runEventLoop()
             if (currEvent & EPOLLOUT)
                 handler->handleWrite();
         }
+        // this line should check client timeout
+        checkTimeout();
     }
 }

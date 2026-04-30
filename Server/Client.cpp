@@ -7,9 +7,13 @@
 #include <errno.h>
 #include <iostream>
 #include <cstdlib>
+#include <ctime>
 
 Client::Client(int fd, Server *srv, const std::vector<ServerConfig> &confs) 
-    : socketFD(fd), server(srv), configs(confs), state(READING_REQUEST) {}
+    : socketFD(fd), server(srv), configs(confs), state(READING_REQUEST)
+{
+    timeout = time(NULL);
+}
 
 Client::~Client()
 {
@@ -98,6 +102,7 @@ void Client::handleRead()
         }
         appendToReadBuffer(buf, bytes);
         dataRead = true;
+        timeout = time(NULL);
     }
     std::cout << readBuffer << std::endl;
     if (!dataRead)
@@ -184,6 +189,7 @@ void Client::handleWrite()
             return;
         }
         consumeWriteBuffer(bytes);
+        timeout = time(NULL);
     }
     if (!hasPendingWrite())
     {

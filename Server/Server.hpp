@@ -28,6 +28,7 @@ class Server
     Server();
     ~Server();
 
+    void checkTimeout();
     void runEventLoop();
     void removeHandler(int fd);
     void init(const std::vector<ServerConfig>& confs);
@@ -68,13 +69,13 @@ class Client : public IEventHandler
     std::string readBuffer;
     std::string writeBuffer;
     std::vector<ServerConfig> configs;
+    
+    const ServerConfig* matchConfig(const std::string& host) const;
+    
+    public:
+    time_t timeout;
     ClientState state;
 
-    Client();
-    Client(const Client&);
-    const ServerConfig* matchConfig(const std::string& host) const;
-
-    public:
     virtual ~Client();
     Client(int fd, Server* srv, const std::vector<ServerConfig>& confs);
 
