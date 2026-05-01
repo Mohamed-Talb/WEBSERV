@@ -59,18 +59,6 @@ void Server::modifyHandler(IEventHandler* handler, uint32_t events)
     epoll_ctl(epollFD, EPOLL_CTL_MOD, handler->getFD(), &ev);
 }
 
-void Server::removeHandler(int fd)
-{
-    epoll_ctl(epollFD, EPOLL_CTL_DEL, fd, NULL);
-    std::map<int, IEventHandler*>::iterator it = fdHandlers.find(fd);
-    if (it != fdHandlers.end())
-    {
-        delete it->second;
-        fdHandlers.erase(it);
-    }
-    ::close(fd);
-}
-
 const std::vector<ServerConfig>& Server::getConfigs() const
 {
     return configs;
@@ -82,15 +70,26 @@ void Server::checkTimeout()
     for (std::map<int, IEventHandler *>::iterator i = fdHandlers.begin(); i != fdHandlers.end();)
     {
         Client *client = dynamic_cast<Client *>(i->second);
-        if (client != NULL) // ieventhandler is actually a client
+        if (client != NULL)
         {
             if (client->state != PROCESSING_CGI && difftime(curr_time, client->timeout) > 30) // hardcoded to 30 sec for now
             {
-                removeHandler(i++->first); // Note: iterators are kinda like linkedlists, cant free then increment its pointer because you need the "next"
+                removeHandler(i++->first);
                 continue;
             }
         }
         i++;
+    }
+}
+
+void Server::removeHandler(int fd)
+{
+    epoll_ctl(epollFD, EPOLL_CTL_DEL, fd, NULL);
+    std::map<int, IEventHandler*>::iterator it = fdHandlers.find(fd);
+    if (it != fdHandlers.end())
+    {
+        delete it->second;
+        fdHandlers.erase(it);
     }
 }
 
@@ -102,6 +101,12 @@ void Server::runEventLoop()
     while (true)
     {
         int ready = epoll_wait(epollFD, readyEvents, MAX_EVENTS, 1000);
+        if (ready == -1)
+        {
+            if (errno == EINTR) // os just wanted us to check a signal
+                continue;
+            break; // To-Do: unrecoverable error, clean up resources and inform the user using perror
+        }
         for (int i = 0; i < ready; ++i)
         {
             int fd = readyEvents[i].data.fd;
@@ -118,11 +123,13 @@ void Server::runEventLoop()
             if (currEvent & EPOLLIN)
             {
                 handler->handleRead();
+                if (fdHandlers.find(fd) == fdHandlers.end())
+                    continue;
             }
             if (currEvent & EPOLLOUT)
                 handler->handleWrite();
         }
-        // this line should check client timeout
         checkTimeout();
     }
+    // cleanup funtion needed here for when we break off the loop
 }
