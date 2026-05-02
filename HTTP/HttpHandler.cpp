@@ -8,32 +8,54 @@ HttpHandler::HttpHandler(const ServerConfig &serverConfig) : serverConfig(&serve
 
 HttpHandler::~HttpHandler() {}
 
-const Location *HttpHandler::matchLocation(const std::string& path)
+bool prefixMatches(const std::string &path, const std::string &locPath)
 {
+    if (locPath == "/")
+        return true;
+
+    if (path.compare(0, locPath.size(), locPath) != 0)
+        return false;
+
+    return path.size() == locPath.size() || path[locPath.size()] == '/';
+}
+
+const Location* HttpHandler::matchLocation(const std::string &path)
+{
+    const Location* bestMatch = NULL;
+    size_t bestLength = 0;
+
     for (size_t i = 0; i < serverConfig->Locations.size(); ++i)
     {
         const Location& loc = serverConfig->Locations[i];
+
         if (path.compare(0, loc.path.size(), loc.path) == 0)
         {
-            return &loc;
+            if (loc.path.size() > bestLength)
+            {
+                bestMatch = &loc;
+                bestLength = loc.path.size();
+            }
         }
     }
-    return NULL;
+    return bestMatch;
 }
 
-bool HttpHandler::isMethodAllowed(const std::string& method, const Location& loc)
+bool HttpHandler::isMethodAllowed(const std::string &method, const Location &loc)
 {
+    std::cout << loc.path << std::endl;   
+    std::cout << loc.root << std::endl;   
     if (loc.methods.empty())
-        return true;   
+        return true;
     for (size_t i = 0; i < loc.methods.size(); ++i)
     {
+        std::cout << loc.methods[i] << std::endl;
         if (toUpper(loc.methods[i]) == method)
             return true;
     }
     return false;
 }
 
-const Location *HttpHandler::getCgiLocation(const HttpRequest& request)
+const Location *HttpHandler::getCgiLocation(const HttpRequest &request)
 {
     std::string requestPath = HttpUtils::stripQuery(request.getTarget());
     const Location *matchedLocation = matchLocation(requestPath);
@@ -63,47 +85,75 @@ std::vector<std::string> HttpHandler::resolveIndexFiles(const Location *loc)
     return defaults;
 }
 
-HttpResponse HttpHandler::process(const HttpRequest &request)
+void HttpHandler::resolveRoute(const HttpRequest& request, RouteMatch& match)
+{
+    match.location = NULL;
+    match.requestPath.clear();
+    match.root.clear();
+    match.fullPath.clear();
+
+    std::string requestPath = HttpUtils::stripQuery(request.getTarget());
+
+    const Location* location = matchLocation(requestPath);
+    if (!location)
+        return;
+
+    std::string root = location->root.empty() ? serverConfig->root : location->root;
+    std::string fullPath = joinPath(root, requestPath);
+
+    match.location = location;
+    match.requestPath = requestPath;
+    match.root = root;
+    match.fullPath = fullPath;
+}
+
+HttpResponse HttpHandler::process(const HttpRequest& request)
 {
     if (request.getErrorCode() != 0)
         return HttpUtils::ErrorPage(request.getErrorCode(), "Bad Request", *serverConfig);
 
-    std::string method = request.getMethod();
-    std::string requestPath = HttpUtils::stripQuery(request.getTarget());
+    RouteMatch match;
+    resolveRoute(request, match);
 
-    const Location *matchedLocation = matchLocation(requestPath);
-    if (!matchedLocation)
+    std::string method = request.getMethod();
+
+    if (!match.location)
         return HttpUtils::ErrorPage(404, "Not Found", *serverConfig);
 
-    if (!isMethodAllowed(method, *matchedLocation))
+    if (!isMethodAllowed(method, *match.location))
         return HttpUtils::ErrorPage(405, "Method Not Allowed", *serverConfig);
 
-    std::string root = matchedLocation->root.empty() ? serverConfig->root : matchedLocation->root;
-    std::string fullPath = joinPath(root, requestPath);
-
     struct stat S;
-    if (stat(fullPath.c_str(), &S) == 0 && S_ISDIR(S.st_mode))
+    if (stat(match.fullPath.c_str(), &S) == 0 && S_ISDIR(S.st_mode))
     {
-        std::vector<std::string> indexes = resolveIndexFiles(matchedLocation);
+        std::vector<std::string> indexes = resolveIndexFiles(match.location);
         bool foundIndex = false;
+
         for (size_t i = 0; i < indexes.size(); ++i)
         {
-            std::string candidatePath = joinPath(fullPath, indexes[i]);
+            std::string candidatePath = joinPath(match.fullPath, indexes[i]);
+
             if (FileSystem::fileExists(candidatePath))
             {
-                requestPath = joinPath(requestPath, indexes[i]);
+                match.requestPath = joinPath(match.requestPath, indexes[i]);
+                match.fullPath = candidatePath;
                 foundIndex = true;
                 break;
             }
         }
+
         if (!foundIndex)
-        {
             return HttpUtils::ErrorPage(403, "Forbidden", *serverConfig);
-        }
     }
+
     if (method == "GET")
-        return HttpMethods::GET(root, requestPath, *serverConfig);
+        return HttpMethods::GET(&match, *serverConfig);
+
     if (method == "DELETE")
-        return HttpMethods::DELETE(root, requestPath, *serverConfig);
+        return HttpMethods::DELETE(&match, *serverConfig);
+
+    if (method == "POST")
+        return HttpMethods::POST(request, &match, *serverConfig);
+
     return HttpUtils::ErrorPage(501, "Not Implemented", *serverConfig);
 }

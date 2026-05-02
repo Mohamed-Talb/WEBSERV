@@ -79,11 +79,9 @@ class Client : public IEventHandler
     virtual ~Client();
     Client(int fd, Server* srv, const std::vector<ServerConfig>& confs);
 
-    void closeConnection();
     bool isConnected() const;
     void onCgiDone(HttpResponse response);
 
-    void clearReadBuffer();
     bool hasPendingWrite() const;
     void consumeReadBuffer(size_t bytes);
     void consumeWriteBuffer(size_t bytes);

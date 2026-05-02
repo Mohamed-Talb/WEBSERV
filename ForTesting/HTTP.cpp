@@ -1,3 +1,5 @@
+#ifndef HTTPHANDLER_HPP
+#define HTTPHANDLER_HPP
 
 #include "../configParser/configParser.hpp"
 #include <string>
@@ -103,8 +105,6 @@ class HttpHandler
     HttpResponse process(const HttpRequest& req);
 };
 
-
-#include "HttpHandler.hpp"
 namespace HttpUtils
 {
     std::string contentType(const std::string &path);
@@ -113,126 +113,9 @@ namespace HttpUtils
 }
 
 
-#include "HttpHandler.hpp"
-#include <string>
+#include "Methods.hpp"
+#include "HttpUtils.hpp"
 
-class HttpMethods 
-{
-    public:
-    static HttpResponse GET(const std::string &rootDirectory, std::string requestPath, const ServerConfig &config);
-    static HttpResponse DELETE(const std::string &rootDirectory, std::string requestPath, const ServerConfig &config);
-
-    // static HttpResponse DELETE(const std::string& rootDirectory, const std::string& targetPath);
-    // static HttpResponse POST(const std::string& rootDirectory, const HttpRequest& request); 
-};
-
-#include "HttpHandler.hpp" // Assuming this contains your FileSystem declaration
-#include <iostream>
-#include <fstream>
-#include <cstdio>
-#include <unistd.h>
-#include <sys/stat.h>
-
-namespace FileSystem
-{
-    bool fileExists(const std::string &filePath)
-    {
-        return (access(filePath.c_str(), F_OK) == 0);
-    }
-    bool readFile(const std::string& filePath, std::string& content)
-    {
-        std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
-        if (!file.is_open())
-            return false;
-        std::ostringstream buffer;
-        buffer << file.rdbuf();
-        content = buffer.str();
-        return true;
-    }
-
-    bool deleteFile(const std::string &filePath)
-    {
-        if (std::remove(filePath.c_str()) == 0)
-            return true;
-        return false;
-    }
-
-    bool writeToFile(const std::string &filePath, std::string &content)
-    {
-        std::ofstream outfile(filePath.c_str(), std::ios::out | std::ios::trunc);
-        if (!outfile.is_open())
-            return false;
-        
-        outfile << content;
-        outfile.close();
-        return true;
-    }
-}
-
-
-
-namespace HttpUtils 
-{
-
-    std::string contentType(const std::string& path)
-    {
-        static std::map<std::string, std::string> mimeTypes;
-        if (mimeTypes.empty())
-        {
-            mimeTypes.insert(std::make_pair(".html", "text/html"));
-            mimeTypes.insert(std::make_pair(".htm", "text/html"));
-            mimeTypes.insert(std::make_pair(".css", "text/css"));
-            mimeTypes.insert(std::make_pair(".js", "application/javascript"));
-            mimeTypes.insert(std::make_pair(".json", "application/json"));
-            mimeTypes.insert(std::make_pair(".txt", "text/plain"));
-            mimeTypes.insert(std::make_pair(".png", "image/png"));
-            mimeTypes.insert(std::make_pair(".jpg", "image/jpeg"));
-            mimeTypes.insert(std::make_pair(".jpeg", "image/jpeg"));
-            mimeTypes.insert(std::make_pair(".gif", "image/gif"));
-        }
-
-        size_t pos = path.find_last_of('.');
-        if (pos == std::string::npos) 
-            return "application/octet-stream";
-        std::string ext = toLower(path.substr(pos));
-        std::map<std::string, std::string>::const_iterator it = mimeTypes.find(ext);
-        if (it != mimeTypes.end()) 
-            return it->second;
-        return "application/octet-stream";
-    }
-
-    std::string stripQuery(const std::string& path)
-    {
-        size_t pos = path.find('?');
-        if (pos == std::string::npos) 
-            return path;
-        return path.substr(0, pos);
-    }
-    HttpResponse ErrorPage(int statusCode, const std::string &statusReason, const ServerConfig &config)
-    {
-        std::string errorPageContent;
-        std::string errorPath;
-        std::map<int, std::string>::const_iterator it = config.errorPage.find(statusCode);
-        
-        if (it != config.errorPage.end()) {
-            errorPath = config.root + it->second;
-        }
-        if (!errorPath.empty() && FileSystem::readFile(errorPath, errorPageContent))
-        {
-            HttpResponse response(statusCode, statusReason);
-            response.setBody(errorPageContent, contentType(errorPath));
-            return response;
-        }
-        std::ostringstream defaultHtml;
-        defaultHtml << "<html><head><title>" << statusCode << " " << statusReason << "</title></head>"
-                    << "<body><center><h1>" << statusCode << " " << statusReason << "</h1></center>"
-                    << "<hr><center>webserv/1.0</center></body></html>";
-
-        HttpResponse response(statusCode, statusReason);
-        response.setBody(defaultHtml.str(), "text/html");
-        return response;
-    }
-}
 
 HttpResponse HttpMethods::GET(const std::string &rootDirectory,
                               std::string requestPath,
@@ -268,8 +151,49 @@ HttpResponse HttpMethods::DELETE(const std::string &rootDirectory, std::string r
     return HttpResponse(204, "No Content");
 }
 
+// static void dbg_print(std::string identifier, std::string data)
+// {
+//     std::cout << identifier << data << std::endl;
+// }
+
+std::string getInBetween(std::string str, std::string s1, std::string s2)
+{
+    std::string result = str.substr(str.find(s1) + s1.size());
+    result = result.substr(0, result.find(s2));
+    return result;
+}
+
+void storeFile(std::string body, std::string rootDirectory)
+{
+    std::string disp = getInBetween(body, "Content-Disposition: ", "\r\n");
+
+    std::cout << "trimedBody: " << body;
+    // dbg_print("trimedBody: ", body);
+    if (disp.find("filename=") != std::string::npos)
+    {
+        std::string filename = getInBetween(disp, "filename=\"", "\"");
+        std::string content = body.substr(body.find("\r\n\r\n") + 4);
+        FileSystem::writeToFile(rootDirectory + "/" + filename, content);
+    }
+}
+
+HttpResponse HttpMethods::POST(const HttpRequest& request, const std::string &rootDirectory, std::string requestPath, const ServerConfig &config)
+{
+    (void) request;
+    (void) rootDirectory;
+    (void) requestPath;
+    (void) config;
+    
+    std::string boundary = getInBetween(request.getHeader("content-type"), "boundary=", "\n");
+    // dbg_print("boundary is: ", boundary);
+    
+    std::string trimedBody = getInBetween(request.getBody(), boundary, "--" + boundary);
+    storeFile(trimedBody, rootDirectory);
+    return HttpResponse(200, "OK");
+}
 
 
+#include "HttpHandler.hpp"
 
 HttpRequest::HttpRequest() : state(PARSE_REQUEST_LINE), parsedSize(0), errorCode(0) {}
 HttpRequest::~HttpRequest() {}
@@ -478,6 +402,8 @@ int HttpRequest::parse(const std::string &rawRequestData)
 
 
 
+
+
 HttpResponse::HttpResponse() : statusCode(200), reasonPhrase("OK")
 {
     headers["Connection"] = "keep-alive";
@@ -623,148 +549,4 @@ HttpResponse HttpHandler::process(const HttpRequest &request)
         return HttpMethods::DELETE(root, requestPath, *serverConfig);
     return HttpUtils::ErrorPage(501, "Not Implemented", *serverConfig);
 }
-
-
-
-#include "configParser.hpp"
-
-std::string expect(TokenIt &it, const Tokens &tokens, const std::string &err)
-{
-    if (it == tokens.end())
-        throw std::runtime_error(err);
-    return *it++;
-}
-
-void expectSemicolon(TokenIt &it, const Tokens &tokens, const std::string &directive)
-{
-    if (expect(it, tokens, "Missing ';' after " + directive) != ";")
-        throw std::runtime_error("Expected ';' after " + directive);
-}
-
-int parsePort(TokenIt &it, const Tokens &tokens)
-{
-    std::string value = expect(it, tokens, "Missing port");
-	if (value.size() > 5)
-        throw std::runtime_error("Invalid port: " + value);
-    int port;
-    try
-    {
-        port = std::atoi(value.c_str());
-    }
-    catch (...)
-    {
-        throw std::runtime_error("Invalid port: " + value);
-    }
-    if (0 < port || port > 65535)
-        throw std::runtime_error("Invalid port: " + value);
-    return static_cast<int>(port);
-}
-
-size_t parseBodySize(TokenIt &it, const Tokens &tokens)
-{
-    std::string value = expect(it, tokens, "Missing body size value");
-    try
-    {
-        return myStold(value);
-    }
-    catch (...)
-    {
-        throw std::runtime_error("Invalid client_max_body_size value: " + value);
-    }
-}
-
-std::string parseRoot(TokenIt &it, const Tokens &tokens)
-{
-    std::string root = expect(it, tokens, "Missing root");
-
-    root = mergeSlashes(root);
-
-    while (root.size() > 1 && root[root.size() - 1] == '/')
-        root.erase(root.size() - 1);
-
-    if (root.empty())
-        throw std::runtime_error("Invalid root path");
-
-    if (root.find("..") != std::string::npos)
-        throw std::runtime_error("Invalid root path: directory traversal");
-
-    return root;
-}
-
-std::string parseLocationPath(TokenIt &it, const Tokens &tokens)
-{
-    std::string path = expect(it, tokens, "Missing location path");
-
-    path = mergeSlashes(path);
-
-    if (path.empty() || path[0] != '/')
-        throw std::runtime_error("Location path must start with '/'");
-
-    while (path.size() > 1 && path[path.size() - 1] == '/')
-        path.erase(path.size() - 1);
-
-    if (path.find("..") != std::string::npos)
-        throw std::runtime_error("Invalid location path: directory traversal");
-
-    return path;
-}
-
-std::vector<std::string> parseIndexes(TokenIt &it, const Tokens &tokens)
-{
-    std::vector<std::string> indexes;
-    while (it != tokens.end() && *it != ";")
-    {
-        std::string index = expect(it, tokens, "Missing index value");
-
-        index = mergeSlashes(index);
-
-        while (!index.empty() && index[0] == '/')
-            index.erase(0, 1);
-
-        if (index.empty())
-            throw std::runtime_error("Index cannot be empty");
-		
-        if (index.find("..") != std::string::npos)
-            throw std::runtime_error("Invalid index path: directory traversal");
-
-        indexes.push_back(index);
-    }
-    if (it == tokens.end())
-        throw std::runtime_error("Missing ';' after index");
-
-    if (indexes.empty())
-        throw std::runtime_error("index directive requires at least one file");
-    ++it;
-    return indexes;
-}
-
-std::string parseCgiExt(TokenIt &it, const Tokens &tokens)
-{
-    std::string ext = expect(it, tokens, "Missing cgi_ext");
-
-    if (ext.empty())
-        throw std::runtime_error("Invalid cgi_ext");
-
-    if (ext[0] != '.')
-        ext = "." + ext;
-
-    return ext;
-}
-
-std::string parseErrorPagePath(const std::string& raw)
-{
-    std::string path = mergeSlashes(raw);
-
-    if (path.empty())
-        throw std::runtime_error("Invalid error_page path");
-
-    if (path.find("..") != std::string::npos)
-        throw std::runtime_error("Invalid error_page path");
-
-    if (path[0] != '/')
-        path = "/" + path;
-
-    return path;
-}
-
 
