@@ -8,17 +8,6 @@ HttpHandler::HttpHandler(const ServerConfig &serverConfig) : serverConfig(&serve
 
 HttpHandler::~HttpHandler() {}
 
-bool prefixMatches(const std::string &path, const std::string &locPath)
-{
-    if (locPath == "/")
-        return true;
-
-    if (path.compare(0, locPath.size(), locPath) != 0)
-        return false;
-
-    return path.size() == locPath.size() || path[locPath.size()] == '/';
-}
-
 const Location* HttpHandler::matchLocation(const std::string &path)
 {
     const Location* bestMatch = NULL;
@@ -27,13 +16,15 @@ const Location* HttpHandler::matchLocation(const std::string &path)
     for (size_t i = 0; i < serverConfig->Locations.size(); ++i)
     {
         const Location& loc = serverConfig->Locations[i];
-
         if (path.compare(0, loc.path.size(), loc.path) == 0)
         {
-            if (loc.path.size() > bestLength)
+            if (loc.path == "/" || path.size() == loc.path.size() || path[loc.path.size()] == '/')
             {
-                bestMatch = &loc;
-                bestLength = loc.path.size();
+                if (loc.path.size() > bestLength)
+                {
+                    bestMatch = &loc;
+                    bestLength = loc.path.size();
+                }
             }
         }
     }
