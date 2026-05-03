@@ -6,6 +6,7 @@ namespace HttpUtils
     std::string contentType(const std::string &path);
     std::string stripQuery(const std::string &path);
     HttpResponse ErrorPage(int statusCode, const std::string &statusReason, const ServerConfig &config);
+    bool isDirectory(const std::string &path);
 }
 
 #endif

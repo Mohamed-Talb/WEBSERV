@@ -3,6 +3,7 @@
 #include <sstream>
 #include <map>
 #include "../Helpers.hpp"
+#include <sys/stat.h>
 
 namespace HttpUtils 
 {
@@ -64,5 +65,13 @@ namespace HttpUtils
         HttpResponse response(statusCode, statusReason);
         response.setBody(defaultHtml.str(), "text/html");
         return response;
+    }
+
+    bool isDirectory(const std::string &path)
+    {
+        struct stat s;
+        if (stat(path.c_str(), &s) != 0)
+            return false;
+        return S_ISDIR(s.st_mode);
     }
 }

@@ -1,6 +1,6 @@
 #include "config.hpp"
 
-Location::Location() : redirectCode(0), autoindex("off"), uploadEnabled("") 
+Location::Location() : redirectCode(0), autoindex("off"), uploadEnabled("off") 
 {
     allowedMethods.push_back("GET");
     allowedMethods.push_back("DELETE");

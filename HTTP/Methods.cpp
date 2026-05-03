@@ -1,26 +1,26 @@
 #include "Methods.hpp"
 #include "HttpUtils.hpp"
 
-std::string getInBetween(std::string str, std::string s1, std::string s2)
-{
-    std::string result = str.substr(str.find(s1) + s1.size());
-    result = result.substr(0, result.find(s2));
-    return result;
-}
+// std::string getInBetween(std::string str, std::string s1, std::string s2)
+// {
+//     std::string result = str.substr(str.find(s1) + s1.size());
+//     result = result.substr(0, result.find(s2));
+//     return result;
+// }
 
-void storeFile(std::string body, std::string rootDirectory)
-{
-    std::string disp = getInBetween(body, "Content-Disposition: ", "\r\n");
+// void storeFile(std::string body, std::string rootDirectory)
+// {
+//     std::string disp = getInBetween(body, "Content-Disposition: ", "\r\n");
 
-    std::cout << "trimedBody: " << body;
-    // dbg_print("trimedBody: ", body);
-    if (disp.find("filename=") != std::string::npos)
-    {
-        std::string filename = getInBetween(disp, "filename=\"", "\"");
-        std::string content = body.substr(body.find("\r\n\r\n") + 4);
-        FileSystem::writeToFile(rootDirectory + "/" + filename, content);
-    }
-}
+//     std::cout << "trimedBody: " << body;
+//     // dbg_print("trimedBody: ", body);
+//     if (disp.find("filename=") != std::string::npos)
+//     {
+//         std::string filename = getInBetween(disp, "filename=\"", "\"");
+//         std::string content = body.substr(body.find("\r\n\r\n") + 4);
+//         FileSystem::writeToFile(rootDirectory + "/" + filename, content);
+//     }
+// }
 
 
 HttpResponse HttpMethods::GET(RouteMatch* match, const ServerConfig& config)
@@ -64,15 +64,15 @@ HttpResponse HttpMethods::DELETE(RouteMatch* match, const ServerConfig& config)
 // }
 
 
-HttpResponse HttpMethods::POST(const HttpRequest &request,RouteMatch *match, const ServerConfig &config)
-{
-    (void) request;
-    (void) config;
+// HttpResponse HttpMethods::POST(const HttpRequest &request, RouteMatch *match, const ServerConfig &config)
+// {
+//     (void) request;
+//     (void) config;
     
-    std::string boundary = getInBetween(request.getHeader("content-type"), "boundary=", "\n");
-    // dbg_print("boundary is: ", boundary);
+//     std::string boundary = getInBetween(request.getHeader("content-type"), "boundary=", "\n");
+//     // dbg_print("boundary is: ", boundary);
     
-    std::string trimedBody = getInBetween(request.getBody(), boundary, "--" + boundary);
-    storeFile(trimedBody, match->root);
-    return HttpResponse(200, "OK");
-}
+//     std::string trimedBody = getInBetween(request.getBody(), boundary, "--" + boundary);
+//     storeFile(trimedBody, match->root);
+//     return HttpResponse(200, "OK");
+// }

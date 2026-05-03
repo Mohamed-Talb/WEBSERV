@@ -272,9 +272,6 @@ void ConfigParser::handleLocUpload(Location &loc)
         throw std::runtime_error("duplicate upload directive");
 
     loc.seenDirectives["upload"] = true;
-    if (!loc.uploadEnabled.empty())
-        throw std::runtime_error("duplicate upload directive");
-
     tokens.expect("Expected upload");
 
     loc.uploadEnabled = tokens.expect("Missing upload value");
