@@ -27,12 +27,13 @@ void Server::init(const std::vector<ServerConfig> &confs)
     if (epollFD < 0)
         throw ServerException("Server", "epoll_create failed");
     
-    std::map<int, std::vector<ServerConfig> > groupedConfigs;
+    std::map<std::string, std::vector<ServerConfig> > groupedConfigs;
     for (size_t i = 0; i < configs.size(); ++i) 
     {
-        groupedConfigs[configs[i].port].push_back(configs[i]);
+        std::string ipPort = configs[i].host + ":" + intToString(configs[i].port);
+        groupedConfigs[ipPort].push_back(configs[i]);
     }
-    std::map<int, std::vector<ServerConfig> >::iterator it;
+    std::map<std::string, std::vector<ServerConfig> >::iterator it;
     for (it = groupedConfigs.begin(); it != groupedConfigs.end(); ++it)
     {
         Listener* listener = new Listener(it->second, this); 
