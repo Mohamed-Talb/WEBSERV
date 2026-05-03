@@ -8,6 +8,12 @@
 
 ConfigParser::ConfigParser(const std::vector<std::string> &tokens) : tokens(tokens)
 {
+    initServerDispatch();
+    initLocationDispatch();
+}
+
+void ConfigParser::initServerDispatch()
+{
     serverDispatch["host"] = &ConfigParser::handleHost;
     serverDispatch["listen"] = &ConfigParser::handleListen;
     serverDispatch["root"] = &ConfigParser::handleRoot;
@@ -16,14 +22,17 @@ ConfigParser::ConfigParser(const std::vector<std::string> &tokens) : tokens(toke
     serverDispatch["index"] = &ConfigParser::handleIndex;
     serverDispatch["error_page"] = &ConfigParser::handleErrorPage;
     serverDispatch["client_max_body_size"] = &ConfigParser::handleClientMaxBodySize;
+}
 
+void ConfigParser::initLocationDispatch()
+{
     locationDispatch["methods"] = &ConfigParser::handleLocMethods;
     locationDispatch["root"] = &ConfigParser::handleLocRoot;
     locationDispatch["autoindex"] = &ConfigParser::handleLocAutoindex;
     locationDispatch["index"] = &ConfigParser::handleLocIndex;
     locationDispatch["cgi_path"] = &ConfigParser::handleLocCgiPath;
     locationDispatch["cgi_ext"] = &ConfigParser::handleLocCgiExt;
-    locationDispatch["redirect"] = &ConfigParser::handleLocRedirect;
+    locationDispatch["return"] = &ConfigParser::handleLocRedirect;
     locationDispatch["upload"] = &ConfigParser::handleLocUpload;
     locationDispatch["upload_path"] = &ConfigParser::handleLocUploadPath;
 }
@@ -31,7 +40,7 @@ ConfigParser::ConfigParser(const std::vector<std::string> &tokens) : tokens(toke
  
 void ConfigParser::parseLocationBlock(Location &loc)
 {
-    loc.path = parseLocationPathStr();
+    loc.path = parseLocationPath();
 
     if (tokens.expect("Expected '{'") != "{")
         throw std::runtime_error("Expected '{'");
