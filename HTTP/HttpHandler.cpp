@@ -90,8 +90,14 @@ void HttpHandler::resolveRoute(const HttpRequest& request, RouteMatch& match)
         return;
 
     std::string root = location->root.empty() ? serverConfig->root : location->root;
-    std::string fullPath = joinPath(root, requestPath);
-
+    std::string relativePath = requestPath;
+    if (location->path != "/")
+    {
+        relativePath = requestPath.substr(location->path.size());
+        if (relativePath.empty())
+            relativePath = "/";
+    }
+    std::string fullPath = joinPath(root, relativePath);
     match.location = location;
     match.requestPath = requestPath;
     match.root = root;
