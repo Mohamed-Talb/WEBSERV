@@ -43,14 +43,14 @@ class HttpRequest
     int  parse(const std::string &rawBuffer);
 
 
-    std::string getBody() const;
+    const std::string &getBody() const;
     State       getState() const;
-    std::string getTarget() const;
-    std::string getMethod() const;
-    std::string getVersion() const;
+    const std::string &getTarget() const;
+    const std::string &getMethod() const;
+    const std::string &getVersion() const;
     int         getErrorCode() const;
     size_t      getParsedSize() const;
-    std::string getHeader(const std::string &key) const;
+    const std::string &getHeader(const std::string &key) const;
 };
 
 #endif

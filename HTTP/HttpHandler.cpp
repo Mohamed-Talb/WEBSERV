@@ -133,7 +133,6 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
             std::string candidatePath = joinPath(match.fullPath, indexes[i]);
             if (fileExists(candidatePath))
             {
-                std::cout << "hello" << std::endl;
                 match.requestPath = joinPath(match.requestPath, indexes[i]);
                 match.fullPath = candidatePath;
                 foundIndex = true;
@@ -142,7 +141,6 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
         }
         if (!foundIndex)
         {
-            std::cout << "hello" << std::endl;
             if (method == "GET" && match.location->autoindex == "on")
                 return resolveAutoIndexing(match, *serverConfig);
             return ErrorPage(403, "Forbidden", *serverConfig);

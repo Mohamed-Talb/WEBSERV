@@ -2,14 +2,15 @@
 #include "../CGI/CGI.hpp"
 #include "../HTTP/HttpUtils/HttpUtils.hpp"
 #include "../HTTP/HttpHandler.hpp"
+#include "../Helpers.hpp"
+
 #include <sys/socket.h>
 #include <unistd.h>
 #include <errno.h>
-#include <iostream>
 #include <cstdlib>
 #include <ctime>
 
-Client::Client(int fd, Server *srv, const std::vector<ServerConfig> &confs) 
+Client::Client(int fd, Server *srv, const std::vector<ServerConfig> &confs)
     : socketFD(fd), server(srv), configs(confs), state(READING_REQUEST)
 {
     timeout = time(NULL);
@@ -40,54 +41,91 @@ void Client::consumeWriteBuffer(size_t bytes)
         writeBuffer.erase(0, bytes);
 }
 
-void Client::appendToWriteBuffer(const std::string& data) { writeBuffer += data; }
-void Client::appendToReadBuffer(const char *data, size_t size) { readBuffer.append(data, size); }
-
-int Client::getFD() const { return socketFD; }
-HttpRequest &Client::getRequest() { return request; }
-bool Client::isConnected() const { return socketFD >= 0; }
-bool Client::hasPendingWrite() const { return !writeBuffer.empty(); }
-const std::string &Client::getReadBuffer() const { return readBuffer; }
-const std::string &Client::getWriteBuffer() const { return writeBuffer; }
-
-const ServerConfig *Client::matchConfig(const std::string& rawHost) const
+void Client::appendToWriteBuffer(const std::string &data)
 {
+    writeBuffer += data;
+}
+
+void Client::appendToReadBuffer(const char *data, size_t size)
+{
+    readBuffer.append(data, size);
+}
+
+int Client::getFD() const
+{
+    return socketFD;
+}
+
+HttpRequest &Client::getRequest()
+{
+    return request;
+}
+
+bool Client::isConnected() const
+{
+    return socketFD >= 0;
+}
+
+bool Client::hasPendingWrite() const
+{
+    return !writeBuffer.empty();
+}
+
+const std::string &Client::getReadBuffer() const
+{
+    return readBuffer;
+}
+
+const std::string &Client::getWriteBuffer() const
+{
+    return writeBuffer;
+}
+
+const ServerConfig *Client::matchConfig(const std::string &rawHost) const
+{
+    if (configs.empty())
+        return NULL;
+
     std::string host = rawHost;
+
     size_t portSep = host.find(':');
-    if (portSep != std::string::npos) 
+    if (portSep != std::string::npos)
         host = host.substr(0, portSep);
-    
+
     host = toLower(host);
 
-    for (size_t i = 0; i < configs.size(); ++i) 
+    for (size_t i = 0; i < configs.size(); ++i)
     {
-        for (size_t j = 0; j < configs[i].serverName.size(); ++j) 
+        for (size_t j = 0; j < configs[i].serverName.size(); ++j)
         {
-            if (configs[i].serverName[j] == host) 
+            if (toLower(configs[i].serverName[j]) == host)
                 return &configs[i];
         }
     }
-    return &configs[0]; // ?????????? mtaleb: fix the bug here 
+    return &configs[0];
 }
 
-void Client::onCgiDone(HttpResponse response)
+void Client::onCgiDone(const HttpResponse &response)
 {
     appendToWriteBuffer(response.toString());
     state = SENDING_RESPONSE;
-    server->modifyHandler(this, EPOLLIN | EPOLLOUT); 
+
+    server->modifyHandler(socketFD, this, EPOLLIN | EPOLLOUT);
 }
 
-
-void Client::handleRead()
+void Client::handleRead(int fd)
 {
-    if (state == PROCESSING_CGI) 
-        return;
+    if (fd != socketFD)
+        return ;
+    if (state == PROCESSING_CGI)
+        return ;
+
     char buf[8192];
     bool dataRead = false;
-    
+
     while (true)
     {
-        int bytes = recv(socketFD, buf, sizeof(buf), 0);
+        ssize_t bytes = recv(socketFD, buf, sizeof(buf), 0);
         if (bytes == 0)
         {
             server->removeHandler(socketFD);
@@ -100,105 +138,147 @@ void Client::handleRead()
             server->removeHandler(socketFD);
             return;
         }
-        appendToReadBuffer(buf, bytes);
+        appendToReadBuffer(buf, static_cast<size_t>(bytes));
         dataRead = true;
         timeout = time(NULL);
     }
-    std::cout << readBuffer << std::endl;
+
     if (!dataRead)
         return;
+
     while (true)
     {
         int parseStatus = request.parse(readBuffer);
+
         if (request.getErrorCode() != 0)
         {
-            HttpResponse response = ErrorPage(request.getErrorCode(), "Bad Request", configs[0]);
+            HttpResponse response = ErrorPage(
+                request.getErrorCode(),
+                "Bad Request",
+                configs[0]
+            );
+
             appendToWriteBuffer(response.toString());
             state = SENDING_RESPONSE;
-            server->modifyHandler(this, EPOLLIN | EPOLLOUT);
+
+            server->modifyHandler(socketFD, this, EPOLLIN | EPOLLOUT);
+
             request.reset();
-            return; 
+            return;
         }
-		if (request.getState() == PARSE_BODY || request.getState() == PARSE_COMPLETE)
-		{
-			const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
-			if (!selectedConfig)
-				selectedConfig = &configs[0];
-			std::string cl = request.getHeader("content-length");
-			if (!cl.empty())
-			{
-				ssize_t bodySize = myStold(cl);
-				if (bodySize > selectedConfig->client_max_body_size)
-				{
-					HttpResponse err = ErrorPage(413,"Payload Too Large",*selectedConfig);
-					appendToWriteBuffer(err.toString());
-					state = SENDING_RESPONSE;
-					server->modifyHandler(this, EPOLLIN | EPOLLOUT);
-					request.reset();
-					readBuffer.clear();
-					return ;
-				}
-			}
-		}
+
+        if (request.getState() == PARSE_BODY || request.getState() == PARSE_COMPLETE)
+        {
+            const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
+
+            if (!selectedConfig)
+                selectedConfig = &configs[0];
+
+            std::string cl = request.getHeader("content-length");
+
+            if (!cl.empty())
+            {
+                ssize_t bodySize = myStold(cl);
+
+                if (bodySize > selectedConfig->client_max_body_size)
+                {
+                    HttpResponse err = ErrorPage(
+                        413,
+                        "Payload Too Large",
+                        *selectedConfig
+                    );
+
+                    appendToWriteBuffer(err.toString());
+                    state = SENDING_RESPONSE;
+
+                    server->modifyHandler(socketFD, this, EPOLLIN | EPOLLOUT);
+
+                    request.reset();
+                    readBuffer.clear();
+                    return;
+                }
+            }
+        }
+
         if (parseStatus == 0)
             break;
-        const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
-        if (!selectedConfig) selectedConfig = &configs[0];
-		HttpHandler handler(*selectedConfig); 
 
-        const Location* cgiLocation = handler.getCgiLocation(request);
-        if (cgiLocation != NULL) 
-        {
-            state = PROCESSING_CGI; 
-            
-            std::string requestPath = stripQuery(request.getTarget());
-            CgiHandler* Cgi = new CgiHandler(this, server, request, *cgiLocation, requestPath);
-            server->addHandler(Cgi, EPOLLIN);
-            
-            consumeReadBuffer(request.getParsedSize());
-            request.reset();
-            break; 
-        }
-        else 
-        {
-            HttpResponse response = handler.process(request);
-            appendToWriteBuffer(response.toString());
-            state = SENDING_RESPONSE;
-            consumeReadBuffer(request.getParsedSize());
-            request.reset(); 
-        }
+        if (parseStatus < 0)
+            return;
+
+        const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
+
+        if (!selectedConfig)
+            selectedConfig = &configs[0];
+
+        HttpHandler handler(*selectedConfig);
+
+        // const Location *cgiLocation = handler.getCgiLocation(request);
+
+        // if (cgiLocation != NULL)
+        // {
+        //     state = PROCESSING_CGI;
+
+        //     std::string requestPath = stripQuery(request.getTarget());
+
+        //     CgiHandler *cgi = new CgiHandler(
+        //         this,
+        //         server,
+        //         request,
+        //         *cgiLocation,
+        //         requestPath
+        //     );
+
+        //     consumeReadBuffer(request.getParsedSize());
+        //     request.reset();
+
+        //     break;
+        // }
+
+        HttpResponse response = handler.process(request);
+
+        appendToWriteBuffer(response.toString());
+        state = SENDING_RESPONSE;
+
+        consumeReadBuffer(request.getParsedSize());
+        request.reset();
     }
+
     if (hasPendingWrite() && state != PROCESSING_CGI)
-        server->modifyHandler(this, EPOLLIN | EPOLLOUT);
+        server->modifyHandler(socketFD, this, EPOLLIN | EPOLLOUT);
 }
 
-void Client::handleWrite()
+void Client::handleWrite(int fd)
 {
-    if (!hasPendingWrite()) return;
-    
-    // std::cout << "RESPONSE---------------\n" << writeBuffer << std::endl;
-    
+    if (fd != socketFD)
+        return;
+
+    if (!hasPendingWrite())
+        return;
+
     while (hasPendingWrite())
     {
-        int bytes = send(socketFD, writeBuffer.c_str(), writeBuffer.size(), 0);
+        ssize_t bytes = send(socketFD, writeBuffer.c_str(), writeBuffer.size(), 0);
+
         if (bytes < 0)
         {
             if (errno == EAGAIN || errno == EWOULDBLOCK)
                 return;
+
             server->removeHandler(socketFD);
             return;
         }
-        consumeWriteBuffer(bytes);
+
+        if (bytes == 0)
+            return;
+
+        consumeWriteBuffer(static_cast<size_t>(bytes));
         timeout = time(NULL);
     }
+
     if (!hasPendingWrite())
     {
-        if (request.getErrorCode() != 0) 
-        {
-            server->removeHandler(socketFD);
-            return;
-        }
-        state = READING_REQUEST; 
-        server->modifyHandler(this, EPOLLIN);
+        state = READING_REQUEST;
+        server->modifyHandler(socketFD, this, EPOLLIN);
     }
 }

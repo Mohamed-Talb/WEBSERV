@@ -5,12 +5,13 @@
 HttpRequest::HttpRequest() : state(PARSE_REQUEST_LINE), parsedSize(0), errorCode(0) {}
 HttpRequest::~HttpRequest() {}
 
-std::string HttpRequest::getHeader(const std::string& key) const
+const std::string &HttpRequest::getHeader(const std::string& key) const
 {
     std::map<std::string, std::string>::const_iterator it = headers.find(key);
     if (it != headers.end())
         return it->second;
-    return "";
+    static const std::string empty = "";
+    return empty;
 }
 
 void HttpRequest::setError(int code)
@@ -19,10 +20,10 @@ void HttpRequest::setError(int code)
     state = PARSE_ERROR;
 }
 
-std::string HttpRequest::getBody()  const { return body; }
-std::string HttpRequest::getMethod() const { return method; }
-std::string HttpRequest::getTarget() const { return target; }
-std::string HttpRequest::getVersion() const { return version; }
+const std::string &HttpRequest::getBody()  const { return body; }
+const std::string &HttpRequest::getMethod() const { return method; }
+const std::string &HttpRequest::getTarget() const { return target; }
+const std::string &HttpRequest::getVersion() const { return version; }
 int HttpRequest::getErrorCode()	const { return errorCode; }
 size_t HttpRequest::getParsedSize()	const { return parsedSize; }
 State  HttpRequest::getState() const { return state; }
