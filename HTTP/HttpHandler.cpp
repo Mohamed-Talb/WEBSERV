@@ -107,7 +107,20 @@ void HttpHandler::resolveRoute(const HttpRequest& request, RouteMatch& match)
 
 HttpResponse generateDirectoryListing(std::string fullPath, std::string requestPath)
 {
+    struct dirent *entry;
+    DIR *dir = opendir(fullPath.c_str());
+    HttpResponse response;
     
+    if (dir == NULL)
+    {
+        
+    }
+
+    while ((entry = readdir(dir)) != NULL)
+    {
+
+    }
+
 }
 
 HttpResponse HttpHandler::process(const HttpRequest& request)

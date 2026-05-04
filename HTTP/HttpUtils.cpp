@@ -54,7 +54,8 @@ namespace HttpUtils
         if (!errorPath.empty() && FileSystem::readFile(errorPath, errorPageContent))
         {
             HttpResponse response(statusCode, statusReason);
-            response.setBody(errorPageContent, contentType(errorPath));
+            response.setBody(errorPageContent);
+            response.setHeader("Content-Type", contentType(errorPath));
             return response;
         }
         std::ostringstream defaultHtml;
@@ -63,7 +64,8 @@ namespace HttpUtils
                     << "<hr><center>webserv/1.0</center></body></html>";
 
         HttpResponse response(statusCode, statusReason);
-        response.setBody(defaultHtml.str(), "text/html");
+        response.setBody(defaultHtml.str());
+        response.setHeader("Content-Type","text/html");
         return response;
     }
 

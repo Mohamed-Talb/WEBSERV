@@ -89,9 +89,10 @@ class HttpResponse
     HttpResponse();
     HttpResponse(int code, const std::string &reason);
     ~HttpResponse();
-
+    void setBody(const std::string &content);
+    void writeBody(const std::string &chunk);
+    bool setBodyFromFile(const std::string &filePath);
     void setHeader(const std::string &key, const std::string &value);
-    void setBody(const std::string &content, const std::string &contentType);
     std::string toString() const;
 };
 

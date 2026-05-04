@@ -18,14 +18,44 @@ void HttpResponse::setHeader(const std::string& name, const std::string& value)
     headers[name] = value;
 }
 
-void HttpResponse::setBody(const std::string& content, const std::string& contentType)
+void HttpResponse::setBody(const std::string &content)
 {
     body = content;
-    headers["Content-Type"] = contentType;
 
     std::ostringstream sizeStream;
     sizeStream << body.size();
     headers["Content-Length"] = sizeStream.str();
+}
+
+void HttpResponse::writeBody(const std::string &chunk)
+{
+    body += chunk;
+
+    std::ostringstream sizeStream;
+    sizeStream << body.size();
+    headers["Content-Length"] = sizeStream.str();
+}
+
+bool HttpResponse::setBodyFromFile(const std::string &filePath)
+{
+    std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
+
+    if (!file.is_open())
+        return false;
+
+    std::ostringstream buffer;
+    buffer << file.rdbuf();
+
+    if (file.bad())
+        return false;
+
+    body = buffer.str();
+
+    std::ostringstream sizeStream;
+    sizeStream << body.size();
+    headers["Content-Length"] = sizeStream.str();
+
+    return true;
 }
 
 std::string HttpResponse::toString() const
