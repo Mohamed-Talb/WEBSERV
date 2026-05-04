@@ -100,8 +100,8 @@ HttpResponse CgiHandler::parseCgiOutput(const std::string& rawOutput)
 
     if (delimiter == std::string::npos) {
         HttpResponse response(statusCode, statusReason);
-        response.setBody(rawOutput, contentType);
-        return response;
+        response.setBody(rawOutput);
+        response.setHeader("Content-Type", contentType);
     }
 
     std::string headersPart = rawOutput.substr(0, delimiter);
@@ -124,6 +124,7 @@ HttpResponse CgiHandler::parseCgiOutput(const std::string& rawOutput)
     }
 
     HttpResponse response(statusCode, statusReason);
-    response.setBody(bodyPart, contentType);
+    response.setBody(bodyPart);
+    response.setHeader("Content-Type", contentType);
     return response;
 }

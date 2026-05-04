@@ -99,28 +99,10 @@ void HttpHandler::resolveRoute(const HttpRequest& request, RouteMatch& match)
             relativePath = "/";
     }
     std::string fullPath = joinPath(root, relativePath);
-    match.location = location;
-    match.requestPath = requestPath;
-    match.root = root;
-    match.fullPath = fullPath;
-}
-
-HttpResponse generateDirectoryListing(std::string fullPath, std::string requestPath)
-{
-    struct dirent *entry;
-    DIR *dir = opendir(fullPath.c_str());
-    HttpResponse response;
-    
-    if (dir == NULL)
-    {
-        
-    }
-
-    while ((entry = readdir(dir)) != NULL)
-    {
-
-    }
-
+    std::cout << match.location << std::endl;
+    std::cout << match.requestPath << std::endl;
+    std::cout << match.root << std::endl;
+    std::cout << match.fullPath << std::endl;
 }
 
 HttpResponse HttpHandler::process(const HttpRequest& request)
@@ -130,6 +112,9 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
 
     RouteMatch match;
     resolveRoute(request, match);
+    if (!match.location)
+        return HttpUtils::ErrorPage(404, "Not Found", *serverConfig);
+
     if (match.location->redirectCode != 0)
     {
         int code = match.location->redirectCode;
@@ -140,22 +125,16 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
         return res;
     }
     std::string method = request.getMethod();
-
-    if (!match.location)
-        return HttpUtils::ErrorPage(404, "Not Found", *serverConfig);
-
     if (!isMethodAllowed(method, *match.location))
         return HttpUtils::ErrorPage(405, "Method Not Allowed", *serverConfig);
 
-    struct stat S;
-    if (stat(match.fullPath.c_str(), &S) == 0 && S_ISDIR(S.st_mode))
+    if (HttpUtils::isDirectory(match.fullPath))
     {
         std::vector<std::string> indexes = resolveIndexFiles(match.location);
         bool foundIndex = false;
         for (size_t i = 0; i < indexes.size(); ++i)
         {
             std::string candidatePath = joinPath(match.fullPath, indexes[i]);
-
             if (FileSystem::fileExists(candidatePath))
             {
                 match.requestPath = joinPath(match.requestPath, indexes[i]);
@@ -164,9 +143,12 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
                 break;
             }
         }
-
         if (!foundIndex)
+        {
+            if (method == "GET" && match.location->autoindex == "on")
+                return generateDirectoryListing(match, serverConfig);
             return HttpUtils::ErrorPage(403, "Forbidden", *serverConfig);
+        }
     }
 
     if (method == "GET")

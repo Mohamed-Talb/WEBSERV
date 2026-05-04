@@ -101,7 +101,6 @@ class HttpHandler
 {
 	private:
     const ServerConfig 	*serverConfig;
-    RouteMatch match;
     const Location *matchLocation(const std::string &path);
     bool isMethodAllowed(const std::string& method, const Location& loc);
     void resolveRoute(const HttpRequest& request, RouteMatch& match);    // METHODS
@@ -113,5 +112,7 @@ class HttpHandler
 
     HttpResponse process(const HttpRequest& req);
 };
+
+HttpResponse generateDirectoryListing(const RouteMatch &match, const ServerConfig *serverConfig);
 
 #endif

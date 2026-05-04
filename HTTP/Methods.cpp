@@ -33,7 +33,8 @@ HttpResponse HttpMethods::GET(RouteMatch* match, const ServerConfig& config)
     if (FileSystem::readFile(match->fullPath, fileContent))
     {
         HttpResponse response(200, "OK");
-        response.setBody(fileContent, HttpUtils::contentType(match->fullPath));
+        response.setBody(fileContent);
+        response.setHeader("Content-Type", HttpUtils::contentType(match->fullPath));
         return response;
     }
 

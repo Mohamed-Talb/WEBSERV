@@ -139,6 +139,7 @@ HttpResponse HttpMethods::POST(const HttpRequest &request, RouteMatch *match, co
         return HttpUtils::ErrorPage(500, "Internal Server Error4", config);
 
     HttpResponse response(201, "Created");
-    response.setBody("File uploaded successfully\n", "text/plain");
+    response.setBody("File uploaded successfully\n");
+    response.setHeader("Content-Type", "text/plain");
     return response;
 }
