@@ -7,7 +7,7 @@
 #include <cctype>
 
 
-std::string urlEncode(const std::string &str)
+static std::string urlEncode(const std::string &str)
 {
     std::ostringstream out;
     for (size_t i = 0; i < str.size(); ++i)
@@ -26,7 +26,7 @@ std::string urlEncode(const std::string &str)
     return out.str();
 }
 
-std::string htmlEscaping(std::string &srcHtml)
+static std::string htmlEscaping(std::string &srcHtml)
 {
     std::string newHtml;
     char currChar;
@@ -47,7 +47,7 @@ std::string htmlEscaping(std::string &srcHtml)
     return newHtml;
 }
 
-HttpResponse generateDirectoryListing(const RouteMatch &match, const ServerConfig *serverConfig)
+HttpResponse resolveAutoIndex(const RouteMatch &match, const ServerConfig *serverConfig)
 {
     DIR *dir = opendir(match.fullPath.c_str());
 

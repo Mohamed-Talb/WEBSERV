@@ -1,9 +1,3 @@
-#include "HttpHandler.hpp"
-#include <fstream>
-#include <sstream>
-#include <map>
-#include "../Helpers.hpp"
-#include <sys/stat.h>
 
 namespace HttpUtils 
 {
@@ -67,13 +61,5 @@ namespace HttpUtils
         response.setBody(defaultHtml.str());
         response.setHeader("Content-Type","text/html");
         return response;
-    }
-
-    bool isDirectory(const std::string &path)
-    {
-        struct stat s;
-        if (stat(path.c_str(), &s) != 0)
-            return false;
-        return S_ISDIR(s.st_mode);
     }
 }

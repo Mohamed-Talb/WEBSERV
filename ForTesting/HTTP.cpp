@@ -5,11 +5,48 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+namespace FileSystem
+{
+    bool fileExists(const std::string &filePath)
+    {
+        return (access(filePath.c_str(), F_OK) == 0);
+    }
+    bool readFile(const std::string& filePath, std::string& content)
+    {
+        std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
+        if (!file.is_open())
+            return false;
+        std::ostringstream buffer;
+        buffer << file.rdbuf();
+        content = buffer.str();
+        return true;
+    }
+
+    bool deleteFile(const std::string &filePath)
+    {
+        if (std::remove(filePath.c_str()) == 0)
+            return true;
+        return false;
+    }
+
+    bool writeToFile(const std::string &filePath, std::string &content)
+    {
+        std::ofstream outfile(filePath.c_str(), std::ios::out | std::ios::trunc);
+        if (!outfile.is_open())
+            return false;
+        
+        outfile << content;
+        outfile.close();
+        return true;
+    }
+}
+
 #include "HttpHandler.hpp"
 #include <fstream>
 #include <sstream>
 #include <map>
 #include "../Helpers.hpp"
+#include <sys/stat.h>
 
 namespace HttpUtils 
 {
@@ -60,7 +97,8 @@ namespace HttpUtils
         if (!errorPath.empty() && FileSystem::readFile(errorPath, errorPageContent))
         {
             HttpResponse response(statusCode, statusReason);
-            response.setBody(errorPageContent, contentType(errorPath));
+            response.setBody(errorPageContent);
+            response.setHeader("Content-Type", contentType(errorPath));
             return response;
         }
         std::ostringstream defaultHtml;
@@ -69,46 +107,201 @@ namespace HttpUtils
                     << "<hr><center>webserv/1.0</center></body></html>";
 
         HttpResponse response(statusCode, statusReason);
-        response.setBody(defaultHtml.str(), "text/html");
+        response.setBody(defaultHtml.str());
+        response.setHeader("Content-Type","text/html");
         return response;
+    }
+
+    bool isDirectory(const std::string &path)
+    {
+        struct stat s;
+        if (stat(path.c_str(), &s) != 0)
+            return false;
+        return S_ISDIR(s.st_mode);
     }
 }
 
-
-namespace FileSystem
+HttpResponse HttpMethods::GET(RouteMatch* match, const ServerConfig& config)
 {
-    bool fileExists(const std::string &filePath)
+    if (!match)
+        return HttpUtils::ErrorPage(500, "Internal Server Error", config);
+
+    std::string fileContent;
+
+    if (FileSystem::readFile(match->fullPath, fileContent))
     {
-        return (access(filePath.c_str(), F_OK) == 0);
-    }
-    bool readFile(const std::string& filePath, std::string& content)
-    {
-        std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
-        if (!file.is_open())
-            return false;
-        std::ostringstream buffer;
-        buffer << file.rdbuf();
-        content = buffer.str();
-        return true;
+        HttpResponse response(200, "OK");
+        response.setBody(fileContent);
+        response.setHeader("Content-Type", HttpUtils::contentType(match->fullPath));
+        return response;
     }
 
-    bool deleteFile(const std::string &filePath)
-    {
-        if (std::remove(filePath.c_str()) == 0)
-            return true;
+    return HttpUtils::ErrorPage(404, "Not Found", config);
+}
+
+
+HttpResponse HttpMethods::DELETE(RouteMatch* match, const ServerConfig& config)
+{
+    if (!match)
+        return HttpUtils::ErrorPage(500, "Internal Server Error", config);
+
+    if (match->requestPath.find("..") != std::string::npos)
+        return HttpUtils::ErrorPage(403, "Forbidden", config);
+
+    if (!FileSystem::fileExists(match->fullPath))
+        return HttpUtils::ErrorPage(404, "Not Found", config);
+
+    if (!FileSystem::deleteFile(match->fullPath))
+        return HttpUtils::ErrorPage(403, "Forbidden", config);
+
+    return HttpResponse(204, "No Content");
+}
+
+
+#include "Methods.hpp"
+#include "HttpUtils.hpp"
+#include "HttpHandler.hpp"
+
+/*
+--BOUNDARY\r\n
+Content-Disposition: form-data; name="file"; filename="cat.png"\r\n
+Content-Type: image/png\r\n
+\r\n
+FILE_CONTENT_HERE\r\n
+--BOUNDARY--\r\n
+*/
+
+static bool isSafeFilename(const std::string &filename)
+{
+    if (filename.empty())
         return false;
-    }
 
-    bool writeToFile(const std::string &filePath, std::string &content)
-    {
-        std::ofstream outfile(filePath.c_str(), std::ios::out | std::ios::trunc);
-        if (!outfile.is_open())
-            return false;
-        
-        outfile << content;
-        outfile.close();
-        return true;
-    }
+    if (filename.find("..") != std::string::npos)
+        return false;
+
+    if (filename.find('/') != std::string::npos)
+        return false;
+
+    if (filename.find('\\') != std::string::npos)
+        return false;
+
+    return true;
+}
+
+static bool extractBoundary(const std::string &contentType, std::string &boundary)
+{
+    std::string key = "boundary=";
+    size_t pos = contentType.find(key);
+
+    if (pos == std::string::npos)
+        return false;
+
+    boundary = contentType.substr(pos + key.size());
+
+    size_t semicolon = boundary.find(';');
+    if (semicolon != std::string::npos)
+        boundary = boundary.substr(0, semicolon);
+
+    boundary = trim(boundary);
+
+    if (boundary.size() >= 2 && boundary[0] == '"' && boundary[boundary.size() - 1] == '"')
+        boundary = boundary.substr(1, boundary.size() - 2);
+
+    return !boundary.empty();
+}
+
+static bool extractFilename(const std::string &partHeaders, std::string &filename)
+{
+    std::string key = "filename=\"";
+    size_t pos = partHeaders.find(key);
+
+    if (pos == std::string::npos)
+        return false;
+
+    pos += key.size();
+
+    size_t end = partHeaders.find("\"", pos);
+    if (end == std::string::npos)
+        return false;
+
+    filename = partHeaders.substr(pos, end - pos);
+    return isSafeFilename(filename);
+}
+
+static bool parseMultipartFile(const std::string &body, const std::string &boundary, std::string &filename, std::string &fileContent)
+{
+    std::string delimiter = "--" + boundary;
+    std::string closingDelimiter = "--" + boundary + "--";
+
+    size_t partStart = body.find(delimiter);
+    if (partStart == std::string::npos)
+        return false;
+
+    partStart += delimiter.size();
+
+    if (body.compare(partStart, 2, "\r\n") != 0)
+        return false;
+
+    partStart += 2;
+
+    size_t headersEnd = body.find("\r\n\r\n", partStart);
+    if (headersEnd == std::string::npos)
+        return false;
+
+    std::string partHeaders = body.substr(partStart, headersEnd - partStart);
+
+    if (!extractFilename(partHeaders, filename))
+        return false;
+
+    size_t contentStart = headersEnd + 4;
+
+    size_t nextBoundary = body.find("\r\n" + delimiter, contentStart);
+    if (nextBoundary == std::string::npos)
+        return false;
+
+    fileContent = body.substr(contentStart, nextBoundary - contentStart);
+
+    return true;
+}
+
+HttpResponse HttpMethods::POST(const HttpRequest &request, RouteMatch *match, const ServerConfig &config)
+{
+    if (!match || !match->location)
+        return HttpUtils::ErrorPage(500, "Internal Server Error!", config);
+
+    if (match->location->uploadEnabled != "on")
+        return HttpUtils::ErrorPage(403, "Forbidden", config);
+
+    if (match->location->uploadPath.empty())
+        return HttpUtils::ErrorPage(500, "Internal Server Error2", config);
+
+    if (!HttpUtils::isDirectory(match->location->uploadPath))
+        return HttpUtils::ErrorPage(500, match->location->uploadPath, config);
+
+    std::string contentType = request.getHeader("content-type");
+
+    if (contentType.find("multipart/form-data") == std::string::npos)
+        return HttpUtils::ErrorPage(415, "Unsupported Media Type", config);
+
+    std::string boundary;
+    if (!extractBoundary(contentType, boundary))
+        return HttpUtils::ErrorPage(400, "Bad Request", config);
+
+    std::string filename;
+    std::string fileContent;
+
+    if (!parseMultipartFile(request.getBody(), boundary, filename, fileContent))
+        return HttpUtils::ErrorPage(400, "Bad Request", config);
+
+    std::string outputPath = joinPath(match->location->uploadPath, filename);
+
+    if (!FileSystem::writeToFile(outputPath, fileContent))
+        return HttpUtils::ErrorPage(500, "Internal Server Error4", config);
+
+    HttpResponse response(201, "Created");
+    response.setBody("File uploaded successfully\n");
+    response.setHeader("Content-Type", "text/plain");
+    return response;
 }
 
 
@@ -321,87 +514,6 @@ int HttpRequest::parse(const std::string &rawRequestData)
 }
 
 
-
-#include "Methods.hpp"
-#include "HttpUtils.hpp"
-
-std::string getInBetween(std::string str, std::string s1, std::string s2)
-{
-    std::string result = str.substr(str.find(s1) + s1.size());
-    result = result.substr(0, result.find(s2));
-    return result;
-}
-
-void storeFile(std::string body, std::string rootDirectory)
-{
-    std::string disp = getInBetween(body, "Content-Disposition: ", "\r\n");
-
-    std::cout << "trimedBody: " << body;
-    // dbg_print("trimedBody: ", body);
-    if (disp.find("filename=") != std::string::npos)
-    {
-        std::string filename = getInBetween(disp, "filename=\"", "\"");
-        std::string content = body.substr(body.find("\r\n\r\n") + 4);
-        FileSystem::writeToFile(rootDirectory + "/" + filename, content);
-    }
-}
-
-
-HttpResponse HttpMethods::GET(RouteMatch* match, const ServerConfig& config)
-{
-    if (!match)
-        return HttpUtils::ErrorPage(500, "Internal Server Error", config);
-
-    std::string fileContent;
-
-    if (FileSystem::readFile(match->fullPath, fileContent))
-    {
-        HttpResponse response(200, "OK");
-        response.setBody(fileContent, HttpUtils::contentType(match->fullPath));
-        return response;
-    }
-
-    return HttpUtils::ErrorPage(404, "Not Found", config);
-}
-
-
-HttpResponse HttpMethods::DELETE(RouteMatch* match, const ServerConfig& config)
-{
-    if (!match)
-        return HttpUtils::ErrorPage(500, "Internal Server Error", config);
-
-    if (match->requestPath.find("..") != std::string::npos)
-        return HttpUtils::ErrorPage(403, "Forbidden", config);
-
-    if (!FileSystem::fileExists(match->fullPath))
-        return HttpUtils::ErrorPage(404, "Not Found", config);
-
-    if (!FileSystem::deleteFile(match->fullPath))
-        return HttpUtils::ErrorPage(403, "Forbidden", config);
-
-    return HttpResponse(204, "No Content");
-}
-
-// static void dbg_print(std::string identifier, std::string data)
-// {
-//     std::cout << identifier << data << std::endl;
-// }
-
-
-HttpResponse HttpMethods::POST(const HttpRequest &request,RouteMatch *match, const ServerConfig &config)
-{
-    (void) request;
-    (void) config;
-    
-    std::string boundary = getInBetween(request.getHeader("content-type"), "boundary=", "\n");
-    // dbg_print("boundary is: ", boundary);
-    
-    std::string trimedBody = getInBetween(request.getBody(), boundary, "--" + boundary);
-    storeFile(trimedBody, match->root);
-    return HttpResponse(200, "OK");
-}
-
-
 #include "HttpHandler.hpp"
 
 HttpResponse::HttpResponse() : statusCode(200), reasonPhrase("OK")
@@ -421,14 +533,44 @@ void HttpResponse::setHeader(const std::string& name, const std::string& value)
     headers[name] = value;
 }
 
-void HttpResponse::setBody(const std::string& content, const std::string& contentType)
+void HttpResponse::setBody(const std::string &content)
 {
     body = content;
-    headers["Content-Type"] = contentType;
 
     std::ostringstream sizeStream;
     sizeStream << body.size();
     headers["Content-Length"] = sizeStream.str();
+}
+
+void HttpResponse::writeBody(const std::string &chunk)
+{
+    body += chunk;
+
+    std::ostringstream sizeStream;
+    sizeStream << body.size();
+    headers["Content-Length"] = sizeStream.str();
+}
+
+bool HttpResponse::setBodyFromFile(const std::string &filePath)
+{
+    std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
+
+    if (!file.is_open())
+        return false;
+
+    std::ostringstream buffer;
+    buffer << file.rdbuf();
+
+    if (file.bad())
+        return false;
+
+    body = buffer.str();
+
+    std::ostringstream sizeStream;
+    sizeStream << body.size();
+    headers["Content-Length"] = sizeStream.str();
+
+    return true;
 }
 
 std::string HttpResponse::toString() const
@@ -450,21 +592,11 @@ std::string HttpResponse::toString() const
 #include "Methods.hpp" 
 #include "HttpUtils.hpp"
 #include <sys/stat.h>
+#include <dirent.h>
 
 HttpHandler::HttpHandler(const ServerConfig &serverConfig) : serverConfig(&serverConfig) {}
 
 HttpHandler::~HttpHandler() {}
-
-bool prefixMatches(const std::string &path, const std::string &locPath)
-{
-    if (locPath == "/")
-        return true;
-
-    if (path.compare(0, locPath.size(), locPath) != 0)
-        return false;
-
-    return path.size() == locPath.size() || path[locPath.size()] == '/';
-}
 
 const Location* HttpHandler::matchLocation(const std::string &path)
 {
@@ -474,13 +606,15 @@ const Location* HttpHandler::matchLocation(const std::string &path)
     for (size_t i = 0; i < serverConfig->Locations.size(); ++i)
     {
         const Location& loc = serverConfig->Locations[i];
-
         if (path.compare(0, loc.path.size(), loc.path) == 0)
         {
-            if (loc.path.size() > bestLength)
+            if (loc.path == "/" || path.size() == loc.path.size() || path[loc.path.size()] == '/')
             {
-                bestMatch = &loc;
-                bestLength = loc.path.size();
+                if (loc.path.size() > bestLength)
+                {
+                    bestMatch = &loc;
+                    bestLength = loc.path.size();
+                }
             }
         }
     }
@@ -546,12 +680,18 @@ void HttpHandler::resolveRoute(const HttpRequest& request, RouteMatch& match)
         return;
 
     std::string root = location->root.empty() ? serverConfig->root : location->root;
-    std::string fullPath = joinPath(root, requestPath);
-
-    match.location = location;
-    match.requestPath = requestPath;
-    match.root = root;
-    match.fullPath = fullPath;
+    std::string relativePath = requestPath;
+    if (location->path != "/")
+    {
+        relativePath = requestPath.substr(location->path.size());
+        if (relativePath.empty())
+            relativePath = "/";
+    }
+    std::string fullPath = joinPath(root, relativePath);
+    std::cout << match.location << std::endl;
+    std::cout << match.requestPath << std::endl;
+    std::cout << match.root << std::endl;
+    std::cout << match.fullPath << std::endl;
 }
 
 HttpResponse HttpHandler::process(const HttpRequest& request)
@@ -561,25 +701,29 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
 
     RouteMatch match;
     resolveRoute(request, match);
-
-    std::string method = request.getMethod();
-
     if (!match.location)
         return HttpUtils::ErrorPage(404, "Not Found", *serverConfig);
 
+    if (match.location->redirectCode != 0)
+    {
+        int code = match.location->redirectCode;
+        std::string reason = code == 301 ? "Moved Permanently" : "Found";
+        HttpResponse res(code, reason);
+        res.setHeader("Location", match.location->redirectTarget);
+        res.setHeader("Content-Length", "0");
+        return res;
+    }
+    std::string method = request.getMethod();
     if (!isMethodAllowed(method, *match.location))
         return HttpUtils::ErrorPage(405, "Method Not Allowed", *serverConfig);
 
-    struct stat S;
-    if (stat(match.fullPath.c_str(), &S) == 0 && S_ISDIR(S.st_mode))
+    if (HttpUtils::isDirectory(match.fullPath))
     {
         std::vector<std::string> indexes = resolveIndexFiles(match.location);
         bool foundIndex = false;
-
         for (size_t i = 0; i < indexes.size(); ++i)
         {
             std::string candidatePath = joinPath(match.fullPath, indexes[i]);
-
             if (FileSystem::fileExists(candidatePath))
             {
                 match.requestPath = joinPath(match.requestPath, indexes[i]);
@@ -588,9 +732,12 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
                 break;
             }
         }
-
         if (!foundIndex)
+        {
+            if (method == "GET" && match.location->autoindex == "on")
+                return generateDirectoryListing(match, serverConfig);
             return HttpUtils::ErrorPage(403, "Forbidden", *serverConfig);
+        }
     }
 
     if (method == "GET")
@@ -604,4 +751,3 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
 
     return HttpUtils::ErrorPage(501, "Not Implemented", *serverConfig);
 }
-

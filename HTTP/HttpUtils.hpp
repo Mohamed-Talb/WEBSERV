@@ -1,12 +1,19 @@
 #ifndef HTTPUTILS_HPP
 #define HTTPUTILS_HPP
+
+#include <map>
+#include <string>
+#include <fstream>
+#include <sstream>
+#include <sys/stat.h>
+#include "../Helpers.hpp"
 #include "HttpHandler.hpp"
-namespace HttpUtils
-{
-    std::string contentType(const std::string &path);
-    std::string stripQuery(const std::string &path);
-    HttpResponse ErrorPage(int statusCode, const std::string &statusReason, const ServerConfig &config);
-    bool isDirectory(const std::string &path);
-}
+#include "../configParser/config.hpp"
+
+
+
+std::string contentType(const std::string &path);
+std::string stripQuery(const std::string &path);
+HttpResponse ErrorPage(int statusCode, const std::string &statusReason, const ServerConfig &config);
 
 #endif

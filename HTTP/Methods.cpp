@@ -1,28 +1,6 @@
 #include "Methods.hpp"
 #include "HttpUtils.hpp"
 
-// std::string getInBetween(std::string str, std::string s1, std::string s2)
-// {
-//     std::string result = str.substr(str.find(s1) + s1.size());
-//     result = result.substr(0, result.find(s2));
-//     return result;
-// }
-
-// void storeFile(std::string body, std::string rootDirectory)
-// {
-//     std::string disp = getInBetween(body, "Content-Disposition: ", "\r\n");
-
-//     std::cout << "trimedBody: " << body;
-//     // dbg_print("trimedBody: ", body);
-//     if (disp.find("filename=") != std::string::npos)
-//     {
-//         std::string filename = getInBetween(disp, "filename=\"", "\"");
-//         std::string content = body.substr(body.find("\r\n\r\n") + 4);
-//         FileSystem::writeToFile(rootDirectory + "/" + filename, content);
-//     }
-// }
-
-
 HttpResponse HttpMethods::GET(RouteMatch* match, const ServerConfig& config)
 {
     if (!match)
@@ -59,21 +37,43 @@ HttpResponse HttpMethods::DELETE(RouteMatch* match, const ServerConfig& config)
     return HttpResponse(204, "No Content");
 }
 
-// static void dbg_print(std::string identifier, std::string data)
-// {
-//     std::cout << identifier << data << std::endl;
-// }
 
+HttpResponse HttpMethods::POST(const HttpRequest &request, RouteMatch *match, const ServerConfig &config)
+{
+    if (!match || !match->location)
+        return HttpUtils::ErrorPage(500, "Internal Server Error!", config);
 
-// HttpResponse HttpMethods::POST(const HttpRequest &request, RouteMatch *match, const ServerConfig &config)
-// {
-//     (void) request;
-//     (void) config;
-    
-//     std::string boundary = getInBetween(request.getHeader("content-type"), "boundary=", "\n");
-//     // dbg_print("boundary is: ", boundary);
-    
-//     std::string trimedBody = getInBetween(request.getBody(), boundary, "--" + boundary);
-//     storeFile(trimedBody, match->root);
-//     return HttpResponse(200, "OK");
-// }
+    if (match->location->uploadEnabled != "on")
+        return HttpUtils::ErrorPage(403, "Forbidden", config);
+
+    if (match->location->uploadPath.empty())
+        return HttpUtils::ErrorPage(500, "Internal Server Error2", config);
+
+    if (!HttpUtils::isDirectory(match->location->uploadPath))
+        return HttpUtils::ErrorPage(500, match->location->uploadPath, config);
+
+    std::string contentType = request.getHeader("content-type");
+
+    if (contentType.find("multipart/form-data") == std::string::npos)
+        return HttpUtils::ErrorPage(415, "Unsupported Media Type", config);
+
+    std::string boundary;
+    if (!extractBoundary(contentType, boundary))
+        return HttpUtils::ErrorPage(400, "Bad Request", config);
+
+    std::string filename;
+    std::string fileContent;
+
+    if (!parseMultipartFile(request.getBody(), boundary, filename, fileContent))
+        return HttpUtils::ErrorPage(400, "Bad Request", config);
+
+    std::string outputPath = joinPath(match->location->uploadPath, filename);
+
+    if (!FileSystem::writeToFile(outputPath, fileContent))
+        return HttpUtils::ErrorPage(500, "Internal Server Error4", config);
+
+    HttpResponse response(201, "Created");
+    response.setBody("File uploaded successfully\n");
+    response.setHeader("Content-Type", "text/plain");
+    return response;
+}

@@ -99,10 +99,10 @@ void HttpHandler::resolveRoute(const HttpRequest& request, RouteMatch& match)
             relativePath = "/";
     }
     std::string fullPath = joinPath(root, relativePath);
-    std::cout << match.location << std::endl;
-    std::cout << match.requestPath << std::endl;
-    std::cout << match.root << std::endl;
-    std::cout << match.fullPath << std::endl;
+    match.location = location;
+    match.requestPath = requestPath;
+    match.root = root;
+    match.fullPath = fullPath;
 }
 
 HttpResponse HttpHandler::process(const HttpRequest& request)
@@ -137,6 +137,7 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
             std::string candidatePath = joinPath(match.fullPath, indexes[i]);
             if (FileSystem::fileExists(candidatePath))
             {
+                std::cout << "hello" << std::endl;
                 match.requestPath = joinPath(match.requestPath, indexes[i]);
                 match.fullPath = candidatePath;
                 foundIndex = true;
@@ -145,6 +146,7 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
         }
         if (!foundIndex)
         {
+            std::cout << "hello" << std::endl;
             if (method == "GET" && match.location->autoindex == "on")
                 return generateDirectoryListing(match, serverConfig);
             return HttpUtils::ErrorPage(403, "Forbidden", *serverConfig);

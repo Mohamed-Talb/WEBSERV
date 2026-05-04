@@ -1,5 +1,6 @@
+#include "HttpRequest.hpp"
+#include "../Helpers.hpp"
 
-#include "HttpHandler.hpp"
 
 HttpRequest::HttpRequest() : state(PARSE_REQUEST_LINE), parsedSize(0), errorCode(0) {}
 HttpRequest::~HttpRequest() {}
@@ -96,7 +97,6 @@ int HttpRequest::parseRequestLine(const std::string &raw)
         setError(400);
         return -1; 
     }
-    
     method = toUpper(method);
     parsedSize = crlf + 2;
     state = PARSE_HEADERS;
