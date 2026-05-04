@@ -3,6 +3,7 @@
 #include "Methods.hpp" 
 #include "HttpUtils.hpp"
 #include <sys/stat.h>
+#include <dirent.h>
 
 HttpHandler::HttpHandler(const ServerConfig &serverConfig) : serverConfig(&serverConfig) {}
 
@@ -104,6 +105,11 @@ void HttpHandler::resolveRoute(const HttpRequest& request, RouteMatch& match)
     match.fullPath = fullPath;
 }
 
+HttpResponse generateDirectoryListing(std::string fullPath, std::string requestPath)
+{
+    
+}
+
 HttpResponse HttpHandler::process(const HttpRequest& request)
 {
     if (request.getErrorCode() != 0)
@@ -111,7 +117,15 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
 
     RouteMatch match;
     resolveRoute(request, match);
-
+    if (match.location->redirectCode != 0)
+    {
+        int code = match.location->redirectCode;
+        std::string reason = code == 301 ? "Moved Permanently" : "Found";
+        HttpResponse res(code, reason);
+        res.setHeader("Location", match.location->redirectTarget);
+        res.setHeader("Content-Length", "0");
+        return res;
+    }
     std::string method = request.getMethod();
 
     if (!match.location)
@@ -125,7 +139,6 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
     {
         std::vector<std::string> indexes = resolveIndexFiles(match.location);
         bool foundIndex = false;
-
         for (size_t i = 0; i < indexes.size(); ++i)
         {
             std::string candidatePath = joinPath(match.fullPath, indexes[i]);

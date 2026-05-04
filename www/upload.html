@@ -14,7 +14,7 @@
 
     <script>
     async function deleteFile(filename) {
-        const response = await fetch(`/uploads/${filename}`, { method: 'DELETE' });
+        const response = await fetch(`/upload/${filename}`, { method: 'DELETE' });
         if (response.ok) alert('File deleted');
         else alert('Failed to delete');
         location.reload();
