@@ -6,7 +6,7 @@ bool fileExists(const std::string &filePath)
     return (access(filePath.c_str(), F_OK) == 0);
 }
 
-bool readFile(const std::string& filePath, std::string& content)
+bool readFile(const std::string &filePath, std::string &content)
 {
     std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
     if (!file.is_open())
@@ -24,7 +24,7 @@ bool deleteFile(const std::string &filePath)
     return false;
 }
 
-bool writeToFile(const std::string &filePath, std::string &content)
+bool writeToFile(const std::string &filePath, const std::string &content)
 {
     std::ofstream outfile(filePath.c_str(), std::ios::out | std::ios::trunc);
     if (!outfile.is_open())

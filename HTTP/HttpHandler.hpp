@@ -1,47 +1,41 @@
 #ifndef HTTPHANDLER_HPP
 #define HTTPHANDLER_HPP
 
-#include "../configParser/configParser.hpp"
-#include <string>
-#include <fstream>
-#include <cctype>
+#include "../CGI/CGI.hpp"
+#include "Methods/Methods.hpp" 
+#include "HttpUtils/HttpUtils.hpp"
+
+#include "../FileSystem.hpp"
 #include "../Helpers.hpp"
-#include "algorithm"
 #include "HttpRequest.hpp"
 #include "HttpResponse.hpp"
+#include "../configParser/config.hpp"
+#include "RouteMatch.hpp"
 
+#include <vector>
 #include <string>
-#include <map>
+#include <cctype>
+#include <iomanip>
 #include <sstream>
-
-
-struct RouteMatch
-{
-    const Location *location;
-    std::string root;
-    std::string fullPath;
-    std::string requestPath;
-};
+#include <dirent.h>
+#include <algorithm>
+#include <sys/stat.h>
 
 class HttpHandler 
 {
 	private:
     const ServerConfig 	*serverConfig;
     const Location *matchLocation(const std::string &path);
-    bool isMethodAllowed(const std::string& method, const Location& loc);
-    void resolveRoute(const HttpRequest& request, RouteMatch& match);    // METHODS
+    void resolveRoute(const HttpRequest& request, RouteMatch &match); 
+    bool isMethodAllowed(const std::string& method, const Location &loc);
+    
     public:
-	std::vector<std::string> resolveIndexFiles(const Location *loc);
-	const Location *getCgiLocation(const HttpRequest &request);
-    HttpHandler(const ServerConfig &serverConfig);
     ~HttpHandler();
+    HttpResponse process(const HttpRequest &req);
+    HttpHandler(const ServerConfig &serverConfig);
+	const Location *getCgiLocation(const HttpRequest &request);
+	std::vector<std::string> resolveIndexFiles(const Location *loc);
 
-    HttpResponse process(const HttpRequest& req);
 };
-
-HttpResponse resolveAutoIndex(const RouteMatch &match, const ServerConfig *serverConfig);
-HttpResponse generateDirectoryListing(const RouteMatch &match, const ServerConfig *serverConfig);
-bool parseMultipartFile(const std::string &body, const std::string &boundary, std::string &filename, std::string &fileContent);
-bool extractBoundary(const std::string &contentType, std::string &boundary);
 
 #endif

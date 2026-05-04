@@ -1,9 +1,5 @@
 #include "HttpHandler.hpp"
-#include "../CGI/CGI.hpp"
-#include "Methods.hpp" 
-#include "HttpUtils.hpp"
-#include <sys/stat.h>
-#include <dirent.h>
+
 
 HttpHandler::HttpHandler(const ServerConfig &serverConfig) : serverConfig(&serverConfig) {}
 
@@ -49,7 +45,7 @@ bool HttpHandler::isMethodAllowed(const std::string &method, const Location &loc
 
 const Location *HttpHandler::getCgiLocation(const HttpRequest &request)
 {
-    std::string requestPath = HttpUtils::stripQuery(request.getTarget());
+    std::string requestPath = stripQuery(request.getTarget());
     const Location *matchedLocation = matchLocation(requestPath);
     
     if (!matchedLocation) return NULL;
@@ -84,7 +80,7 @@ void HttpHandler::resolveRoute(const HttpRequest& request, RouteMatch& match)
     match.root.clear();
     match.fullPath.clear();
 
-    std::string requestPath = HttpUtils::stripQuery(request.getTarget());
+    std::string requestPath = stripQuery(request.getTarget());
 
     const Location* location = matchLocation(requestPath);
     if (!location)
@@ -108,12 +104,12 @@ void HttpHandler::resolveRoute(const HttpRequest& request, RouteMatch& match)
 HttpResponse HttpHandler::process(const HttpRequest& request)
 {
     if (request.getErrorCode() != 0)
-        return HttpUtils::ErrorPage(request.getErrorCode(), "Bad Request", *serverConfig);
+        return ErrorPage(request.getErrorCode(), "Bad Request", *serverConfig);
 
     RouteMatch match;
     resolveRoute(request, match);
     if (!match.location)
-        return HttpUtils::ErrorPage(404, "Not Found", *serverConfig);
+        return ErrorPage(404, "Not Found", *serverConfig);
 
     if (match.location->redirectCode != 0)
     {
@@ -126,16 +122,16 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
     }
     std::string method = request.getMethod();
     if (!isMethodAllowed(method, *match.location))
-        return HttpUtils::ErrorPage(405, "Method Not Allowed", *serverConfig);
+        return ErrorPage(405, "Method Not Allowed", *serverConfig);
 
-    if (HttpUtils::isDirectory(match.fullPath))
+    if (isDirectory(match.fullPath))
     {
         std::vector<std::string> indexes = resolveIndexFiles(match.location);
         bool foundIndex = false;
         for (size_t i = 0; i < indexes.size(); ++i)
         {
             std::string candidatePath = joinPath(match.fullPath, indexes[i]);
-            if (FileSystem::fileExists(candidatePath))
+            if (fileExists(candidatePath))
             {
                 std::cout << "hello" << std::endl;
                 match.requestPath = joinPath(match.requestPath, indexes[i]);
@@ -148,19 +144,19 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
         {
             std::cout << "hello" << std::endl;
             if (method == "GET" && match.location->autoindex == "on")
-                return generateDirectoryListing(match, serverConfig);
-            return HttpUtils::ErrorPage(403, "Forbidden", *serverConfig);
+                return resolveAutoIndexing(match, *serverConfig);
+            return ErrorPage(403, "Forbidden", *serverConfig);
         }
     }
 
     if (method == "GET")
-        return HttpMethods::GET(&match, *serverConfig);
+        return HttpMethods::GET(match, *serverConfig);
 
     if (method == "DELETE")
-        return HttpMethods::DELETE(&match, *serverConfig);
+        return HttpMethods::DELETE(match, *serverConfig);
 
     if (method == "POST")
-        return HttpMethods::POST(request, &match, *serverConfig);
+        return HttpMethods::POST(request, match, *serverConfig);
 
-    return HttpUtils::ErrorPage(501, "Not Implemented", *serverConfig);
+    return ErrorPage(501, "Not Implemented", *serverConfig);
 }

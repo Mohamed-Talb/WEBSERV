@@ -16,13 +16,14 @@ class HttpResponse
 
 	public:
     HttpResponse();
-    HttpResponse(int code, const std::string &reason);
     ~HttpResponse();
+    HttpResponse(int code, const std::string &reason);
+
+    std::string toString() const;
     void setBody(const std::string &content);
     void writeBody(const std::string &chunk);
     bool setBodyFromFile(const std::string &filePath);
     void setHeader(const std::string &key, const std::string &value);
-    std::string toString() const;
 };
 
 #endif

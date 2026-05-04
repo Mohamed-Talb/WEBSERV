@@ -1,6 +1,6 @@
 #include "Server.hpp"
 #include "../CGI/CGI.hpp"
-#include "../HTTP/HttpUtils.hpp"
+#include "../HTTP/HttpUtils/HttpUtils.hpp"
 #include "../HTTP/HttpHandler.hpp"
 #include <sys/socket.h>
 #include <unistd.h>
@@ -112,7 +112,7 @@ void Client::handleRead()
         int parseStatus = request.parse(readBuffer);
         if (request.getErrorCode() != 0)
         {
-            HttpResponse response = HttpUtils::ErrorPage(request.getErrorCode(), "Bad Request", configs[0]);
+            HttpResponse response = ErrorPage(request.getErrorCode(), "Bad Request", configs[0]);
             appendToWriteBuffer(response.toString());
             state = SENDING_RESPONSE;
             server->modifyHandler(this, EPOLLIN | EPOLLOUT);
@@ -130,7 +130,7 @@ void Client::handleRead()
 				ssize_t bodySize = myStold(cl);
 				if (bodySize > selectedConfig->client_max_body_size)
 				{
-					HttpResponse err = HttpUtils::ErrorPage(413,"Payload Too Large",*selectedConfig);
+					HttpResponse err = ErrorPage(413,"Payload Too Large",*selectedConfig);
 					appendToWriteBuffer(err.toString());
 					state = SENDING_RESPONSE;
 					server->modifyHandler(this, EPOLLIN | EPOLLOUT);
@@ -151,7 +151,7 @@ void Client::handleRead()
         {
             state = PROCESSING_CGI; 
             
-            std::string requestPath = HttpUtils::stripQuery(request.getTarget());
+            std::string requestPath = stripQuery(request.getTarget());
             CgiHandler* Cgi = new CgiHandler(this, server, request, *cgiLocation, requestPath);
             server->addHandler(Cgi, EPOLLIN);
             

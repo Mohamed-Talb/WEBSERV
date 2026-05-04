@@ -3,6 +3,9 @@
 
 #include "../Server/Server.ipp" 
 #include "../HTTP/HttpHandler.hpp"
+#include "../HTTP/HttpResponse.hpp"
+#include "../HTTP/HttpRequest.hpp"
+#include "../HTTP/RouteMatch.hpp"
 #include "../configParser/configParser.hpp" 
 #include <string>
 #include <sys/types.h>

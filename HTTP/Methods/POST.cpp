@@ -1,7 +1,4 @@
-#include "HttpHandler.hpp"
 #include "Methods.hpp"
-#include "HttpUtils.hpp"
-#include "HttpHandler.hpp"
 
 /*
 --BOUNDARY\r\n
@@ -49,7 +46,7 @@ static bool extractFilename(const std::string &partHeaders, std::string &filenam
     return isSafeFilename(filename);
 }
 
-bool extractBoundary(const std::string &contentType, std::string &boundary)
+static bool extractBoundary(const std::string &contentType, std::string &boundary)
 {
     std::string key = "boundary=";
     size_t pos = contentType.find(key);
@@ -71,7 +68,7 @@ bool extractBoundary(const std::string &contentType, std::string &boundary)
     return !boundary.empty();
 }
 
-bool parseMultipartFile(const std::string &body, const std::string &boundary, std::string &filename, std::string &fileContent)
+static bool parseMultipartFile(const std::string &body, const std::string &boundary, std::string &filename, std::string &fileContent)
 {
     std::string delimiter = "--" + boundary;
     std::string closingDelimiter = "--" + boundary + "--";
@@ -107,3 +104,44 @@ bool parseMultipartFile(const std::string &body, const std::string &boundary, st
     return true;
 }
 
+
+
+HttpResponse HttpMethods::POST(const HttpRequest &request, const RouteMatch &match, const ServerConfig &config)
+{
+    if (!match.location)
+        return ErrorPage(500, "Internal Server Error!", config);
+
+    if (match.location->uploadEnabled != "on")
+        return ErrorPage(403, "Forbidden", config);
+
+    if (match.location->uploadPath.empty())
+        return ErrorPage(500, "Internal Server Error2", config);
+
+    if (!isDirectory(match.location->uploadPath))
+        return ErrorPage(500, match.location->uploadPath, config);
+
+    std::string contentType = request.getHeader("content-type");
+
+    if (contentType.find("multipart/form-data") == std::string::npos)
+        return ErrorPage(415, "Unsupported Media Type", config);
+
+    std::string boundary;
+    if (!extractBoundary(contentType, boundary))
+        return ErrorPage(400, "Bad Request", config);
+
+    std::string filename;
+    std::string fileContent;
+
+    if (!parseMultipartFile(request.getBody(), boundary, filename, fileContent))
+        return ErrorPage(400, "Bad Request", config);
+
+    std::string outputPath = joinPath(match.location->uploadPath, filename);
+
+    if (!writeToFile(outputPath, fileContent))
+        return ErrorPage(500, "Internal Server Error4", config);
+
+    HttpResponse response(201, "Created");
+    response.setBody("File uploaded successfully\n");
+    response.setHeader("Content-Type", "text/plain");
+    return response;
+}

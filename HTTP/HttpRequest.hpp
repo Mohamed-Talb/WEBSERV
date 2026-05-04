@@ -20,11 +20,11 @@ class HttpRequest
 {
 
 	private:
+    std::string body;
     std::string method;
     std::string target;
     std::string version;
     std::map<std::string, std::string> headers;
-    std::string body;
     
     State   state;
     size_t  parsedSize;
@@ -34,23 +34,23 @@ class HttpRequest
     int  parseBody(const std::string &raw);
     int  parseHeaders(const std::string &raw);
     int  parseRequestLine(const std::string &raw);
-	public:
+	
+    public:
     HttpRequest();
     ~HttpRequest();
 
     void reset();
     int  parse(const std::string &rawBuffer);
 
-    int getErrorCode() const;
-    std::string getBody() const;
-    size_t getParsedSize() const;
-    std::string getMethod() const;
-    std::string getTarget() const;
-    std::string getVersion() const;
-    std::string getHeader(const std::string &key) const;
-    
 
-    State getState() const { return state; }
+    std::string getBody() const;
+    State       getState() const;
+    std::string getTarget() const;
+    std::string getMethod() const;
+    std::string getVersion() const;
+    int         getErrorCode() const;
+    size_t      getParsedSize() const;
+    std::string getHeader(const std::string &key) const;
 };
 
 #endif

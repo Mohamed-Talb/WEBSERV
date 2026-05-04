@@ -1,9 +1,24 @@
-WEBSERV_SRC = main.cpp Helpers.cpp Errors.cpp\
-			Server/Server.cpp Server/Listener.cpp Server/Client.cpp \
-			configParser/configParser.cpp configParser/ConfigParserValues.cpp configParser/Lexer.cpp configParser/ConfigParserLocationHandlers.cpp  configParser/ConfigParserServerHandlers.cpp configParser/config.cpp \
-			HTTP/HttpHandler.cpp HTTP/listenDirectory.cpp HTTP/POST.cpp HTTP/HttpRequest.cpp  HTTP/HttpResponse.cpp HTTP/FileSystem.cpp HTTP/Methods.cpp HTTP/HttpUtils.cpp \
-			CGI/CGI.cpp
-
+WEBSERV_SRC = main.cpp Helpers.cpp Errors.cpp \
+	Server/Server.cpp \
+	Server/Listener.cpp \
+	Server/Client.cpp \
+	configParser/config.cpp \
+	configParser/configParser.cpp \
+	configParser/ConfigParserValues.cpp \
+	configParser/ConfigParserLocationHandlers.cpp \
+	configParser/ConfigParserServerHandlers.cpp \
+	configParser/Lexer.cpp \
+	HTTP/HttpHandler.cpp \
+	HTTP/HttpRequest.cpp \
+	HTTP/HttpResponse.cpp \
+	HTTP/HttpUtils/HttpUtils.cpp \
+	HTTP/HttpUtils/ErrorPagesBuilder.cpp \
+	HTTP/HttpUtils/AutoIndexing.cpp \
+	HTTP/Methods/GET.cpp \
+	HTTP/Methods/POST.cpp \
+	HTTP/Methods/DELETE.cpp \
+	FileSystem.cpp \
+	CGI/CGI.cpp
 			
 WEBSERV_OBJ = $(WEBSERV_SRC:.cpp=.o)
 

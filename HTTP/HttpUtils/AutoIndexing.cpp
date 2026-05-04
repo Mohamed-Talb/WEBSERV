@@ -1,4 +1,4 @@
-#include "HttpHandler.hpp"
+#include "../HttpHandler.hpp"
 #include "HttpUtils.hpp"
 #include <sys/stat.h>
 #include <dirent.h>
@@ -47,12 +47,12 @@ static std::string htmlEscaping(std::string &srcHtml)
     return newHtml;
 }
 
-HttpResponse resolveAutoIndex(const RouteMatch &match, const ServerConfig *serverConfig)
+HttpResponse resolveAutoIndexing(const RouteMatch &match, const ServerConfig &serverConfig)
 {
     DIR *dir = opendir(match.fullPath.c_str());
 
     if (dir == NULL)
-        return HttpUtils::ErrorPage(403, "Forbidden", *serverConfig);
+        return ErrorPage(403, "Forbidden", serverConfig);
 
     HttpResponse response(200, "OK");
     response.setHeader("Content-Type", "text/html");
@@ -82,7 +82,7 @@ HttpResponse resolveAutoIndex(const RouteMatch &match, const ServerConfig *serve
         if (entryName == "." || entryName == "..")
             continue;
         std::string entryFullPath = joinPath(match.fullPath, entryName);
-        bool isDir = HttpUtils::isDirectory(entryFullPath);
+        bool isDir = isDirectory(entryFullPath);
         std::string hrefName = urlEncode(entryName);
         std::string displayName = htmlEscaping(entryName);
         if (isDir)

@@ -19,13 +19,13 @@ void HttpRequest::setError(int code)
     state = PARSE_ERROR;
 }
 
-std::string HttpRequest::getBody()		const { return body; }
-std::string HttpRequest::getMethod()	const { return method; }
-std::string HttpRequest::getTarget() 	const { return target; }
-std::string HttpRequest::getVersion()	const { return version; }
-int HttpRequest::getErrorCode()			const { return errorCode; }
-size_t HttpRequest::getParsedSize()	    const { return parsedSize; }
-
+std::string HttpRequest::getBody()  const { return body; }
+std::string HttpRequest::getMethod() const { return method; }
+std::string HttpRequest::getTarget() const { return target; }
+std::string HttpRequest::getVersion() const { return version; }
+int HttpRequest::getErrorCode()	const { return errorCode; }
+size_t HttpRequest::getParsedSize()	const { return parsedSize; }
+State  HttpRequest::getState() const { return state; }
 
 void HttpRequest::reset() 
 {
