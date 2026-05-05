@@ -113,13 +113,85 @@ void Client::onCgiDone(const HttpResponse &response)
     server->modifyHandler(socketFD, this, EPOLLIN | EPOLLOUT);
 }
 
-void Client::handleRead(int fd)
+void Client::handleParseError()
 {
-    if (fd != socketFD)
-        return ;
-    if (state == PROCESSING_CGI)
-        return ;
+    const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
 
+    if (!selectedConfig)
+        selectedConfig = &configs[0];
+
+    HttpHandler handler(*selectedConfig);
+    HttpResult result = handler.process(request);
+
+    appendToWriteBuffer(result.response.toString());
+    state = SENDING_RESPONSE;
+
+    server->modifyHandler(socketFD, this, EPOLLIN | EPOLLOUT);
+
+    request.reset();
+}
+
+bool Client::processParsedRequest()
+{
+    const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
+
+    if (!selectedConfig)
+        selectedConfig = &configs[0];
+
+    HttpHandler handler(*selectedConfig);
+    HttpResult result = handler.process(request);
+
+    // if (result.type == HTTP_RESULT_CGI)
+    // {
+    //     state = PROCESSING_CGI;
+
+    //     CgiHandler *cgi = new CgiHandler(
+    //         this,
+    //         server,
+    //         request,
+    //         *result.cgiLocation,
+    //         result.cgiRequestPath
+    //     );
+
+    //     server->addHandler(cgi->getFD(), cgi, EPOLLIN);
+
+    //     consumeReadBuffer(request.getParsedSize());
+    //     request.reset();
+
+    //     return false;
+    // }
+    appendToWriteBuffer(result.response.toString());
+    state = SENDING_RESPONSE;
+
+    consumeReadBuffer(request.getParsedSize());
+    request.reset();
+    return true;
+}
+
+void Client::enableWriteIfNeeded()
+{
+    if (hasPendingWrite() && state != PROCESSING_CGI)
+        server->modifyHandler(socketFD, this, EPOLLIN | EPOLLOUT);
+}
+
+void Client::handleParseError()
+{
+    HttpResponse response = ErrorPage(
+        request.getErrorCode(),
+        "Bad Request",
+        configs[0]
+    );
+
+    appendToWriteBuffer(response.toString());
+    state = SENDING_RESPONSE;
+
+    server->modifyHandler(socketFD, this, EPOLLIN | EPOLLOUT);
+
+    request.reset();
+}
+
+int Client::readFromSocket()
+{
     char buf[8192];
     bool dataRead = false;
 
@@ -129,79 +201,49 @@ void Client::handleRead(int fd)
         if (bytes == 0)
         {
             server->removeHandler(socketFD);
-            return;
+            return -1;
         }
         if (bytes < 0)
         {
             if (errno == EAGAIN || errno == EWOULDBLOCK)
                 break;
             server->removeHandler(socketFD);
-            return;
+            return -1;
         }
         appendToReadBuffer(buf, static_cast<size_t>(bytes));
         dataRead = true;
         timeout = time(NULL);
     }
-
     if (!dataRead)
+        return 0;
+    return 1;
+}
+
+void Client::handleRead(int fd)
+{
+    if (fd != socketFD)
+        return;
+    if (state == PROCESSING_CGI)
+        return;
+    int readStatus = readFromSocket();
+    if (readStatus <= 0)
         return;
     while (true)
     {
         int parseStatus = request.parse(readBuffer);
         if (request.getErrorCode() != 0)
         {
-            HttpResponse response = ErrorPage(
-                request.getErrorCode(),
-                "Bad Request",
-                configs[0]
-            );
-            appendToWriteBuffer(response.toString());
-            state = SENDING_RESPONSE;
-            server->modifyHandler(socketFD, this, EPOLLIN | EPOLLOUT);
-            request.reset();
+            handleParseError();
             return;
         }
-
         if (parseStatus == 0)
             break;
-
         if (parseStatus < 0)
             return;
-
-        const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
-        if (!selectedConfig)
-            selectedConfig = &configs[0];
-
-        HttpHandler handler(*selectedConfig);
-        HttpResult result = handler.process(request);
-
-        // if (result.type == HTTP_RESULT_CGI)
-        // {
-        //     state = PROCESSING_CGI;
-        //     CgiHandler *cgi = new CgiHandler(
-        //         this,
-        //         server,
-        //         request,
-        //         *result.cgiLocation,
-        //         result.cgiRequestPath
-        //     );
-
-        //     server->addHandler(cgi->getFD(), cgi, EPOLLIN);
-
-        //     consumeReadBuffer(request.getParsedSize());
-        //     request.reset();
-        //     break;
-        // }
-
-        appendToWriteBuffer(result.response.toString());
-        state = SENDING_RESPONSE;
-
-        consumeReadBuffer(request.getParsedSize());
-        request.reset();
+        if (!processParsedRequest())
+            break;
     }
-
-    if (hasPendingWrite() && state != PROCESSING_CGI)
-        server->modifyHandler(socketFD, this, EPOLLIN | EPOLLOUT);
+    enableWriteIfNeeded();
 }
 
 void Client::handleWrite(int fd)

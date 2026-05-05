@@ -33,6 +33,12 @@ class Client : public IEventHandler
     virtual ~Client();
     Client(int fd, Server* srv, const std::vector<ServerConfig>& confs);
 
+	private:
+    int  readFromSocket();
+    void handleParseError();
+    void enableWriteIfNeeded();
+    bool processParsedRequest();
+
     bool isConnected() const;
     void onCgiDone(const HttpResponse &response);
 

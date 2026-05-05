@@ -50,7 +50,6 @@ static bool extractFilename(const std::string &partHeaders, std::string &filenam
         return false;
 
     filename = partHeaders.substr(pos, end - pos);
-
     return isSafeFilename(filename);
 }
 
@@ -76,9 +75,7 @@ static bool extractBoundary(const std::string &contentType, std::string &boundar
     return !boundary.empty();
 }
 
-static bool parseMultipartFileInfo(const std::string &body,
-                                   const std::string &boundary,
-                                   MultipartFileInfo &info)
+static bool parseMultipartFileInfo(const std::string &body, const std::string &boundary, MultipartFileInfo &info)
 {
     std::string delimiter = "--" + boundary;
 
@@ -109,7 +106,6 @@ static bool parseMultipartFileInfo(const std::string &body,
         return false;
 
     info.contentLength = nextBoundary - info.contentStart;
-
     return true;
 }
 
@@ -121,12 +117,10 @@ static bool writeBufferToFile(const std::string &filePath, const char *data, siz
         return false;
 
     outfile.write(data, size);
-
     if (!outfile.good())
         return false;
 
     outfile.close();
-
     return true;
 }
 
