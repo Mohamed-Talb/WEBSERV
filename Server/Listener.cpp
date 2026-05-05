@@ -12,7 +12,6 @@ Listener::Listener(const std::vector<ServerConfig> &confs, Server *srv)
     : socketFD(-1), server(srv), configs(confs)
 {
     ServerConfig conf = configs[0];
-
     socketFD = socket(AF_INET, SOCK_STREAM, 0);
     if (socketFD < 0)
         throw ServerException("Listener", "socket() failed on port " + intToString(conf.port));

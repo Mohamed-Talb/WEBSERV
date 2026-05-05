@@ -21,6 +21,52 @@
 #include <algorithm>
 #include <sys/stat.h>
 
+#ifndef HTTP_RESULT_HPP
+#define HTTP_RESULT_HPP
+
+#include "HttpResponse.hpp"
+#include "RouteMatch.hpp"
+#include "../configParser/config.hpp"
+#include <string>
+
+enum HttpResultType
+{
+    HTTP_RESULT_RESPONSE,
+    HTTP_RESULT_CGI
+};
+
+struct HttpResult
+{
+    HttpResultType type;
+    HttpResponse response;
+    std::string cgiRequestPath;
+    const Location *cgiLocation;
+
+    HttpResult()
+        : type(HTTP_RESULT_RESPONSE), response(),
+        cgiLocation(NULL), cgiRequestPath() {}
+
+    static HttpResult makeResponse(const HttpResponse &res)
+    {
+        HttpResult result;
+        result.type = HTTP_RESULT_RESPONSE;
+        result.response = res;
+        return result;
+    }
+
+    static HttpResult makeCgi(const Location *loc, const std::string &path)
+    {
+        HttpResult result;
+        result.type = HTTP_RESULT_CGI;
+        result.cgiLocation = loc;
+        result.cgiRequestPath = path;
+        return result;
+    }
+};
+
+#endif
+
+
 class HttpHandler 
 {
 	private:
@@ -31,7 +77,7 @@ class HttpHandler
     
     public:
     ~HttpHandler();
-    HttpResponse process(const HttpRequest &req);
+    HttpResult process(const HttpRequest &req);
     HttpHandler(const ServerConfig &serverConfig);
 	const Location *getCgiLocation(const HttpRequest &request);
 	std::vector<std::string> resolveIndexFiles(const Location *loc);

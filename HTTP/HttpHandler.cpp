@@ -45,7 +45,7 @@ bool HttpHandler::isMethodAllowed(const std::string &method, const Location &loc
 
 const Location *HttpHandler::getCgiLocation(const HttpRequest &request)
 {
-    std::string requestPath = stripQuery(request.getTarget());
+    std::string requestPath = request.getRequestPath();
     const Location *matchedLocation = matchLocation(requestPath);
     
     if (!matchedLocation) return NULL;
@@ -73,14 +73,14 @@ std::vector<std::string> HttpHandler::resolveIndexFiles(const Location *loc)
     return defaults;
 }
 
-void HttpHandler::resolveRoute(const HttpRequest& request, RouteMatch& match)
+void HttpHandler::resolveRoute(const HttpRequest &request, RouteMatch& match)
 {
     match.location = NULL;
     match.requestPath.clear();
     match.root.clear();
     match.fullPath.clear();
 
-    std::string requestPath = stripQuery(request.getTarget());
+    std::string requestPath = request.getRequestPath();
 
     const Location* location = matchLocation(requestPath);
     if (!location)
@@ -101,29 +101,43 @@ void HttpHandler::resolveRoute(const HttpRequest& request, RouteMatch& match)
     match.fullPath = fullPath;
 }
 
-HttpResponse HttpHandler::process(const HttpRequest& request)
+HttpResponse resolveRedirection(const RouteMatch &match)
+{
+    int code = match.location->redirectCode;
+    std::string reason = code == 301 ? "Moved Permanently" : "Found";
+    HttpResponse response(code, reason);
+    response.setHeader("Location", match.location->redirectTarget);
+    response.setHeader("Content-Length", "0");
+    return response;
+}
+
+HttpResult HttpHandler::process(const HttpRequest& request)
 {
     if (request.getErrorCode() != 0)
-        return ErrorPage(request.getErrorCode(), "Bad Request", *serverConfig);
+        return HttpResult::makeResponse(ErrorPage(request.getErrorCode(), "Bad Request", *serverConfig));
 
     RouteMatch match;
     resolveRoute(request, match);
     if (!match.location)
-        return ErrorPage(404, "Not Found", *serverConfig);
+        return HttpResult::makeResponse(ErrorPage(404, "Not Found", *serverConfig));
 
     if (match.location->redirectCode != 0)
     {
-        int code = match.location->redirectCode;
-        std::string reason = code == 301 ? "Moved Permanently" : "Found";
-        HttpResponse res(code, reason);
-        res.setHeader("Location", match.location->redirectTarget);
-        res.setHeader("Content-Length", "0");
-        return res;
+        return HttpResult::makeResponse(resolveRedirection(match));
     }
     std::string method = request.getMethod();
     if (!isMethodAllowed(method, *match.location))
-        return ErrorPage(405, "Method Not Allowed", *serverConfig);
-
+        return HttpResult::makeResponse(ErrorPage(405, "Method Not Allowed", *serverConfig));
+    if (request.getBody().size() > serverConfig->client_max_body_size)
+    {
+        return HttpResult::makeResponse(ErrorPage(413, "Payload Too Large", *serverConfig));
+    }
+    const Location *cgiLocation = getCgiLocation(request);
+    if (cgiLocation != NULL)
+    {
+        std::string requestPath = request.getRequestPath();
+        return HttpResult::makeCgi(cgiLocation, requestPath);
+    }
     if (isDirectory(match.fullPath))
     {
         std::vector<std::string> indexes = resolveIndexFiles(match.location);
@@ -142,19 +156,19 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
         if (!foundIndex)
         {
             if (method == "GET" && match.location->autoindex == "on")
-                return resolveAutoIndexing(match, *serverConfig);
-            return ErrorPage(403, "Forbidden", *serverConfig);
+                return HttpResult::makeResponse(resolveAutoIndexing(match, *serverConfig));
+            return HttpResult::makeResponse(ErrorPage(403, "Forbidden", *serverConfig));
         }
     }
-
+    HttpResponse response;
     if (method == "GET")
-        return HttpMethods::GET(match, *serverConfig);
-
-    if (method == "DELETE")
-        return HttpMethods::DELETE(match, *serverConfig);
-
-    if (method == "POST")
-        return HttpMethods::POST(request, match, *serverConfig);
-
-    return ErrorPage(501, "Not Implemented", *serverConfig);
+        response = HttpMethods::GET(match, *serverConfig);
+    else if (method == "DELETE")
+       response = HttpMethods::DELETE(match, *serverConfig);
+    else if (method == "POST")
+        response = HttpMethods::POST(request, match, *serverConfig);
+    else 
+        response = ErrorPage(501, "Not Implemented", *serverConfig);
+    return HttpResult::makeResponse(response);
 }
+

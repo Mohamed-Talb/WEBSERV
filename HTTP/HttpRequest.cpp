@@ -14,6 +14,19 @@ const std::string &HttpRequest::getHeader(const std::string& key) const
     return empty;
 }
 
+void HttpRequest::spliteTarget()
+{
+    size_t pos = target.find('?');
+    if (pos == std::string::npos)
+    {
+        requestPath = target;
+        querys.clear();
+        return;
+    }
+    requestPath = target.substr(0, pos);
+    querys = target.substr(pos + 1);
+}
+
 void HttpRequest::setError(int code)
 {
     errorCode = code;
@@ -24,14 +37,18 @@ const std::string &HttpRequest::getBody()  const { return body; }
 const std::string &HttpRequest::getMethod() const { return method; }
 const std::string &HttpRequest::getTarget() const { return target; }
 const std::string &HttpRequest::getVersion() const { return version; }
+const std::string &HttpRequest::getQuery() const {return querys; }
+const std::string &HttpRequest::getRequestPath() const { return requestPath;}
 int HttpRequest::getErrorCode()	const { return errorCode; }
 size_t HttpRequest::getParsedSize()	const { return parsedSize; }
 State  HttpRequest::getState() const { return state; }
+
 
 void HttpRequest::reset() 
 {
     method.clear(); target.clear(); version.clear();
     headers.clear(); body.clear();
+    requestPath.clear(); querys.clear();
     parsedSize = 0; 
     errorCode = 0;
     state = PARSE_REQUEST_LINE;
@@ -101,6 +118,7 @@ int HttpRequest::parseRequestLine(const std::string &raw)
     method = toUpper(method);
     parsedSize = crlf + 2;
     state = PARSE_HEADERS;
+    spliteTarget();
     return 1;
 }
 

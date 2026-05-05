@@ -26,11 +26,3 @@ std::string contentType(const std::string& path)
         return it->second;
     return "application/octet-stream";
 }
-
-std::string stripQuery(const std::string &path)
-{
-    size_t pos = path.find('?');
-    if (pos == std::string::npos) 
-        return path;
-    return path.substr(0, pos);
-}

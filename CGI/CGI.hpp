@@ -1,5 +1,5 @@
-#ifndef CGIHANDLER_HPP
-#define CGIHANDLER_HPP
+#ifndef CGI_HPP
+#define CGI_HPP
 
 #include "../Server/Server.ipp" 
 #include "../HTTP/HttpHandler.hpp"
@@ -13,20 +13,20 @@
 class Client; 
 class Server;
 
-class CgiHandler : public IEventHandler
+class CGI : public IEventHandler
 {
-private:
+    private:
     int         pipe_fd;
     pid_t       cgi_pid;
     std::string rawOutputBuffer;
     
-    Client* parentClient;
     Server* server;
-    HttpResponse parseCgiOutput(const std::string& rawOutput);
+    Client* parentClient;
+    HttpResponse parseCgiOutput(const std::string &rawOutput);
 
 public:
-    CgiHandler(Client* client, Server* srv, const HttpRequest& request, const Location& location, std::string path);
-    virtual ~CgiHandler();
+    CGI(Client* client, Server* srv, const HttpRequest& request, const Location& location, std::string path);
+    virtual ~CGI();
 
     virtual void handleRead();
     virtual void handleWrite();

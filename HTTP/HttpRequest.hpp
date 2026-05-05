@@ -23,6 +23,8 @@ class HttpRequest
     std::string body;
     std::string method;
     std::string target;
+    std::string requestPath;
+    std::string querys;
     std::string version;
     std::map<std::string, std::string> headers;
     
@@ -30,6 +32,7 @@ class HttpRequest
     size_t  parsedSize;
     int     errorCode;
 
+    void spliteTarget();
     void setError(int code);
     int  parseBody(const std::string &raw);
     int  parseHeaders(const std::string &raw);
@@ -46,6 +49,8 @@ class HttpRequest
     const std::string &getBody() const;
     State       getState() const;
     const std::string &getTarget() const;
+    const std::string &getQuery() const;
+    const std::string &getRequestPath() const;
     const std::string &getMethod() const;
     const std::string &getVersion() const;
     int         getErrorCode() const;

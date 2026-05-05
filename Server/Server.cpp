@@ -110,7 +110,6 @@ void Server::checkTimeout()
     while (it != fdHandlers.end())
     {
         Client *client = dynamic_cast<Client*>(it->second);
-
         if (client != NULL)
         {
             if (client->state != PROCESSING_CGI &&
@@ -133,9 +132,7 @@ void Server::removeHandler(int fd)
     std::map<int, IEventHandler*>::iterator it = fdHandlers.find(fd);
     if (it == fdHandlers.end())
         return;
-
     IEventHandler *handler = it->second;
-
     fdHandlers.erase(it);
 
     /*

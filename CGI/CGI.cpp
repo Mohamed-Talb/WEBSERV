@@ -7,7 +7,7 @@
 #include <cstdlib>
 #include <sstream>
 
-CgiHandler::CgiHandler(Client* client, Server* srv, const HttpRequest& request, const Location& location, std::string path)
+CGI::CGI(Client* client, Server* srv, const HttpRequest& request, const Location& location, std::string path)
     : parentClient(client), server(srv)
 {
     (void) location;
@@ -49,17 +49,17 @@ CgiHandler::CgiHandler(Client* client, Server* srv, const HttpRequest& request, 
     free(my_envp[1]);
 }
 
-CgiHandler::~CgiHandler()
+CGI::~CGI()
 {
     if (pipe_fd >= 0) close(pipe_fd);
     waitpid(cgi_pid, NULL, WNOHANG); 
 }
 
-int CgiHandler::getFD() const { return pipe_fd; }
+int CGI::getFD() const { return pipe_fd; }
 
-void CgiHandler::handleWrite() {}
+void CGI::handleWrite() {}
 
-void CgiHandler::handleRead()
+void CGI::handleRead()
 {
     char buffer[4096];
     int bytesRead = read(pipe_fd, buffer, sizeof(buffer));
@@ -84,7 +84,7 @@ void CgiHandler::handleRead()
     }
 }
 
-HttpResponse CgiHandler::parseCgiOutput(const std::string& rawOutput)
+HttpResponse CGI::parseCgiOutput(const std::string& rawOutput)
 {
     int statusCode = 200;
     std::string statusReason = "OK";
