@@ -72,22 +72,18 @@ void Listener::handleRead(int fd)
     while (true)
     {
         int clientFD = accept(socketFD, NULL, NULL);
-
         if (clientFD < 0)
         {
             if (errno == EAGAIN || errno == EWOULDBLOCK)
                 break;
             break;
         }
-
         if (fcntl(clientFD, F_SETFL, O_NONBLOCK) < 0)
         {
             ::close(clientFD);
             continue;
         }
-
         Client *newClient = new Client(clientFD, server, configs);
-
         // New API: pass fd explicitly.
         server->addHandler(clientFD, newClient, EPOLLIN);
     }

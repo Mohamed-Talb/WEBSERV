@@ -23,18 +23,14 @@ Server::~Server()
         This set makes sure each handler is deleted only once.
     */
     std::set<IEventHandler *> deletedHandlers;
-
     std::map<int, IEventHandler*>::iterator it;
     for (it = fdHandlers.begin(); it != fdHandlers.end(); ++it)
     {
         if (deletedHandlers.insert(it->second).second)
             delete it->second;
-
         ::close(it->first);
     }
-
     fdHandlers.clear();
-
     if (epollFD >= 0)
     {
         ::close(epollFD);
@@ -57,7 +53,6 @@ void Server::init(const std::vector<ServerConfig> &confs)
         std::string ipPort = configs[i].host + ":" + intToString(configs[i].port);
         groupedConfigs[ipPort].push_back(configs[i]);
     }
-
     std::map<std::string, std::vector<ServerConfig> >::iterator it;
     for (it = groupedConfigs.begin(); it != groupedConfigs.end(); ++it)
     {
@@ -176,15 +171,12 @@ void Server::runEventLoop()
     while (true)
     {
         int ready = epoll_wait(epollFD, readyEvents, MAX_EVENTS, 1000);
-
         if (ready == -1)
         {
             if (errno == EINTR)
                 continue;
-
             break;
         }
-
         for (int i = 0; i < ready; ++i)
         {
             int fd = readyEvents[i].data.fd;
@@ -193,32 +185,25 @@ void Server::runEventLoop()
             std::map<int, IEventHandler*>::iterator it = fdHandlers.find(fd);
             if (it == fdHandlers.end())
                 continue;
-
             IEventHandler *handler = it->second;
-
             if (currEvent & (EPOLLERR | EPOLLHUP))
             {
                 removeHandler(fd);
                 continue;
             }
-
             if (currEvent & EPOLLIN)
             {
                 handler->handleRead(fd);
-
                 if (fdHandlers.find(fd) == fdHandlers.end())
                     continue;
             }
-
             if (currEvent & EPOLLOUT)
             {
                 handler->handleWrite(fd);
-
                 if (fdHandlers.find(fd) == fdHandlers.end())
                     continue;
             }
         }
-
         checkTimeout();
     }
 }
