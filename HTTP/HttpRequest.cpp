@@ -157,12 +157,11 @@ int HttpRequest::parseHeaders(const std::string &raw)
 
 int HttpRequest::parseBody(const std::string &raw)
 {
-    std::string rawBodyData = raw.substr(parsedSize);
     size_t bodyConsumed = 0;
 
     std::map<std::string, std::string>::iterator te_it = headers.find("transfer-encoding");
     std::map<std::string, std::string>::iterator cl_it = headers.find("content-length");
-    
+
     if (te_it != headers.end() && cl_it != headers.end())
     {
         setError(400);
@@ -175,12 +174,13 @@ int HttpRequest::parseBody(const std::string &raw)
             setError(400);
             return -1;
         }
+        std::string rawBodyData(raw, parsedSize);
         if (!parseChunkedBody(rawBodyData, body, bodyConsumed))
             return 0;
     }
     else if (cl_it != headers.end())
     {
-        std::string lengthString = cl_it->second;
+        const std::string &lengthString = cl_it->second;
         if (lengthString.empty())
         {
             setError(400);
@@ -194,9 +194,10 @@ int HttpRequest::parseBody(const std::string &raw)
             setError(400);
             return -1;
         }
-        if (rawBodyData.size() < contentLength)
-            return 0;  
-        body = rawBodyData.substr(0, contentLength);
+
+        if (raw.size() - parsedSize < contentLength)
+            return 0;
+        body.assign(raw.data() + parsedSize, contentLength);
         bodyConsumed = contentLength;
     }
     parsedSize += bodyConsumed;

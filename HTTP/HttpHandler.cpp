@@ -128,7 +128,7 @@ HttpResult HttpHandler::process(const HttpRequest& request)
     std::string method = request.getMethod();
     if (!isMethodAllowed(method, *match.location))
         return HttpResult::makeResponse(ErrorPage(405, "Method Not Allowed", *serverConfig));
-    if (request.getBody().size() > serverConfig->client_max_body_size)
+    if (request.getBody().size() > static_cast<size_t>(serverConfig->client_max_body_size))
     {
         return HttpResult::makeResponse(ErrorPage(413, "Payload Too Large", *serverConfig));
     }

@@ -39,8 +39,8 @@ struct HttpResult
 {
     HttpResultType type;
     HttpResponse response;
-    std::string cgiRequestPath;
     const Location *cgiLocation;
+    std::string cgiRequestPath;
 
     HttpResult()
         : type(HTTP_RESULT_RESPONSE), response(),

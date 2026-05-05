@@ -20,8 +20,8 @@ class CGI : public IEventHandler
     pid_t       cgi_pid;
     std::string rawOutputBuffer;
     
-    Server* server;
     Client* parentClient;
+    Server* server;
     HttpResponse parseCgiOutput(const std::string &rawOutput);
 
 public:

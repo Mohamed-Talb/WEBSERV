@@ -9,7 +9,14 @@ FILE_CONTENT_HERE\r\n
 --BOUNDARY--\r\n
 */
 
+struct MultipartFileInfo
+{
+    std::string filename;
+    size_t contentStart;
+    size_t contentLength;
 
+    MultipartFileInfo() : contentStart(0), contentLength(0) {}
+};
 
 static bool isSafeFilename(const std::string &filename)
 {
@@ -43,6 +50,7 @@ static bool extractFilename(const std::string &partHeaders, std::string &filenam
         return false;
 
     filename = partHeaders.substr(pos, end - pos);
+
     return isSafeFilename(filename);
 }
 
@@ -68,10 +76,11 @@ static bool extractBoundary(const std::string &contentType, std::string &boundar
     return !boundary.empty();
 }
 
-static bool parseMultipartFile(const std::string &body, const std::string &boundary, std::string &filename, std::string &fileContent)
+static bool parseMultipartFileInfo(const std::string &body,
+                                   const std::string &boundary,
+                                   MultipartFileInfo &info)
 {
     std::string delimiter = "--" + boundary;
-    std::string closingDelimiter = "--" + boundary + "--";
 
     size_t partStart = body.find(delimiter);
     if (partStart == std::string::npos)
@@ -90,35 +99,50 @@ static bool parseMultipartFile(const std::string &body, const std::string &bound
 
     std::string partHeaders = body.substr(partStart, headersEnd - partStart);
 
-    if (!extractFilename(partHeaders, filename))
+    if (!extractFilename(partHeaders, info.filename))
         return false;
 
-    size_t contentStart = headersEnd + 4;
+    info.contentStart = headersEnd + 4;
 
-    size_t nextBoundary = body.find("\r\n" + delimiter, contentStart);
+    size_t nextBoundary = body.find("\r\n" + delimiter, info.contentStart);
     if (nextBoundary == std::string::npos)
         return false;
 
-    fileContent = body.substr(contentStart, nextBoundary - contentStart);
+    info.contentLength = nextBoundary - info.contentStart;
 
     return true;
 }
 
+static bool writeBufferToFile(const std::string &filePath, const char *data, size_t size)
+{
+    std::ofstream outfile(filePath.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
 
+    if (!outfile.is_open())
+        return false;
+
+    outfile.write(data, size);
+
+    if (!outfile.good())
+        return false;
+
+    outfile.close();
+
+    return true;
+}
 
 HttpResponse HttpMethods::POST(const HttpRequest &request, const RouteMatch &match, const ServerConfig &config)
 {
     if (!match.location)
-        return ErrorPage(500, "Internal Server Error!", config);
+        return ErrorPage(500, "Internal Server Error", config);
 
     if (match.location->uploadEnabled != "on")
         return ErrorPage(403, "Forbidden", config);
 
     if (match.location->uploadPath.empty())
-        return ErrorPage(500, "Internal Server Error2", config);
+        return ErrorPage(500, "Internal Server Error", config);
 
     if (!isDirectory(match.location->uploadPath))
-        return ErrorPage(500, match.location->uploadPath, config);
+        return ErrorPage(500, "Internal Server Error", config);
 
     std::string contentType = request.getHeader("content-type");
 
@@ -129,19 +153,27 @@ HttpResponse HttpMethods::POST(const HttpRequest &request, const RouteMatch &mat
     if (!extractBoundary(contentType, boundary))
         return ErrorPage(400, "Bad Request", config);
 
-    std::string filename;
-    std::string fileContent;
+    MultipartFileInfo fileInfo;
 
-    if (!parseMultipartFile(request.getBody(), boundary, filename, fileContent))
+    if (!parseMultipartFileInfo(request.getBody(), boundary, fileInfo))
         return ErrorPage(400, "Bad Request", config);
 
-    std::string outputPath = joinPath(match.location->uploadPath, filename);
+    std::string outputPath = joinPath(match.location->uploadPath, fileInfo.filename);
 
-    if (!writeToFile(outputPath, fileContent))
-        return ErrorPage(500, "Internal Server Error4", config);
+    const std::string &body = request.getBody();
+
+    if (fileInfo.contentStart > body.size())
+        return ErrorPage(400, "Bad Request", config);
+
+    if (fileInfo.contentLength > body.size() - fileInfo.contentStart)
+        return ErrorPage(400, "Bad Request", config);
+
+    if (!writeBufferToFile(outputPath, body.data() + fileInfo.contentStart, fileInfo.contentLength))
+        return ErrorPage(500, "Internal Server Error", config);
 
     HttpResponse response(201, "Created");
     response.setBody("File uploaded successfully\n");
     response.setHeader("Content-Type", "text/plain");
+
     return response;
 }
