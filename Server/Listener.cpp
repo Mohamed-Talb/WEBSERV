@@ -1,15 +1,8 @@
-#include "Server.hpp"
+#include "Listener.hpp" 
 #include <cctype>
 #include <fstream>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <errno.h>
 
-Listener::Listener(const std::vector<ServerConfig> &confs, Server *srv)
-    : socketFD(-1), server(srv), configs(confs)
+Listener::Listener(const std::vector<ServerConfig> &confs, Server *srv) : socketFD(-1), server(srv), configs(confs)
 {
     ServerConfig conf = configs[0];
     socketFD = socket(AF_INET, SOCK_STREAM, 0);
@@ -23,29 +16,25 @@ Listener::Listener(const std::vector<ServerConfig> &confs, Server *srv)
         socketFD = -1;
         throw ServerException("Listener", "setsockopt() failed on port " + intToString(conf.port));
     }
-
     if (fcntl(socketFD, F_SETFL, O_NONBLOCK) < 0)
     {
         ::close(socketFD);
         socketFD = -1;
         throw ServerException("Listener", "fcntl() failed on port " + intToString(conf.port));
     }
-
     sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(conf.port);
-    addr.sin_addr.s_addr = inet_addr(conf.host.c_str());
+    addr.sin_family      = AF_INET;
+    addr.sin_port        = htons(conf.port);
+    addr.sin_addr.s_addr = inet_addr(conf.host.c_str()); 
 
     if (addr.sin_addr.s_addr == INADDR_NONE)
         addr.sin_addr.s_addr = INADDR_ANY;
-
-    if (bind(socketFD, (sockaddr *)&addr, sizeof(addr)) < 0)
+    if (bind(socketFD, (sockaddr*)&addr, sizeof(addr)) < 0)
     {
         ::close(socketFD);
         socketFD = -1;
         throw ServerException("Listener", "bind() failed on port " + intToString(conf.port));
     }
-
     if (listen(socketFD, SOMAXCONN) < 0)
     {
         ::close(socketFD);
@@ -63,42 +52,25 @@ Listener::~Listener()
     }
 }
 
-void Listener::handleRead(int fd)
+void Listener::handleRead()
 {
-    if (fd != socketFD)
-        return;
-
     while (true)
     {
-        int clientFD = accept(socketFD, NULL, NULL);
+        int clientFD = accept(socketFD, NULL, NULL);     
         if (clientFD < 0)
         {
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                break;
-            break;
+            break; 
         }
         if (fcntl(clientFD, F_SETFL, O_NONBLOCK) < 0)
         {
             ::close(clientFD);
             continue;
         }
-        Client *newClient = new Client(clientFD, server, configs);
-        // New API: pass fd explicitly.
-        server->addHandler(clientFD, newClient, EPOLLIN);
+        Client* newClient = new Client(clientFD, server, configs);
+        server->addHandler(newClient, EPOLLIN); 
     }
 }
 
-void Listener::handleWrite(int fd)
-{
-    (void)fd;
-}
-
-int Listener::getFD() const
-{
-    return socketFD;
-}
-
-int Listener::getPort() const
-{
-    return configs[0].port;
-}
+void Listener::handleWrite() {}
+int Listener::getFD() const {return socketFD;}
+int Listener::getPort() const {return configs[0].port;}

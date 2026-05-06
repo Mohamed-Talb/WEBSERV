@@ -31,13 +31,11 @@ class Server
     void runEventLoop();
     void removeHandler(int fd);
     void init(const std::vector<ServerConfig>& confs);
-
-    void addHandler(int fd, IEventHandler* handler, uint32_t events);
-    void modifyHandler(int fd, IEventHandler* handler, uint32_t events);
+    void addHandler(IEventHandler* handler, uint32_t events);
+    void modifyHandler(IEventHandler* handler, uint32_t events);
 
     const std::vector<ServerConfig>& getConfigs() const;
 };
-
 
 
 #endif

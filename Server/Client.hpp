@@ -24,8 +24,9 @@ class Client : public IEventHandler
     std::string readBuffer;
     std::string writeBuffer;
     std::vector<ServerConfig> configs;
+    
     const ServerConfig* matchConfig(const std::string& host) const;
-
+    
     public:
     time_t timeout;
     ClientState state;
@@ -33,28 +34,23 @@ class Client : public IEventHandler
     virtual ~Client();
     Client(int fd, Server* srv, const std::vector<ServerConfig>& confs);
 
-	private:
-    int  readFromSocket();
-    void handleParseError();
-    void enableWriteIfNeeded();
-    bool processParsedRequest();
-
     bool isConnected() const;
-    void onCgiDone(const HttpResponse &response);
+    void onCgiDone(HttpResponse response);
 
     bool hasPendingWrite() const;
     void consumeReadBuffer(size_t bytes);
     void consumeWriteBuffer(size_t bytes);
-    void appendToWriteBuffer(const std::string &data);
+    void appendToWriteBuffer(const std::string& data);
     void appendToReadBuffer(const char* data, size_t size);
+    
+    virtual void handleRead();
+    virtual void handleWrite();
 
-    virtual void handleRead(int fd);
-    virtual void handleWrite(int fd);
-
-    int getFD() const;
     HttpRequest &getRequest();
+    virtual int getFD() const;
     const std::string &getReadBuffer() const;
     const std::string &getWriteBuffer() const;
+
 };
 
 #endif

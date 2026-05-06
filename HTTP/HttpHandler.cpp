@@ -104,10 +104,31 @@ void HttpHandler::resolveRoute(const HttpRequest &request, RouteMatch& match)
 HttpResponse resolveRedirection(const RouteMatch &match)
 {
     int code = match.location->redirectCode;
-    std::string reason = code == 301 ? "Moved Permanently" : "Found";
+
+    std::string reason;
+    switch (code)
+    {
+        case 301: reason = "Moved Permanently"; break;
+        case 302: reason = "Found"; break;
+        case 303: reason = "See Other"; break;
+        case 307: reason = "Temporary Redirect"; break;
+        case 308: reason = "Permanent Redirect"; break;
+        default:
+            HttpResponse error(500, "Internal Server Error");
+            error.setHeader("Content-Length", "0");
+            return error;
+    }
+    if (match.location->redirectTarget.empty())
+    {
+        HttpResponse error(500, "Internal Server Error");
+        error.setHeader("Content-Length", "0");
+        return error;
+    }
+
     HttpResponse response(code, reason);
     response.setHeader("Location", match.location->redirectTarget);
     response.setHeader("Content-Length", "0");
+
     return response;
 }
 
