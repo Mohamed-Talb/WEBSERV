@@ -24,6 +24,7 @@ class Client : public IEventHandler
     std::string readBuffer;
     std::string writeBuffer;
     std::vector<ServerConfig> configs;
+    CGI* activeCgi;
     
     const ServerConfig* matchConfig(const std::string& host) const;
     

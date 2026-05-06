@@ -1,36 +1,52 @@
 #ifndef CGI_HPP
 #define CGI_HPP
 
-#include "../Server/Server.ipp" 
+#include "../Server/Server.ipp"
 #include "../HTTP/HttpHandler.hpp"
 #include "../HTTP/HttpResponse.hpp"
 #include "../HTTP/HttpRequest.hpp"
 #include "../HTTP/RouteMatch.hpp"
-#include "../configParser/configParser.hpp" 
+#include "../configParser/configParser.hpp"
 #include <string>
 #include <sys/types.h>
 
-class Client; 
+class Client;
 class Server;
+
+enum CgiState
+{
+    WRITING_INPUT,
+    READING_OUTPUT,
+    DONE
+};
 
 class CGI : public IEventHandler
 {
     private:
-    int         pipe_fd;
-    pid_t       cgi_pid;
+    int pipeOutFd;         // pipeOut[0]
+    int pipeInFd;          // pipeIn[1]
+    pid_t cgiPid;
+
+    size_t writeOffset;
+    std::string requestBody;
     std::string rawOutputBuffer;
-    
-    Client* parentClient;
+
+    CgiState state;
+
     Server* server;
+    Client* parentClient;
+
     HttpResponse parseCgiOutput(const std::string &rawOutput);
 
-public:
-    CGI(Client* client, Server* srv, const HttpRequest& request, const Location& location, std::string path);
+    public:
     virtual ~CGI();
+    CGI(Client* client, Server *srv, const HttpRequest &request, const Location &location, std::string path);
 
     virtual void handleRead();
+    virtual int getFD() const;
     virtual void handleWrite();
-    virtual int  getFD() const;
+    void freeEnv(char **envp);
+    char **buildEnv(const HttpRequest &request);
 };
 
 #endif

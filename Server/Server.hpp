@@ -29,7 +29,7 @@ class Server
 
     void checkTimeout();
     void runEventLoop();
-    void removeHandler(int fd);
+    void removeHandler(int fd, bool deleteMemory = true);
     void init(const std::vector<ServerConfig>& confs);
     void addHandler(IEventHandler* handler, uint32_t events);
     void modifyHandler(IEventHandler* handler, uint32_t events);

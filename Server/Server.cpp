@@ -83,13 +83,16 @@ void Server::checkTimeout()
     }
 }
 
-void Server::removeHandler(int fd)
+void Server::removeHandler(int fd, bool deleteMemory)
 {
     epoll_ctl(epollFD, EPOLL_CTL_DEL, fd, NULL);
     std::map<int, IEventHandler*>::iterator it = fdHandlers.find(fd);
     if (it != fdHandlers.end())
     {
-        delete it->second;
+        if (deleteMemory) 
+        {
+            delete it->second;
+        }
         fdHandlers.erase(it);
     }
 }
