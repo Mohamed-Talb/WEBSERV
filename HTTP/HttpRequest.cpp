@@ -157,11 +157,16 @@ int HttpRequest::parseRequestLine(const std::string &raw)
 {
     size_t crlf = raw.find("\r\n", parsedSize);
     if (crlf == std::string::npos) 
-		return 0;
+		return 0;std::string extraGarbage;
     std::string line = raw.substr(parsedSize, crlf - parsedSize);
     std::istringstream lineStream(line);
     
-    if (!(lineStream >> method >> target >> version)) 
+    if (!(lineStream >> method >> target >> version) ||(lineStream >> extraGarbage)) 
+    {
+        setError(400);
+        return -1; 
+    }
+    if (target[0] != '/')
     {
         setError(400);
         return -1; 
