@@ -33,7 +33,7 @@ class HttpRequest
     size_t  parsedSize;
     int     errorCode;
 
-    void spliteTarget();
+    bool spliteTarget();
     void setError(int code);
     int  parseBody(const std::string &raw);
     int  parseHeaders(const std::string &raw);

@@ -19,17 +19,59 @@ const std::string &HttpRequest::getHeader(const std::string& key) const
     return empty;
 }
 
-void HttpRequest::spliteTarget()
+bool urlDecode(const std::string& in, std::string& out) 
+{
+    out.clear();
+    out.reserve(in.length());
+
+    for (std::size_t i = 0; i < in.length(); ++i) 
+    {
+        if (in[i] == '%') 
+        {
+            if (i + 2 < in.length()) 
+            {
+                if (std::isxdigit(in[i + 1]) && std::isxdigit(in[i + 2])) 
+                {
+                    std::string hexStr = in.substr(i + 1, 2);
+                    std::istringstream hexStream(hexStr);
+                    int hexVal;
+                    hexStream >> std::hex >> hexVal;
+                    out += static_cast<char>(hexVal);
+                    i += 2;
+                } 
+                else 
+                    return false;
+            } 
+            else
+                return false;
+        } 
+        else 
+            out += in[i];
+    }
+    return true;
+}
+
+bool HttpRequest::spliteTarget()
 {
     size_t pos = target.find('?');
+    std::string rawPath;
+    
     if (pos == std::string::npos)
     {
-        requestPath = target;
+        rawPath = target;
         querys.clear();
-        return;
     }
-    requestPath = target.substr(0, pos);
-    querys = target.substr(pos + 1);
+    else
+    {
+        rawPath = target.substr(0, pos);
+        querys = target.substr(pos + 1);
+    }
+    if (!urlDecode(rawPath, requestPath))
+    {
+        setError(400);
+        return false;
+    }
+    return true;
 }
 
 void HttpRequest::setError(int code)
@@ -127,7 +169,8 @@ int HttpRequest::parseRequestLine(const std::string &raw)
     method = toUpper(method);
     parsedSize = crlf + 2;
     state = PARSE_HEADERS;
-    spliteTarget();
+    if (!spliteTarget())
+        return -1;
     return 1;
 }
 
@@ -156,9 +199,21 @@ int HttpRequest::parseHeaders(const std::string &raw)
         }
         std::string headerKey = toLower(trim(line.substr(0, delimiterPos)));
         std::string headerValue = trim(line.substr(delimiterPos + 1));
+        if ((headerKey == "content-length" || headerKey == "host") && headers.find(headerKey) != headers.end())
+        {
+            setError(400);
+            return -1;
+        }
+        if (headers.find(headerKey) != headers.end()) 
+        {
+            headers[headerKey] += ", " + headerValue;
+        } 
+        else 
+        {
+            headers[headerKey] = headerValue;
+        }
         headers[headerKey] = headerValue;
     }
-    
     parsedSize = headerEnd + 4;
     state = PARSE_BODY;
     return 1; 
