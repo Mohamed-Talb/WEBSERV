@@ -157,7 +157,8 @@ int HttpRequest::parseRequestLine(const std::string &raw)
 {
     size_t crlf = raw.find("\r\n", parsedSize);
     if (crlf == std::string::npos) 
-		return 0;std::string extraGarbage;
+		return 0;
+    std::string extraGarbage;
     std::string line = raw.substr(parsedSize, crlf - parsedSize);
     std::istringstream lineStream(line);
     

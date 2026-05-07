@@ -28,6 +28,9 @@ class Client : public IEventHandler
     const ServerConfig *activeConfig;
     const ServerConfig* matchConfig(const std::string& host) const;
     void errorsHandler(int errorCode);
+    void processRequestHeaders();
+    void executeRequest();
+    bool readingFromSocket();
     public:
     time_t timeout;
     ClientState state;
