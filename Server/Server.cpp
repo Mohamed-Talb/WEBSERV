@@ -134,6 +134,7 @@ void Server::runEventLoop()
             {
                 std::cout << "EPOLLOUT" << std::endl;
                 handler->handleWrite();
+                std::cout << "EPOLLOUT2" << std::endl;
             }
         }
         checkTimeout();

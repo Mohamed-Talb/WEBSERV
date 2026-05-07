@@ -1,322 +1,193 @@
-#include "HttpHandler.hpp" // Assuming this contains your FileSystem declaration
-#include <iostream>
-#include <fstream>
-#include <cstdio>
-#include <unistd.h>
-#include <sys/stat.h>
-
-namespace FileSystem
-{
-    bool fileExists(const std::string &filePath)
-    {
-        return (access(filePath.c_str(), F_OK) == 0);
-    }
-    bool readFile(const std::string& filePath, std::string& content)
-    {
-        std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
-        if (!file.is_open())
-            return false;
-        std::ostringstream buffer;
-        buffer << file.rdbuf();
-        content = buffer.str();
-        return true;
-    }
-
-    bool deleteFile(const std::string &filePath)
-    {
-        if (std::remove(filePath.c_str()) == 0)
-            return true;
-        return false;
-    }
-
-    bool writeToFile(const std::string &filePath, std::string &content)
-    {
-        std::ofstream outfile(filePath.c_str(), std::ios::out | std::ios::trunc);
-        if (!outfile.is_open())
-            return false;
-        
-        outfile << content;
-        outfile.close();
-        return true;
-    }
-}
-
-#include "HttpHandler.hpp"
-#include <fstream>
-#include <sstream>
-#include <map>
-#include "../Helpers.hpp"
-#include <sys/stat.h>
-
-namespace HttpUtils 
-{
-
-    std::string contentType(const std::string& path)
-    {
-        static std::map<std::string, std::string> mimeTypes;
-        if (mimeTypes.empty())
-        {
-            mimeTypes.insert(std::make_pair(".html", "text/html"));
-            mimeTypes.insert(std::make_pair(".htm", "text/html"));
-            mimeTypes.insert(std::make_pair(".css", "text/css"));
-            mimeTypes.insert(std::make_pair(".js", "application/javascript"));
-            mimeTypes.insert(std::make_pair(".json", "application/json"));
-            mimeTypes.insert(std::make_pair(".txt", "text/plain"));
-            mimeTypes.insert(std::make_pair(".png", "image/png"));
-            mimeTypes.insert(std::make_pair(".jpg", "image/jpeg"));
-            mimeTypes.insert(std::make_pair(".jpeg", "image/jpeg"));
-            mimeTypes.insert(std::make_pair(".gif", "image/gif"));
-        }
-
-        size_t pos = path.find_last_of('.');
-        if (pos == std::string::npos) 
-            return "application/octet-stream";
-        std::string ext = toLower(path.substr(pos));
-        std::map<std::string, std::string>::const_iterator it = mimeTypes.find(ext);
-        if (it != mimeTypes.end()) 
-            return it->second;
-        return "application/octet-stream";
-    }
-
-    std::string stripQuery(const std::string& path)
-    {
-        size_t pos = path.find('?');
-        if (pos == std::string::npos) 
-            return path;
-        return path.substr(0, pos);
-    }
-    HttpResponse ErrorPage(int statusCode, const std::string &statusReason, const ServerConfig &config)
-    {
-        std::string errorPageContent;
-        std::string errorPath;
-        std::map<int, std::string>::const_iterator it = config.errorPage.find(statusCode);
-        
-        if (it != config.errorPage.end()) {
-            errorPath = config.root + it->second;
-        }
-        if (!errorPath.empty() && FileSystem::readFile(errorPath, errorPageContent))
-        {
-            HttpResponse response(statusCode, statusReason);
-            response.setBody(errorPageContent);
-            response.setHeader("Content-Type", contentType(errorPath));
-            return response;
-        }
-        std::ostringstream defaultHtml;
-        defaultHtml << "<html><head><title>" << statusCode << " " << statusReason << "</title></head>"
-                    << "<body><center><h1>" << statusCode << " " << statusReason << "</h1></center>"
-                    << "<hr><center>webserv/1.0</center></body></html>";
-
-        HttpResponse response(statusCode, statusReason);
-        response.setBody(defaultHtml.str());
-        response.setHeader("Content-Type","text/html");
-        return response;
-    }
-
-    bool isDirectory(const std::string &path)
-    {
-        struct stat s;
-        if (stat(path.c_str(), &s) != 0)
-            return false;
-        return S_ISDIR(s.st_mode);
-    }
-}
-
-HttpResponse HttpMethods::GET(RouteMatch* match, const ServerConfig& config)
-{
-    if (!match)
-        return HttpUtils::ErrorPage(500, "Internal Server Error", config);
-
-    std::string fileContent;
-
-    if (FileSystem::readFile(match->fullPath, fileContent))
-    {
-        HttpResponse response(200, "OK");
-        response.setBody(fileContent);
-        response.setHeader("Content-Type", HttpUtils::contentType(match->fullPath));
-        return response;
-    }
-
-    return HttpUtils::ErrorPage(404, "Not Found", config);
-}
-
-
-HttpResponse HttpMethods::DELETE(RouteMatch* match, const ServerConfig& config)
-{
-    if (!match)
-        return HttpUtils::ErrorPage(500, "Internal Server Error", config);
-
-    if (match->requestPath.find("..") != std::string::npos)
-        return HttpUtils::ErrorPage(403, "Forbidden", config);
-
-    if (!FileSystem::fileExists(match->fullPath))
-        return HttpUtils::ErrorPage(404, "Not Found", config);
-
-    if (!FileSystem::deleteFile(match->fullPath))
-        return HttpUtils::ErrorPage(403, "Forbidden", config);
-
-    return HttpResponse(204, "No Content");
-}
-
-
-#include "Methods.hpp"
+#include "../HttpHandler.hpp"
 #include "HttpUtils.hpp"
-#include "HttpHandler.hpp"
+#include <sys/stat.h>
+#include <dirent.h>
+#include <sstream>
+#include <iomanip>
+#include <cctype>
 
-/*
---BOUNDARY\r\n
-Content-Disposition: form-data; name="file"; filename="cat.png"\r\n
-Content-Type: image/png\r\n
-\r\n
-FILE_CONTENT_HERE\r\n
---BOUNDARY--\r\n
-*/
 
-static bool isSafeFilename(const std::string &filename)
+static std::string urlEncode(const std::string &str)
 {
-    if (filename.empty())
-        return false;
-
-    if (filename.find("..") != std::string::npos)
-        return false;
-
-    if (filename.find('/') != std::string::npos)
-        return false;
-
-    if (filename.find('\\') != std::string::npos)
-        return false;
-
-    return true;
+    std::ostringstream out;
+    for (size_t i = 0; i < str.size(); ++i)
+    {
+        unsigned char c = static_cast<unsigned char>(str[i]);
+        if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~')
+        {
+            out << c;
+        }
+        else
+        {
+            out << '%' << std::uppercase << std::hex << std::setw(2)
+                << std::setfill('0') << static_cast<int>(c) << std::nouppercase << std::dec;
+        }
+    }
+    return out.str();
 }
 
-static bool extractBoundary(const std::string &contentType, std::string &boundary)
+static std::string htmlEscaping(std::string &srcHtml)
 {
-    std::string key = "boundary=";
-    size_t pos = contentType.find(key);
-
-    if (pos == std::string::npos)
-        return false;
-
-    boundary = contentType.substr(pos + key.size());
-
-    size_t semicolon = boundary.find(';');
-    if (semicolon != std::string::npos)
-        boundary = boundary.substr(0, semicolon);
-
-    boundary = trim(boundary);
-
-    if (boundary.size() >= 2 && boundary[0] == '"' && boundary[boundary.size() - 1] == '"')
-        boundary = boundary.substr(1, boundary.size() - 2);
-
-    return !boundary.empty();
+    std::string newHtml;
+    char currChar;
+    for(size_t i = 0; i < srcHtml.length(); i++)
+    {
+        currChar = srcHtml[i];
+        if(currChar == '&')
+            newHtml += "&amp;";
+        else if(currChar == '<')
+            newHtml += "&lt;";
+        else if(currChar == '>')
+            newHtml += "&gt;";
+        else if(currChar == '"')
+            newHtml += "&quot;";
+        else
+            newHtml += currChar;
+    }
+    return newHtml;
 }
 
-static bool extractFilename(const std::string &partHeaders, std::string &filename)
+HttpResponse resolveAutoIndexing(const RouteMatch &match, const ServerConfig &serverConfig)
 {
-    std::string key = "filename=\"";
-    size_t pos = partHeaders.find(key);
+    DIR *dir = opendir(match.fullPath.c_str());
 
-    if (pos == std::string::npos)
-        return false;
+    if (dir == NULL)
+        return ErrorPage(403, "Forbidden", serverConfig);
 
-    pos += key.size();
+    HttpResponse response(200, "OK");
+    response.setHeader("Content-Type", "text/html");
 
-    size_t end = partHeaders.find("\"", pos);
-    if (end == std::string::npos)
-        return false;
+    std::string urlBase = match.requestPath;
 
-    filename = partHeaders.substr(pos, end - pos);
-    return isSafeFilename(filename);
-}
+    if (urlBase.empty())
+        urlBase = "/";
 
-static bool parseMultipartFile(const std::string &body, const std::string &boundary, std::string &filename, std::string &fileContent)
-{
-    std::string delimiter = "--" + boundary;
-    std::string closingDelimiter = "--" + boundary + "--";
+    if (urlBase[urlBase.size() - 1] != '/')
+        urlBase += "/";
 
-    size_t partStart = body.find(delimiter);
-    if (partStart == std::string::npos)
-        return false;
+    response.writeBody("<html>");
+    response.writeBody("<head><title>Index of ");
+    response.writeBody(htmlEscaping(urlBase));
+    response.writeBody("</title></head>");
+    response.writeBody("<body>");
+    response.writeBody("<h1>Index of ");
+    response.writeBody(htmlEscaping(urlBase));
+    response.writeBody("</h1>");
+    response.writeBody("<ul>");
 
-    partStart += delimiter.size();
-
-    if (body.compare(partStart, 2, "\r\n") != 0)
-        return false;
-
-    partStart += 2;
-
-    size_t headersEnd = body.find("\r\n\r\n", partStart);
-    if (headersEnd == std::string::npos)
-        return false;
-
-    std::string partHeaders = body.substr(partStart, headersEnd - partStart);
-
-    if (!extractFilename(partHeaders, filename))
-        return false;
-
-    size_t contentStart = headersEnd + 4;
-
-    size_t nextBoundary = body.find("\r\n" + delimiter, contentStart);
-    if (nextBoundary == std::string::npos)
-        return false;
-
-    fileContent = body.substr(contentStart, nextBoundary - contentStart);
-
-    return true;
-}
-
-HttpResponse HttpMethods::POST(const HttpRequest &request, RouteMatch *match, const ServerConfig &config)
-{
-    if (!match || !match->location)
-        return HttpUtils::ErrorPage(500, "Internal Server Error!", config);
-
-    if (match->location->uploadEnabled != "on")
-        return HttpUtils::ErrorPage(403, "Forbidden", config);
-
-    if (match->location->uploadPath.empty())
-        return HttpUtils::ErrorPage(500, "Internal Server Error2", config);
-
-    if (!HttpUtils::isDirectory(match->location->uploadPath))
-        return HttpUtils::ErrorPage(500, match->location->uploadPath, config);
-
-    std::string contentType = request.getHeader("content-type");
-
-    if (contentType.find("multipart/form-data") == std::string::npos)
-        return HttpUtils::ErrorPage(415, "Unsupported Media Type", config);
-
-    std::string boundary;
-    if (!extractBoundary(contentType, boundary))
-        return HttpUtils::ErrorPage(400, "Bad Request", config);
-
-    std::string filename;
-    std::string fileContent;
-
-    if (!parseMultipartFile(request.getBody(), boundary, filename, fileContent))
-        return HttpUtils::ErrorPage(400, "Bad Request", config);
-
-    std::string outputPath = joinPath(match->location->uploadPath, filename);
-
-    if (!FileSystem::writeToFile(outputPath, fileContent))
-        return HttpUtils::ErrorPage(500, "Internal Server Error4", config);
-
-    HttpResponse response(201, "Created");
-    response.setBody("File uploaded successfully\n");
-    response.setHeader("Content-Type", "text/plain");
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL)
+    {
+        std::string entryName = entry->d_name;
+        if (entryName == "." || entryName == "..")
+            continue;
+        std::string entryFullPath = joinPath(match.fullPath, entryName);
+        bool isDir = isDirectory(entryFullPath);
+        std::string hrefName = urlEncode(entryName);
+        std::string displayName = htmlEscaping(entryName);
+        if (isDir)
+        {
+            hrefName += "/";
+            displayName += "/";
+        }
+        response.writeBody("<li><a href=\"");
+        response.writeBody(urlBase + hrefName);
+        response.writeBody("\">");
+        response.writeBody(displayName);
+        response.writeBody("</a></li>");
+    }
+    closedir(dir);
+    response.writeBody("</ul>");
+    response.writeBody("</body>");
+    response.writeBody("</html>");
     return response;
 }
+#include "HttpUtils.hpp"
+
+HttpResponse ErrorPage(int statusCode, const std::string &statusReason, const ServerConfig &config)
+{
+    std::string errorPageContent;
+    std::string errorPath;
+    std::map<int, std::string>::const_iterator it = config.errorPage.find(statusCode);
+    
+    if (it != config.errorPage.end()) 
+    {
+        errorPath = config.root + it->second;
+    }
+    if (!errorPath.empty() && readFile(errorPath, errorPageContent))
+    {
+        HttpResponse response(statusCode, statusReason);
+        response.setBody(errorPageContent);
+        response.setHeader("Content-Type", contentType(errorPath));
+        return response;
+    }
+    std::ostringstream defaultHtml;
+    defaultHtml << "<html><head><title>" << statusCode << " " << statusReason << "</title></head>"
+                << "<body><center><h1>" << statusCode << " " << statusReason << "</h1></center>"
+                << "<hr><center>webserv/1.0</center></body></html>";
+
+    HttpResponse response(statusCode, statusReason);
+    response.setBody(defaultHtml.str());
+    response.setHeader("Content-Type","text/html");
+    return response;
+}
+#include "HttpUtils.hpp"
+
+std::string contentType(const std::string& path)
+{
+    static std::map<std::string, std::string> mimeTypes;
+    if (mimeTypes.empty())
+    {
+        mimeTypes.insert(std::make_pair(".html", "text/html"));
+        mimeTypes.insert(std::make_pair(".htm", "text/html"));
+        mimeTypes.insert(std::make_pair(".css", "text/css"));
+        mimeTypes.insert(std::make_pair(".js", "application/javascript"));
+        mimeTypes.insert(std::make_pair(".json", "application/json"));
+        mimeTypes.insert(std::make_pair(".txt", "text/plain"));
+        mimeTypes.insert(std::make_pair(".png", "image/png"));
+        mimeTypes.insert(std::make_pair(".jpg", "image/jpeg"));
+        mimeTypes.insert(std::make_pair(".jpeg", "image/jpeg"));
+        mimeTypes.insert(std::make_pair(".gif", "image/gif"));
+    }
+
+    size_t pos = path.find_last_of('.');
+    if (pos == std::string::npos) 
+        return "application/octet-stream";
+    std::string ext = toLower(path.substr(pos));
+    std::map<std::string, std::string>::const_iterator it = mimeTypes.find(ext);
+    if (it != mimeTypes.end()) 
+        return it->second;
+    return "application/octet-stream";
+}
 
 
+#include "HttpRequest.hpp"
+#include "../Helpers.hpp"
 
-#include "HttpHandler.hpp"
 
 HttpRequest::HttpRequest() : state(PARSE_REQUEST_LINE), parsedSize(0), errorCode(0) {}
 HttpRequest::~HttpRequest() {}
 
-std::string HttpRequest::getHeader(const std::string& key) const
+const std::string &HttpRequest::getHeader(const std::string& key) const
 {
     std::map<std::string, std::string>::const_iterator it = headers.find(key);
     if (it != headers.end())
         return it->second;
-    return "";
+    static const std::string empty = "";
+    return empty;
+}
+
+void HttpRequest::spliteTarget()
+{
+    size_t pos = target.find('?');
+    if (pos == std::string::npos)
+    {
+        requestPath = target;
+        querys.clear();
+        return;
+    }
+    requestPath = target.substr(0, pos);
+    querys = target.substr(pos + 1);
 }
 
 void HttpRequest::setError(int code)
@@ -325,18 +196,22 @@ void HttpRequest::setError(int code)
     state = PARSE_ERROR;
 }
 
-std::string HttpRequest::getBody()		const { return body; }
-std::string HttpRequest::getMethod()	const { return method; }
-std::string HttpRequest::getTarget() 	const { return target; }
-std::string HttpRequest::getVersion()	const { return version; }
-int HttpRequest::getErrorCode()			const { return errorCode; }
-size_t HttpRequest::getParsedSize()	    const { return parsedSize; }
+const std::string &HttpRequest::getBody()  const { return body; }
+const std::string &HttpRequest::getMethod() const { return method; }
+const std::string &HttpRequest::getTarget() const { return target; }
+const std::string &HttpRequest::getVersion() const { return version; }
+const std::string &HttpRequest::getQuery() const {return querys; }
+const std::string &HttpRequest::getRequestPath() const { return requestPath;}
+int HttpRequest::getErrorCode()	const { return errorCode; }
+size_t HttpRequest::getParsedSize()	const { return parsedSize; }
+State  HttpRequest::getState() const { return state; }
 
 
 void HttpRequest::reset() 
 {
     method.clear(); target.clear(); version.clear();
     headers.clear(); body.clear();
+    requestPath.clear(); querys.clear();
     parsedSize = 0; 
     errorCode = 0;
     state = PARSE_REQUEST_LINE;
@@ -403,10 +278,10 @@ int HttpRequest::parseRequestLine(const std::string &raw)
         setError(400);
         return -1; 
     }
-    
     method = toUpper(method);
     parsedSize = crlf + 2;
     state = PARSE_HEADERS;
+    spliteTarget();
     return 1;
 }
 
@@ -445,12 +320,11 @@ int HttpRequest::parseHeaders(const std::string &raw)
 
 int HttpRequest::parseBody(const std::string &raw)
 {
-    std::string rawBodyData = raw.substr(parsedSize);
     size_t bodyConsumed = 0;
 
     std::map<std::string, std::string>::iterator te_it = headers.find("transfer-encoding");
     std::map<std::string, std::string>::iterator cl_it = headers.find("content-length");
-    
+
     if (te_it != headers.end() && cl_it != headers.end())
     {
         setError(400);
@@ -463,12 +337,13 @@ int HttpRequest::parseBody(const std::string &raw)
             setError(400);
             return -1;
         }
+        std::string rawBodyData(raw, parsedSize);
         if (!parseChunkedBody(rawBodyData, body, bodyConsumed))
             return 0;
     }
     else if (cl_it != headers.end())
     {
-        std::string lengthString = cl_it->second;
+        const std::string &lengthString = cl_it->second;
         if (lengthString.empty())
         {
             setError(400);
@@ -482,9 +357,10 @@ int HttpRequest::parseBody(const std::string &raw)
             setError(400);
             return -1;
         }
-        if (rawBodyData.size() < contentLength)
-            return 0;  
-        body = rawBodyData.substr(0, contentLength);
+
+        if (raw.size() - parsedSize < contentLength)
+            return 0;
+        body.assign(raw.data() + parsedSize, contentLength);
         bodyConsumed = contentLength;
     }
     parsedSize += bodyConsumed;
@@ -513,8 +389,7 @@ int HttpRequest::parse(const std::string &rawRequestData)
     return 1;
 }
 
-
-#include "HttpHandler.hpp"
+#include "HttpResponse.hpp"
 
 HttpResponse::HttpResponse() : statusCode(200), reasonPhrase("OK")
 {
@@ -588,11 +463,7 @@ std::string HttpResponse::toString() const
 }
 
 #include "HttpHandler.hpp"
-#include "../CGI/CGI.hpp"
-#include "Methods.hpp" 
-#include "HttpUtils.hpp"
-#include <sys/stat.h>
-#include <dirent.h>
+
 
 HttpHandler::HttpHandler(const ServerConfig &serverConfig) : serverConfig(&serverConfig) {}
 
@@ -638,7 +509,7 @@ bool HttpHandler::isMethodAllowed(const std::string &method, const Location &loc
 
 const Location *HttpHandler::getCgiLocation(const HttpRequest &request)
 {
-    std::string requestPath = HttpUtils::stripQuery(request.getTarget());
+    std::string requestPath = request.getRequestPath();
     const Location *matchedLocation = matchLocation(requestPath);
     
     if (!matchedLocation) return NULL;
@@ -666,14 +537,14 @@ std::vector<std::string> HttpHandler::resolveIndexFiles(const Location *loc)
     return defaults;
 }
 
-void HttpHandler::resolveRoute(const HttpRequest& request, RouteMatch& match)
+void HttpHandler::resolveRoute(const HttpRequest &request, RouteMatch& match)
 {
     match.location = NULL;
     match.requestPath.clear();
     match.root.clear();
     match.fullPath.clear();
 
-    std::string requestPath = HttpUtils::stripQuery(request.getTarget());
+    std::string requestPath = request.getRequestPath();
 
     const Location* location = matchLocation(requestPath);
     if (!location)
@@ -688,43 +559,72 @@ void HttpHandler::resolveRoute(const HttpRequest& request, RouteMatch& match)
             relativePath = "/";
     }
     std::string fullPath = joinPath(root, relativePath);
-    std::cout << match.location << std::endl;
-    std::cout << match.requestPath << std::endl;
-    std::cout << match.root << std::endl;
-    std::cout << match.fullPath << std::endl;
+    match.location = location;
+    match.requestPath = requestPath;
+    match.root = root;
+    match.fullPath = fullPath;
 }
 
-HttpResponse HttpHandler::process(const HttpRequest& request)
+HttpResponse resolveRedirection(const RouteMatch &match)
+{
+    int code = match.location->redirectCode;
+
+    std::string reason;
+    switch (code)
+    {
+        case 301: reason = "Moved Permanently"; break;
+        case 302: reason = "Found"; break;
+        case 303: reason = "See Other"; break;
+        case 307: reason = "Temporary Redirect"; break;
+        case 308: reason = "Permanent Redirect"; break;
+        default:
+            HttpResponse error(500, "Internal Server Error");
+            error.setHeader("Content-Length", "0");
+            return error;
+    }
+    if (match.location->redirectTarget.empty())
+    {
+        HttpResponse error(500, "Internal Server Error");
+        error.setHeader("Content-Length", "0");
+        return error;
+    }
+
+    HttpResponse response(code, reason);
+    response.setHeader("Location", match.location->redirectTarget);
+    response.setHeader("Content-Length", "0");
+
+    return response;
+}
+
+HttpResult HttpHandler::process(const HttpRequest& request)
 {
     if (request.getErrorCode() != 0)
-        return HttpUtils::ErrorPage(request.getErrorCode(), "Bad Request", *serverConfig);
+        return HttpResult::makeResponse(ErrorPage(request.getErrorCode(), "Bad Request", *serverConfig));
 
     RouteMatch match;
     resolveRoute(request, match);
     if (!match.location)
-        return HttpUtils::ErrorPage(404, "Not Found", *serverConfig);
+        return HttpResult::makeResponse(ErrorPage(404, "Not Found", *serverConfig));
 
     if (match.location->redirectCode != 0)
     {
-        int code = match.location->redirectCode;
-        std::string reason = code == 301 ? "Moved Permanently" : "Found";
-        HttpResponse res(code, reason);
-        res.setHeader("Location", match.location->redirectTarget);
-        res.setHeader("Content-Length", "0");
-        return res;
+        return HttpResult::makeResponse(resolveRedirection(match));
     }
     std::string method = request.getMethod();
     if (!isMethodAllowed(method, *match.location))
-        return HttpUtils::ErrorPage(405, "Method Not Allowed", *serverConfig);
-
-    if (HttpUtils::isDirectory(match.fullPath))
+        return HttpResult::makeResponse(ErrorPage(405, "Method Not Allowed", *serverConfig));
+    if (request.getBody().size() > static_cast<size_t>(serverConfig->client_max_body_size))
+    {
+        return HttpResult::makeResponse(ErrorPage(413, "Payload Too Large", *serverConfig));
+    }
+    if (isDirectory(match.fullPath))
     {
         std::vector<std::string> indexes = resolveIndexFiles(match.location);
         bool foundIndex = false;
         for (size_t i = 0; i < indexes.size(); ++i)
         {
             std::string candidatePath = joinPath(match.fullPath, indexes[i]);
-            if (FileSystem::fileExists(candidatePath))
+            if (fileExists(candidatePath))
             {
                 match.requestPath = joinPath(match.requestPath, indexes[i]);
                 match.fullPath = candidatePath;
@@ -735,19 +635,28 @@ HttpResponse HttpHandler::process(const HttpRequest& request)
         if (!foundIndex)
         {
             if (method == "GET" && match.location->autoindex == "on")
-                return generateDirectoryListing(match, serverConfig);
-            return HttpUtils::ErrorPage(403, "Forbidden", *serverConfig);
+                return HttpResult::makeResponse(resolveAutoIndexing(match, *serverConfig));
+            return HttpResult::makeResponse(ErrorPage(403, "Forbidden", *serverConfig));
+        }
+    }
+    if (match.location && !match.location->cgiExt.empty())
+    {
+        if (match.fullPath.size() >= match.location->cgiExt.size() &&
+            match.fullPath.compare(match.fullPath.size() - match.location->cgiExt.size(), 
+                                   match.location->cgiExt.size(), match.location->cgiExt) == 0)
+        {
+            return HttpResult::makeCgi(match.location, match.fullPath);
         }
     }
 
+    HttpResponse response;
     if (method == "GET")
-        return HttpMethods::GET(&match, *serverConfig);
-
-    if (method == "DELETE")
-        return HttpMethods::DELETE(&match, *serverConfig);
-
-    if (method == "POST")
-        return HttpMethods::POST(request, &match, *serverConfig);
-
-    return HttpUtils::ErrorPage(501, "Not Implemented", *serverConfig);
+        response = HttpMethods::GET(match, *serverConfig);
+    else if (method == "DELETE")
+       response = HttpMethods::DELETE(match, *serverConfig);
+    else if (method == "POST")
+        response = HttpMethods::POST(request, match, *serverConfig);
+    else 
+        response = ErrorPage(501, "Not Implemented", *serverConfig);
+    return HttpResult::makeResponse(response);
 }

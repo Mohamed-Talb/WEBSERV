@@ -20,14 +20,14 @@ class Client : public IEventHandler
     private:
     int socketFD;
     Server* server;
-    HttpRequest request;
+    HttpRequest activeRequest; 
     std::string readBuffer;
     std::string writeBuffer;
     std::vector<ServerConfig> configs;
-    CGI* activeCgi;
-    
+    CGI *activeCgi;
+    const ServerConfig *activeConfig;
     const ServerConfig* matchConfig(const std::string& host) const;
-    
+    void errorsHandler(int errorCode);
     public:
     time_t timeout;
     ClientState state;
@@ -47,7 +47,7 @@ class Client : public IEventHandler
     virtual void handleRead();
     virtual void handleWrite();
 
-    HttpRequest &getRequest();
+    HttpRequest &getActiveRequest();
     virtual int getFD() const;
     const std::string &getReadBuffer() const;
     const std::string &getWriteBuffer() const;

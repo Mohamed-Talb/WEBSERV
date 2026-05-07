@@ -13,6 +13,8 @@ Client::Client(int fd, Server *srv, const std::vector<ServerConfig> &confs)
     : socketFD(fd), server(srv), configs(confs), state(READING_REQUEST)
 {
     timeout = time(NULL);
+    activeCgi = NULL;   
+    activeConfig = NULL; 
 }
 
 Client::~Client()
@@ -49,7 +51,7 @@ void Client::appendToWriteBuffer(const std::string& data) { writeBuffer += data;
 void Client::appendToReadBuffer(const char *data, size_t size) { readBuffer.append(data, size); }
 
 int Client::getFD() const { return socketFD; }
-HttpRequest &Client::getRequest() { return request; }
+HttpRequest &Client::getActiveRequest() { return activeRequest;}
 bool Client::isConnected() const { return socketFD >= 0; }
 bool Client::hasPendingWrite() const { return !writeBuffer.empty(); }
 const std::string &Client::getReadBuffer() const { return readBuffer; }
@@ -58,8 +60,6 @@ const std::string &Client::getWriteBuffer() const { return writeBuffer; }
 const ServerConfig *Client::matchConfig(const std::string& rawHost) const
 {
     std::string host = rawHost;
-    
-    // FIXED: Strip the trailing \r before matching to prevent routing bugs
     if (!host.empty() && host[host.size() - 1] == '\r') {
         host.erase(host.size() - 1);
     }
@@ -84,7 +84,7 @@ const ServerConfig *Client::matchConfig(const std::string& rawHost) const
 void Client::onCgiDone(HttpResponse response)
 {
     appendToWriteBuffer(response.toString());
-    request.reset();
+    activeRequest.reset();
     readBuffer.clear();
     state = SENDING_RESPONSE;
     
@@ -97,6 +97,22 @@ void Client::onCgiDone(HttpResponse response)
 
     server->modifyHandler(this, EPOLLOUT);
 }
+
+void Client::errorsHandler(int errorCode)
+{
+    std::string reason = "Error";
+    if (errorCode == 413) reason = "Payload Too Large";
+    else if (errorCode == 400) reason = "Bad Request";
+    else if (errorCode == 505) reason = "HTTP Version Not Supported";
+    HttpResponse response = ErrorPage(errorCode, reason, configs[0]);
+    response.setHeader("Connection", "close");
+    appendToWriteBuffer(response.toString());
+    state = SENDING_RESPONSE;
+    server->modifyHandler(this, EPOLLOUT);
+    activeRequest.reset();
+    readBuffer.clear(); 
+}
+
 void Client::handleRead()
 {
     if (state == PROCESSING_CGI)
@@ -124,104 +140,95 @@ void Client::handleRead()
         dataRead = true;
         timeout = time(NULL);
     }
-
     if (!dataRead)
         return;
-
     while (true)
     {
-        int parseStatus = request.parse(readBuffer);
-
-        if (request.getErrorCode() != 0)
+        int parseStatus = activeRequest.parse(readBuffer);
+        if (activeRequest.getErrorCode() != 0)
         {
-            HttpResponse response = ErrorPage(request.getErrorCode(), "Bad Request", configs[0]);
-            appendToWriteBuffer(response.toString());
-            state = SENDING_RESPONSE;
-            server->modifyHandler(this, EPOLLIN | EPOLLOUT);
-            request.reset();
+            std::cout << "HELLO world" << std::endl;
+            errorsHandler(activeRequest.getErrorCode());
             return;
         }
-
-        // Restored Payload Size Check
-        if (request.getState() == PARSE_BODY || request.getState() == PARSE_COMPLETE)
+        if (parseStatus == 2)
         {
-             const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
-             if (!selectedConfig) selectedConfig = &configs[0];
-
-             std::string cl = request.getHeader("content-length");
-             if (!cl.empty())
-             {
-                 ssize_t bodySize = myStold(cl);
-                 if (bodySize > selectedConfig->client_max_body_size)
-                 {
-                     HttpResponse err = ErrorPage(413, "Payload Too Large", *selectedConfig);
-                     appendToWriteBuffer(err.toString());
-                     state = SENDING_RESPONSE;
-                     server->modifyHandler(this, EPOLLIN | EPOLLOUT);
-                     request.reset();
-                     readBuffer.clear();
-                     return;
-                 }
-             }
+            const ServerConfig *selectedConfig = matchConfig(activeRequest.getHeader("host"));
+            activeConfig = selectedConfig ? selectedConfig : &configs[0];
+            activeRequest.setMaxBodySize(activeConfig->client_max_body_size);
+            std::string cl = activeRequest.getHeader("content-length");
+            if (!cl.empty())
+            {
+                ssize_t bodySize = myStold(cl);
+                if (bodySize > selectedConfig->client_max_body_size)
+                {
+                    HttpResponse err = ErrorPage(413, "Payload Too Large", *selectedConfig);
+                    appendToWriteBuffer(err.toString());
+                    state = SENDING_RESPONSE;
+                    server->modifyHandler(this, EPOLLIN | EPOLLOUT);
+                    activeRequest.reset();
+                    readBuffer.clear();
+                    return;
+                }
+            }
+            continue ;
         }
-
         if (parseStatus == 0)
             break;
         if (parseStatus < 0)
             return;
 
-        const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
-        if (!selectedConfig)
-            selectedConfig = &configs[0];
-
-        HttpHandler handler(*selectedConfig);
-        HttpResult result = handler.process(request);
+        HttpHandler handler(*activeConfig);
+        HttpResult result = handler.process(activeRequest);
         if (result.type == HTTP_RESULT_CGI)
         {
             state = PROCESSING_CGI;
-            CGI *cgi = new CGI(this, server, request, *result.cgiLocation, result.cgiRequestPath);
+            CGI *cgi = new CGI(this, server, activeRequest, *result.cgiLocation, result.cgiRequestPath);
             activeCgi = cgi;
             server->addHandler(cgi, EPOLLOUT); 
-            consumeReadBuffer(request.getParsedSize());
-            request.reset();
+            consumeReadBuffer(activeRequest.getParsedSize());
+            activeRequest.reset();
             break ;
         }
         else 
         {
             appendToWriteBuffer(result.response.toString());
             state = SENDING_RESPONSE;
-            consumeReadBuffer(request.getParsedSize());
-            request.reset();
+            consumeReadBuffer(activeRequest.getParsedSize());
+            activeRequest.reset();
         }
     }
     if (hasPendingWrite() && state != PROCESSING_CGI)
-        server->modifyHandler(this, EPOLLIN | EPOLLOUT);
+    {
+        if (state == SENDING_RESPONSE)
+            server->modifyHandler(this, EPOLLOUT);
+        else
+            server->modifyHandler(this, EPOLLIN | EPOLLOUT);
+    }
 }
 
 void Client::handleWrite()
 {
-    if (!hasPendingWrite())
-        return;
-        
     while (hasPendingWrite())
     {
         ssize_t bytes = send(socketFD, writeBuffer.c_str(), writeBuffer.size(), 0);
         if (bytes < 0)
         {
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                return;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) return;
             server->removeHandler(socketFD);
             return;
         }
-        if (bytes == 0)
-            return;
-            
+        if (bytes == 0) return;       
         consumeWriteBuffer(static_cast<size_t>(bytes));
         timeout = time(NULL);
     }
-    
     if (!hasPendingWrite())
     {
+        if (state == SENDING_RESPONSE || activeRequest.getHeader("Connection") == "close")
+        {
+             server->removeHandler(socketFD);
+             return;
+        }
         state = READING_REQUEST;
         server->modifyHandler(this, EPOLLIN);
     }

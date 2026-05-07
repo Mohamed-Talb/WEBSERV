@@ -12,7 +12,7 @@ const Location* HttpHandler::matchLocation(const std::string &path)
 
     for (size_t i = 0; i < serverConfig->Locations.size(); ++i)
     {
-        const Location& loc = serverConfig->Locations[i];
+        const Location &loc = serverConfig->Locations[i];
         if (path.compare(0, loc.path.size(), loc.path) == 0)
         {
             if (loc.path == "/" || path.size() == loc.path.size() || path[loc.path.size()] == '/')

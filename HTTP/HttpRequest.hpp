@@ -26,6 +26,7 @@ class HttpRequest
     std::string requestPath;
     std::string querys;
     std::string version;
+    size_t maxBodySize;
     std::map<std::string, std::string> headers;
     
     State   state;
@@ -37,7 +38,7 @@ class HttpRequest
     int  parseBody(const std::string &raw);
     int  parseHeaders(const std::string &raw);
     int  parseRequestLine(const std::string &raw);
-	
+	bool parseChunkedBody(const std::string &rawInputData, std::string &decodedBody, size_t &totalConsumed);
     public:
     HttpRequest();
     ~HttpRequest();
@@ -45,7 +46,7 @@ class HttpRequest
     void reset();
     int  parse(const std::string &rawBuffer);
 
-
+    void setMaxBodySize(size_t value);
     const std::string &getBody() const;
     State       getState() const;
     const std::string &getTarget() const;

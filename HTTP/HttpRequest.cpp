@@ -2,8 +2,13 @@
 #include "../Helpers.hpp"
 
 
-HttpRequest::HttpRequest() : state(PARSE_REQUEST_LINE), parsedSize(0), errorCode(0) {}
+HttpRequest::HttpRequest() : maxBodySize(0), state(PARSE_REQUEST_LINE), parsedSize(0), errorCode(0) {}
 HttpRequest::~HttpRequest() {}
+
+void HttpRequest::setMaxBodySize(size_t value)
+{
+    maxBodySize = value;
+}
 
 const std::string &HttpRequest::getHeader(const std::string& key) const
 {
@@ -54,7 +59,7 @@ void HttpRequest::reset()
     state = PARSE_REQUEST_LINE;
 }
 
-static bool parseChunkedBody(const std::string &rawInputData, std::string& decodedBody, size_t& totalConsumed)
+bool HttpRequest::parseChunkedBody(const std::string &rawInputData, std::string &decodedBody, size_t &totalConsumed)
 {
     decodedBody.clear();
     totalConsumed = 0;
@@ -84,7 +89,11 @@ static bool parseChunkedBody(const std::string &rawInputData, std::string& decod
 
         if (rawInputData.size() < currentPosition + dataChunkSize + CRLF_SIZE)
             return false;
-
+        if (decodedBody.size() + dataChunkSize > maxBodySize) 
+        {
+            setError(413);
+            return false; 
+        }
         if (dataChunkSize == 0)
         {
             if (rawInputData.compare(currentPosition, CRLF_SIZE, CRLF) != 0)
@@ -209,20 +218,20 @@ int HttpRequest::parse(const std::string &rawRequestData)
 {
     while (state != PARSE_COMPLETE && state != PARSE_ERROR)
     {
+        State prevState = state; 
         int status = 0;
+        
         switch (state) 
         {
-            case PARSE_REQUEST_LINE:
-                status = parseRequestLine(rawRequestData); break;
-            case PARSE_HEADERS:
-                status = parseHeaders(rawRequestData); break;
-            case PARSE_BODY:
-                status = parseBody(rawRequestData); break;
-            default: 
-                return 1;
+            case PARSE_REQUEST_LINE: status = parseRequestLine(rawRequestData); break;
+            case PARSE_HEADERS:      status = parseHeaders(rawRequestData); break;
+            case PARSE_BODY:         status = parseBody(rawRequestData); break;
+            default:                 setError(500); return -1;
         }
-        if (status <= 0) return status; // 0 = Need more data, -1 = Error
+        if (status <= 0) return status; 
+        if (prevState == PARSE_HEADERS && state == PARSE_BODY) {
+            return 2; 
+        }
     }
     return 1;
 }
-

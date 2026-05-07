@@ -9,6 +9,7 @@ std::vector<ServerConfig> parseConfig(const std::string &configFile)
 
 int main(int ac, char **av)
 {
+    signal(SIGPIPE, SIG_IGN);
     if (ac != 2)
     {
         std::cout << "Usage: ./program pathToConfig" << std::endl;
@@ -17,7 +18,6 @@ int main(int ac, char **av)
     try
     {
         std::vector<ServerConfig> configs = parseConfig(av[1]);
-        signal(SIGPIPE, SIG_IGN);
         Server server;
         server.init(configs);
         server.runEventLoop();
