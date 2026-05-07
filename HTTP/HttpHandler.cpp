@@ -153,12 +153,6 @@ HttpResult HttpHandler::process(const HttpRequest& request)
     {
         return HttpResult::makeResponse(ErrorPage(413, "Payload Too Large", *serverConfig));
     }
-    const Location *cgiLocation = getCgiLocation(request);
-    if (cgiLocation != NULL)
-    {
-        std::string requestPath = request.getRequestPath();
-        return HttpResult::makeCgi(cgiLocation, requestPath);
-    }
     if (isDirectory(match.fullPath))
     {
         std::vector<std::string> indexes = resolveIndexFiles(match.location);
@@ -181,6 +175,16 @@ HttpResult HttpHandler::process(const HttpRequest& request)
             return HttpResult::makeResponse(ErrorPage(403, "Forbidden", *serverConfig));
         }
     }
+    if (match.location && !match.location->cgiExt.empty())
+    {
+        if (match.fullPath.size() >= match.location->cgiExt.size() &&
+            match.fullPath.compare(match.fullPath.size() - match.location->cgiExt.size(), 
+                                   match.location->cgiExt.size(), match.location->cgiExt) == 0)
+        {
+            return HttpResult::makeCgi(match.location, match.fullPath);
+        }
+    }
+
     HttpResponse response;
     if (method == "GET")
         response = HttpMethods::GET(match, *serverConfig);
@@ -192,4 +196,3 @@ HttpResult HttpHandler::process(const HttpRequest& request)
         response = ErrorPage(501, "Not Implemented", *serverConfig);
     return HttpResult::makeResponse(response);
 }
-

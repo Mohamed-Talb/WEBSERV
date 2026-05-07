@@ -121,17 +121,20 @@ void Server::runEventLoop()
             IEventHandler* handler = fdHandlers[fd];
             if (currEvent & (EPOLLERR | EPOLLHUP))
             {
-                removeHandler(fd);
-                continue;
+                currEvent |= EPOLLIN | EPOLLOUT;
             }
             if (currEvent & EPOLLIN)
             {
                 handler->handleRead();
                 if (fdHandlers.find(fd) == fdHandlers.end())
                     continue;
+                std::cout << "EPOLLIN" << std::endl;
             }
-            if (currEvent & EPOLLOUT)
+            else if (currEvent & EPOLLOUT)
+            {
+                std::cout << "EPOLLOUT" << std::endl;
                 handler->handleWrite();
+            }
         }
         checkTimeout();
     }

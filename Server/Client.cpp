@@ -97,11 +97,11 @@ void Client::onCgiDone(HttpResponse response)
 
     server->modifyHandler(this, EPOLLOUT);
 }
-
 void Client::handleRead()
 {
     if (state == PROCESSING_CGI)
         return ;
+        
     char buf[8192];
     bool dataRead = false;
 
@@ -134,81 +134,57 @@ void Client::handleRead()
 
         if (request.getErrorCode() != 0)
         {
-            HttpResponse response = ErrorPage(
-                request.getErrorCode(),
-                "Bad Request",
-                configs[0]
-            );
-
+            HttpResponse response = ErrorPage(request.getErrorCode(), "Bad Request", configs[0]);
             appendToWriteBuffer(response.toString());
             state = SENDING_RESPONSE;
             server->modifyHandler(this, EPOLLIN | EPOLLOUT);
-
             request.reset();
             return;
         }
 
+        // Restored Payload Size Check
         if (request.getState() == PARSE_BODY || request.getState() == PARSE_COMPLETE)
         {
-            const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
+             const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
+             if (!selectedConfig) selectedConfig = &configs[0];
 
-            if (!selectedConfig)
-                selectedConfig = &configs[0];
-
-            std::string cl = request.getHeader("content-length");
-
-            if (!cl.empty())
-            {
-                ssize_t bodySize = myStold(cl); // Ensure myStold handles potential trailing \r correctly in your util too
-
-                if (bodySize > selectedConfig->client_max_body_size)
-                {
-                    HttpResponse err = ErrorPage(
-                        413,
-                        "Payload Too Large",
-                        *selectedConfig
-                    );
-
-                    appendToWriteBuffer(err.toString());
-                    state = SENDING_RESPONSE;
-                    server->modifyHandler(this, EPOLLIN | EPOLLOUT);
-
-                    request.reset();
-                    readBuffer.clear();
-                    return;
-                }
-            }
+             std::string cl = request.getHeader("content-length");
+             if (!cl.empty())
+             {
+                 ssize_t bodySize = myStold(cl);
+                 if (bodySize > selectedConfig->client_max_body_size)
+                 {
+                     HttpResponse err = ErrorPage(413, "Payload Too Large", *selectedConfig);
+                     appendToWriteBuffer(err.toString());
+                     state = SENDING_RESPONSE;
+                     server->modifyHandler(this, EPOLLIN | EPOLLOUT);
+                     request.reset();
+                     readBuffer.clear();
+                     return;
+                 }
+             }
         }
 
         if (parseStatus == 0)
             break;
-
         if (parseStatus < 0)
             return;
 
         const ServerConfig *selectedConfig = matchConfig(request.getHeader("host"));
-
         if (!selectedConfig)
             selectedConfig = &configs[0];
 
         HttpHandler handler(*selectedConfig);
         HttpResult result = handler.process(request);
-        
         if (result.type == HTTP_RESULT_CGI)
         {
             state = PROCESSING_CGI;
-            CGI *cgi = new CGI(
-                this,
-                server,
-                request,
-                *result.cgiLocation,
-                result.cgiRequestPath
-            );
+            CGI *cgi = new CGI(this, server, request, *result.cgiLocation, result.cgiRequestPath);
             activeCgi = cgi;
             server->addHandler(cgi, EPOLLOUT); 
-            
             consumeReadBuffer(request.getParsedSize());
             request.reset();
+            break ;
         }
         else 
         {
