@@ -73,7 +73,7 @@ const ServerConfig *Client::matchConfig(const std::string& rawHost) const
     {
         for (size_t j = 0; j < configs[i].serverName.size(); ++j) 
         {
-            if (configs[i].serverName[j] == host) 
+            if (toLower(configs[i].serverName[j]) == host) 
                 return &configs[i];
         }
     }
@@ -177,6 +177,7 @@ void Client::handleRead()
 {
     if (state == PROCESSING_CGI || !readingFromSocket())
         return;
+    std::cout << readBuffer << std::endl;
     while (true)
     {
         int parseStatus = activeRequest.parse(readBuffer);
