@@ -98,7 +98,8 @@ void Client::onCgiDone(HttpResponse response)
 
 void Client::errorsHandler(int errorCode)
 {
-    HttpResponse response = ErrorPage(errorCode, configs[0]);
+    const ServerConfig& currConfig = (activeConfig) ? *activeConfig : configs[0];
+    HttpResponse response = ErrorPage(errorCode,currConfig);
     response.setHeader("Connection", "close");
     appendToWriteBuffer(response.toString());
     state = SENDING_RESPONSE;
