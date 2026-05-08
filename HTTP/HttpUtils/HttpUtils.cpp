@@ -16,12 +16,18 @@ std::string contentType(const std::string &path)
         mimeTypes.insert(std::make_pair(".jpeg", "image/jpeg"));
         mimeTypes.insert(std::make_pair(".gif", "image/gif"));
     }
-    size_t pos = path.find_last_of('.');
-    if (pos == std::string::npos) 
-        return "application/octet-stream";
-    std::string ext = toLower(path.substr(pos));
+    size_t dotPos = path.find_last_of('.');
+    size_t slashPos = path.find_last_of('/');
+    if (dotPos == std::string::npos || (slashPos != std::string::npos && slashPos > dotPos))
+    {
+        return "application/octet-stream"; // Default binary type
+    }
+    std::string ext = toLower(path.substr(dotPos));
     std::map<std::string, std::string>::const_iterator it = mimeTypes.find(ext);
     if (it != mimeTypes.end()) 
+    {
         return it->second;
+    }
+
     return "application/octet-stream";
 }
