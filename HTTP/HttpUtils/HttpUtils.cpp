@@ -1,6 +1,6 @@
 #include "HttpUtils.hpp"
 
-std::string contentType(const std::string& path)
+std::string contentType(const std::string &path)
 {
     static std::map<std::string, std::string> mimeTypes;
     if (mimeTypes.empty())
@@ -16,7 +16,6 @@ std::string contentType(const std::string& path)
         mimeTypes.insert(std::make_pair(".jpeg", "image/jpeg"));
         mimeTypes.insert(std::make_pair(".gif", "image/gif"));
     }
-
     size_t pos = path.find_last_of('.');
     if (pos == std::string::npos) 
         return "application/octet-stream";

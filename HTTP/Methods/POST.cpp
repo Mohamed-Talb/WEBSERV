@@ -132,41 +132,43 @@ HttpResponse HttpMethods::POST(const HttpRequest &request, const RouteMatch &mat
     if (match.location->uploadEnabled != "on")
         return ErrorPage(403, "Forbidden", config);
 
-    if (match.location->uploadPath.empty())
-        return ErrorPage(500, "Internal Server Error", config);
-
-    if (!isDirectory(match.location->uploadPath))
+    if (match.location->uploadPath.empty() || !isDirectory(match.location->uploadPath))
         return ErrorPage(500, "Internal Server Error", config);
 
     std::string contentType = request.getHeader("content-type");
+    std::string outputPath;
+    const char* dataStart = NULL;
+    size_t dataLength = 0;
 
-    if (contentType.find("multipart/form-data") == std::string::npos)
-        return ErrorPage(415, "Unsupported Media Type", config);
+    if (contentType.find("multipart/form-data") != std::string::npos)
+    {
+        std::string boundary;
+        if (!extractBoundary(contentType, boundary))
+            return ErrorPage(400, "Bad Request", config);
 
-    std::string boundary;
-    if (!extractBoundary(contentType, boundary))
+        MultipartFileInfo fileInfo;
+        if (!parseMultipartFileInfo(request.getBody(), boundary, fileInfo))
+            return ErrorPage(400, "Bad Request", config);
+
+        outputPath = joinPath(match.location->uploadPath, fileInfo.filename);
+        dataStart = request.getBody().data() + fileInfo.contentStart;
+        dataLength = fileInfo.contentLength;
+    }
+    else 
+    {
+        outputPath = joinPath(match.location->uploadPath, "upload.bin");
+        dataStart = request.getBody().data();
+        dataLength = request.getBody().size();
+    }
+
+    if (!dataStart || (dataStart + dataLength > request.getBody().data() + request.getBody().size()))
         return ErrorPage(400, "Bad Request", config);
 
-    MultipartFileInfo fileInfo;
-
-    if (!parseMultipartFileInfo(request.getBody(), boundary, fileInfo))
-        return ErrorPage(400, "Bad Request", config);
-
-    std::string outputPath = joinPath(match.location->uploadPath, fileInfo.filename);
-
-    const std::string &body = request.getBody();
-
-    if (fileInfo.contentStart > body.size())
-        return ErrorPage(400, "Bad Request", config);
-
-    if (fileInfo.contentLength > body.size() - fileInfo.contentStart)
-        return ErrorPage(400, "Bad Request", config);
-
-    if (!writeBufferToFile(outputPath, body.data() + fileInfo.contentStart, fileInfo.contentLength))
+    if (!writeBufferToFile(outputPath, dataStart, dataLength))
         return ErrorPage(500, "Internal Server Error", config);
 
     HttpResponse response(201, "Created");
-    response.setBody("File uploaded successfully\n");
+    response.setBody("File uploaded successfully to: " + outputPath + "\n");
     response.setHeader("Content-Type", "text/plain");
 
     return response;

@@ -111,7 +111,7 @@ void Client::errorsHandler(int errorCode)
     readBuffer.clear(); 
 }
 
-const size_t ABSOLUTE_MAX_BUFFER = 10 * 1024 * 1024;
+// const size_t ABSOLUTE_MAX_BUFFER = 10 * 1024 * 1024;
 
 bool Client::readingFromSocket()
 {
@@ -120,8 +120,8 @@ bool Client::readingFromSocket()
 
     while (true)
     {
-        if (readBuffer.size() > ABSOLUTE_MAX_BUFFER)
-            break ;
+        // if (readBuffer.size() > ABSOLUTE_MAX_BUFFER)
+        //     break ;
         ssize_t bytes = recv(socketFD, buf, sizeof(buf), 0);
         if (bytes == 0)
         {
@@ -180,6 +180,7 @@ void Client::handleRead()
     while (true)
     {
         int parseStatus = activeRequest.parse(readBuffer);
+        // readBuffer.erase(0, activeRequest.getParsedSize());
         if (activeRequest.getErrorCode() != 0) 
         {
             errorsHandler(activeRequest.getErrorCode());

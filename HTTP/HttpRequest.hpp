@@ -38,7 +38,7 @@ class HttpRequest
     int  parseBody(const std::string &raw);
     int  parseHeaders(const std::string &raw);
     int  parseRequestLine(const std::string &raw);
-	bool parseChunkedBody(const std::string &rawInputData, std::string &decodedBody, size_t &totalConsumed);
+	bool parseChunkedBody(const std::string &rawInputData, std::string &decodedBody, size_t &totalConsumed, size_t startPos);
     public:
     HttpRequest();
     ~HttpRequest();
