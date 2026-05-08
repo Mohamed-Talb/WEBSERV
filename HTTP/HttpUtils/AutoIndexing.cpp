@@ -52,7 +52,7 @@ HttpResponse resolveAutoIndexing(const RouteMatch &match, const ServerConfig &se
     DIR *dir = opendir(match.fullPath.c_str());
 
     if (dir == NULL)
-        return ErrorPage(403, "Forbidden", serverConfig);
+        return ErrorPage(403, serverConfig);
 
     HttpResponse response(200, "OK");
     response.setHeader("Content-Type", "text/html");

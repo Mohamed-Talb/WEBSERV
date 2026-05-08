@@ -15,6 +15,7 @@
 
 
 std::string contentType(const std::string &path);
-HttpResponse ErrorPage(int statusCode, const std::string &statusReason, const ServerConfig &config);
+HttpResponse ErrorPage(int statusCode, const ServerConfig &config);
 HttpResponse resolveAutoIndexing(const RouteMatch &match, const ServerConfig &serverConfig);
+std::string normalizePath(const std::string &path);
 #endif

@@ -98,11 +98,7 @@ void Client::onCgiDone(HttpResponse response)
 
 void Client::errorsHandler(int errorCode)
 {
-    std::string reason = "Error";
-    if (errorCode == 413) reason = "Payload Too Large";
-    else if (errorCode == 400) reason = "Bad Request";
-    else if (errorCode == 505) reason = "HTTP Version Not Supported";
-    HttpResponse response = ErrorPage(errorCode, reason, configs[0]);
+    HttpResponse response = ErrorPage(errorCode, configs[0]);
     response.setHeader("Connection", "close");
     appendToWriteBuffer(response.toString());
     state = SENDING_RESPONSE;

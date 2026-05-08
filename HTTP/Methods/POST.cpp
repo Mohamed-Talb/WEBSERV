@@ -127,13 +127,13 @@ static bool writeBufferToFile(const std::string &filePath, const char *data, siz
 HttpResponse HttpMethods::POST(const HttpRequest &request, const RouteMatch &match, const ServerConfig &config)
 {
     if (!match.location)
-        return ErrorPage(500, "Internal Server Error", config);
+        return ErrorPage(500, config);
 
-    if (match.location->uploadEnabled != "on")
-        return ErrorPage(403, "Forbidden", config);
+    if (!match.location || match.location->uploadEnabled != "on")
+        return ErrorPage(403, config);
 
     if (match.location->uploadPath.empty() || !isDirectory(match.location->uploadPath))
-        return ErrorPage(500, "Internal Server Error", config);
+        return ErrorPage(500, config);
 
     std::string contentType = request.getHeader("content-type");
     std::string outputPath;
@@ -144,11 +144,11 @@ HttpResponse HttpMethods::POST(const HttpRequest &request, const RouteMatch &mat
     {
         std::string boundary;
         if (!extractBoundary(contentType, boundary))
-            return ErrorPage(400, "Bad Request", config);
+            return ErrorPage(400, config);
 
         MultipartFileInfo fileInfo;
         if (!parseMultipartFileInfo(request.getBody(), boundary, fileInfo))
-            return ErrorPage(400, "Bad Request", config);
+            return ErrorPage(400, config);
 
         outputPath = joinPath(match.location->uploadPath, fileInfo.filename);
         dataStart = request.getBody().data() + fileInfo.contentStart;
@@ -162,10 +162,10 @@ HttpResponse HttpMethods::POST(const HttpRequest &request, const RouteMatch &mat
     }
 
     if (!dataStart || (dataStart + dataLength > request.getBody().data() + request.getBody().size()))
-        return ErrorPage(400, "Bad Request", config);
+        return ErrorPage(400, config);
 
     if (!writeBufferToFile(outputPath, dataStart, dataLength))
-        return ErrorPage(500, "Internal Server Error", config);
+        return ErrorPage(500, config);
 
     HttpResponse response(201, "Created");
     response.setBody("File uploaded successfully to: " + outputPath + "\n");

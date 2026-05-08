@@ -102,6 +102,8 @@ HttpResponse resolveAutoIndexing(const RouteMatch &match, const ServerConfig &se
     response.writeBody("</html>");
     return response;
 }
+
+
 #include "HttpUtils.hpp"
 
 HttpResponse ErrorPage(int statusCode, const std::string &statusReason, const ServerConfig &config)
@@ -131,9 +133,11 @@ HttpResponse ErrorPage(int statusCode, const std::string &statusReason, const Se
     response.setHeader("Content-Type","text/html");
     return response;
 }
+
+
 #include "HttpUtils.hpp"
 
-std::string contentType(const std::string& path)
+std::string contentType(const std::string &path)
 {
     static std::map<std::string, std::string> mimeTypes;
     if (mimeTypes.empty())
@@ -149,7 +153,6 @@ std::string contentType(const std::string& path)
         mimeTypes.insert(std::make_pair(".jpeg", "image/jpeg"));
         mimeTypes.insert(std::make_pair(".gif", "image/gif"));
     }
-
     size_t pos = path.find_last_of('.');
     if (pos == std::string::npos) 
         return "application/octet-stream";
@@ -160,51 +163,305 @@ std::string contentType(const std::string& path)
     return "application/octet-stream";
 }
 
+#include "Methods.hpp"
+
+HttpResponse HttpMethods::DELETE(const RouteMatch &match, const ServerConfig& config)
+{
+    if (match.requestPath.find("..") != std::string::npos)
+        return ErrorPage(403, "Forbidden", config);
+
+    if (!fileExists(match.fullPath))
+        return ErrorPage(404, "Not Found", config);
+
+    if (!deleteFile(match.fullPath))
+        return ErrorPage(403, "Forbidden", config);
+
+    return HttpResponse(204, "No Content");
+}
+
+#include "Methods.hpp"
+
+HttpResponse HttpMethods::GET(const RouteMatch &match, const ServerConfig &config)
+{
+    std::string fileContent;
+
+    if (readFile(match.fullPath, fileContent))
+    {
+        HttpResponse response(200, "OK");
+        response.setBody(fileContent);
+        response.setHeader("Content-Type", contentType(match.fullPath));
+        return response;
+    }
+
+    return ErrorPage(404, "Not Found", config);
+}
+
+
+#include "Methods.hpp"
+
+/*
+--BOUNDARY\r\n
+Content-Disposition: form-data; name="file"; filename="cat.png"\r\n
+Content-Type: image/png\r\n
+\r\n
+FILE_CONTENT_HERE\r\n
+--BOUNDARY--\r\n
+*/
+
+struct MultipartFileInfo
+{
+    std::string filename;
+    size_t contentStart;
+    size_t contentLength;
+
+    MultipartFileInfo() : contentStart(0), contentLength(0) {}
+};
+
+static bool isSafeFilename(const std::string &filename)
+{
+    if (filename.empty())
+        return false;
+
+    if (filename.find("..") != std::string::npos)
+        return false;
+
+    if (filename.find('/') != std::string::npos)
+        return false;
+
+    if (filename.find('\\') != std::string::npos)
+        return false;
+
+    return true;
+}
+
+static bool extractFilename(const std::string &partHeaders, std::string &filename)
+{
+    std::string key = "filename=\"";
+    size_t pos = partHeaders.find(key);
+
+    if (pos == std::string::npos)
+        return false;
+
+    pos += key.size();
+
+    size_t end = partHeaders.find("\"", pos);
+    if (end == std::string::npos)
+        return false;
+
+    filename = partHeaders.substr(pos, end - pos);
+    return isSafeFilename(filename);
+}
+
+static bool extractBoundary(const std::string &contentType, std::string &boundary)
+{
+    std::string key = "boundary=";
+    size_t pos = contentType.find(key);
+
+    if (pos == std::string::npos)
+        return false;
+
+    boundary = contentType.substr(pos + key.size());
+
+    size_t semicolon = boundary.find(';');
+    if (semicolon != std::string::npos)
+        boundary = boundary.substr(0, semicolon);
+
+    boundary = trim(boundary);
+
+    if (boundary.size() >= 2 && boundary[0] == '"' && boundary[boundary.size() - 1] == '"')
+        boundary = boundary.substr(1, boundary.size() - 2);
+
+    return !boundary.empty();
+}
+
+static bool parseMultipartFileInfo(const std::string &body, const std::string &boundary, MultipartFileInfo &info)
+{
+    std::string delimiter = "--" + boundary;
+
+    size_t partStart = body.find(delimiter);
+    if (partStart == std::string::npos)
+        return false;
+
+    partStart += delimiter.size();
+
+    if (body.compare(partStart, 2, "\r\n") != 0)
+        return false;
+
+    partStart += 2;
+
+    size_t headersEnd = body.find("\r\n\r\n", partStart);
+    if (headersEnd == std::string::npos)
+        return false;
+
+    std::string partHeaders = body.substr(partStart, headersEnd - partStart);
+
+    if (!extractFilename(partHeaders, info.filename))
+        return false;
+
+    info.contentStart = headersEnd + 4;
+
+    size_t nextBoundary = body.find("\r\n" + delimiter, info.contentStart);
+    if (nextBoundary == std::string::npos)
+        return false;
+
+    info.contentLength = nextBoundary - info.contentStart;
+    return true;
+}
+
+static bool writeBufferToFile(const std::string &filePath, const char *data, size_t size)
+{
+    std::ofstream outfile(filePath.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
+
+    if (!outfile.is_open())
+        return false;
+
+    outfile.write(data, size);
+    if (!outfile.good())
+        return false;
+
+    outfile.close();
+    return true;
+}
+
+HttpResponse HttpMethods::POST(const HttpRequest &request, const RouteMatch &match, const ServerConfig &config)
+{
+    if (!match.location)
+        return ErrorPage(500, "Internal Server Error", config);
+
+    if (!match.location || match.location->uploadEnabled != "on")
+        return ErrorPage(403, "Forbidden", config);
+
+    if (match.location->uploadPath.empty() || !isDirectory(match.location->uploadPath))
+        return ErrorPage(500, "Internal Server Error", config);
+
+    std::string contentType = request.getHeader("content-type");
+    std::string outputPath;
+    const char* dataStart = NULL;
+    size_t dataLength = 0;
+
+    if (contentType.find("multipart/form-data") != std::string::npos)
+    {
+        std::string boundary;
+        if (!extractBoundary(contentType, boundary))
+            return ErrorPage(400, "Bad Request", config);
+
+        MultipartFileInfo fileInfo;
+        if (!parseMultipartFileInfo(request.getBody(), boundary, fileInfo))
+            return ErrorPage(400, "Bad Request", config);
+
+        outputPath = joinPath(match.location->uploadPath, fileInfo.filename);
+        dataStart = request.getBody().data() + fileInfo.contentStart;
+        dataLength = fileInfo.contentLength;
+    }
+    else 
+    {
+        outputPath = joinPath(match.location->uploadPath, "upload.bin");
+        dataStart = request.getBody().data();
+        dataLength = request.getBody().size();
+    }
+
+    if (!dataStart || (dataStart + dataLength > request.getBody().data() + request.getBody().size()))
+        return ErrorPage(400, "Bad Request", config);
+
+    if (!writeBufferToFile(outputPath, dataStart, dataLength))
+        return ErrorPage(500, "Internal Server Error", config);
+
+    HttpResponse response(201, "Created");
+    response.setBody("File uploaded successfully to: " + outputPath + "\n");
+    response.setHeader("Content-Type", "text/plain");
+
+    return response;
+}
 
 #include "HttpRequest.hpp"
 #include "../Helpers.hpp"
 
-
-HttpRequest::HttpRequest() : state(PARSE_REQUEST_LINE), parsedSize(0), errorCode(0) {}
+HttpRequest::HttpRequest() : maxBodySize(0), state(PARSE_REQUEST_LINE), parsedSize(0), errorCode(0) {}
 HttpRequest::~HttpRequest() {}
+void HttpRequest::setMaxBodySize(size_t value) {maxBodySize = value;}
 
-const std::string &HttpRequest::getHeader(const std::string& key) const
+
+const std::string &HttpRequest::getHeader(const std::string &key) const 
 {
-    std::map<std::string, std::string>::const_iterator it = headers.find(key);
+    std::map<std::string, std::string>::const_iterator it = headers.find(toLower(key));
     if (it != headers.end())
+    {
         return it->second;
+    }
     static const std::string empty = "";
     return empty;
 }
 
-void HttpRequest::spliteTarget()
+
+bool urlDecode(const std::string &in, std::string &out) 
 {
-    size_t pos = target.find('?');
-    if (pos == std::string::npos)
+    out.clear();
+    out.reserve(in.length());
+    for (std::size_t i = 0; i < in.length(); ++i) 
     {
-        requestPath = target;
-        querys.clear();
-        return;
+        if (in[i] == '%') 
+        {
+            if (i + 2 < in.length()) 
+            {
+                if (std::isxdigit(in[i + 1]) && std::isxdigit(in[i + 2])) 
+                {
+                    std::string hexStr = in.substr(i + 1, 2);
+                    std::istringstream hexStream(hexStr);
+                    int hexVal;
+                    hexStream >> std::hex >> hexVal;
+                    out += static_cast<char>(hexVal);
+                    i += 2;
+                } 
+                else 
+                    return false;
+            } 
+            else 
+                return false;
+        } 
+        else 
+            out += in[i];
     }
-    requestPath = target.substr(0, pos);
-    querys = target.substr(pos + 1);
+    return true;
 }
 
-void HttpRequest::setError(int code)
+bool HttpRequest::spliteTarget() 
+{
+    size_t pos = target.find('?');
+    std::string rawPath;
+    if (pos == std::string::npos) 
+    {
+        rawPath = target;
+        querys.clear();
+    } 
+    else 
+    {
+        rawPath = target.substr(0, pos);
+        querys = target.substr(pos + 1);
+    }
+    if (!urlDecode(rawPath, requestPath)) 
+    {
+        setError(400);
+        return false;
+    }
+    return true;
+}
+
+
+void HttpRequest::setError(int code) 
 {
     errorCode = code;
     state = PARSE_ERROR;
 }
 
-const std::string &HttpRequest::getBody()  const { return body; }
+const std::string &HttpRequest::getBody() const { return body; }
 const std::string &HttpRequest::getMethod() const { return method; }
 const std::string &HttpRequest::getTarget() const { return target; }
 const std::string &HttpRequest::getVersion() const { return version; }
-const std::string &HttpRequest::getQuery() const {return querys; }
-const std::string &HttpRequest::getRequestPath() const { return requestPath;}
-int HttpRequest::getErrorCode()	const { return errorCode; }
-size_t HttpRequest::getParsedSize()	const { return parsedSize; }
-State  HttpRequest::getState() const { return state; }
+const std::string &HttpRequest::getQuery() const { return querys; }
+const std::string &HttpRequest::getRequestPath() const { return requestPath; }
+int HttpRequest::getErrorCode() const { return errorCode; }
+size_t HttpRequest::getParsedSize() const { return parsedSize; }
+State HttpRequest::getState() const { return state; }
 
 
 void HttpRequest::reset() 
@@ -212,155 +469,192 @@ void HttpRequest::reset()
     method.clear(); target.clear(); version.clear();
     headers.clear(); body.clear();
     requestPath.clear(); querys.clear();
-    parsedSize = 0; 
-    errorCode = 0;
+    parsedSize = 0; errorCode = 0;
     state = PARSE_REQUEST_LINE;
 }
 
-static bool parseChunkedBody(const std::string &rawInputData, std::string& decodedBody, size_t& totalConsumed)
+
+// true (full chunked body found), false (incomplete data or error)
+bool HttpRequest::parseChunkedBody(const std::string &raw, std::string &decodedBody, size_t &totalConsumed, size_t startPos) 
 {
     decodedBody.clear();
     totalConsumed = 0;
-    
-    size_t currentPosition = 0;
+    size_t currentPosition = startPos;
     const size_t CRLF_SIZE = 2;
     const std::string CRLF = "\r\n";
-
-    while (true)
+    while (true) 
     {
-        size_t chunkHeaderEndPos = rawInputData.find(CRLF, currentPosition);
-        if (chunkHeaderEndPos == std::string::npos)
+        size_t chunkHeaderEndPos = raw.find(CRLF, currentPosition);
+        if (chunkHeaderEndPos == std::string::npos) 
+        {
             return false;
-
-        std::string chunkHeader = rawInputData.substr(currentPosition, chunkHeaderEndPos - currentPosition);
+        }
+        std::string chunkHeader = raw.substr(currentPosition, chunkHeaderEndPos - currentPosition);
         size_t extensionStartPos = chunkHeader.find(';');
         if (extensionStartPos != std::string::npos)
+        {
             chunkHeader = chunkHeader.substr(0, extensionStartPos);
-
+        }
         size_t dataChunkSize = 0;
         std::istringstream hexStream(chunkHeader);
         hexStream >> std::hex >> dataChunkSize;
-
-        if (hexStream.fail() || !hexStream.eof())
-            return false;
-        currentPosition = chunkHeaderEndPos + CRLF_SIZE;
-
-        if (rawInputData.size() < currentPosition + dataChunkSize + CRLF_SIZE)
-            return false;
-
-        if (dataChunkSize == 0)
+        if (hexStream.fail() || !hexStream.eof()) 
         {
-            if (rawInputData.compare(currentPosition, CRLF_SIZE, CRLF) != 0)
+            return false;
+        }
+        currentPosition = chunkHeaderEndPos + CRLF_SIZE;
+        if (raw.size() < currentPosition + dataChunkSize + CRLF_SIZE) 
+        {
+            return false;
+        }
+        if (decodedBody.size() + dataChunkSize > maxBodySize) 
+        {
+            setError(413);
+            return false;
+        }
+        if (dataChunkSize == 0) 
+        {
+            if (raw.compare(currentPosition, CRLF_SIZE, CRLF) != 0) 
+            {
                 return false;
-            totalConsumed = currentPosition + CRLF_SIZE;
+            }
+            totalConsumed = (currentPosition + CRLF_SIZE) - startPos;
             return true;
         }
-        decodedBody.append(rawInputData, currentPosition, dataChunkSize);
+        decodedBody.append(raw, currentPosition, dataChunkSize);
         currentPosition += dataChunkSize;
-
-        if (rawInputData.compare(currentPosition, CRLF_SIZE, CRLF) != 0)
+        if (raw.compare(currentPosition, CRLF_SIZE, CRLF) != 0) 
+        {
             return false;
-
+        }
         currentPosition += CRLF_SIZE;
     }
 }
 
-int HttpRequest::parseRequestLine(const std::string &raw)
+
+// return: 1 (success), 0 (incomplete CRLF), -1 (syntax error)
+int HttpRequest::parseRequestLine(const std::string &raw) 
 {
     size_t crlf = raw.find("\r\n", parsedSize);
     if (crlf == std::string::npos) 
-		return 0;
+    {
+        return 0;
+    }
+    std::string extraGarbage;
     std::string line = raw.substr(parsedSize, crlf - parsedSize);
     std::istringstream lineStream(line);
-    
-    if (!(lineStream >> method >> target >> version)) 
-    {
-        setError(400);
-        return -1; 
-    }
-    method = toUpper(method);
-    parsedSize = crlf + 2;
-    state = PARSE_HEADERS;
-    spliteTarget();
-    return 1;
-}
-
-int HttpRequest::parseHeaders(const std::string &raw)
-{
-    size_t headerEnd = raw.find("\r\n\r\n", parsedSize);
-    if (headerEnd == std::string::npos) return 0; 
-
-    std::string headerSection = raw.substr(parsedSize, headerEnd - parsedSize);
-    std::istringstream headerStream(headerSection);
-    
-    std::string line;
-    while (std::getline(headerStream, line))
-    {
-        if (!line.empty() && line[line.size() - 1] == '\r')
-            line.erase(line.size() - 1);
-            
-        if (line.empty())
-            continue;
-
-        size_t delimiterPos = line.find(':');
-        if (delimiterPos == std::string::npos)
-        {
-            setError(400);
-            return -1;
-        }
-        std::string headerKey = toLower(trim(line.substr(0, delimiterPos)));
-        std::string headerValue = trim(line.substr(delimiterPos + 1));
-        headers[headerKey] = headerValue;
-    }
-    
-    parsedSize = headerEnd + 4;
-    state = PARSE_BODY;
-    return 1; 
-}
-
-int HttpRequest::parseBody(const std::string &raw)
-{
-    size_t bodyConsumed = 0;
-
-    std::map<std::string, std::string>::iterator te_it = headers.find("transfer-encoding");
-    std::map<std::string, std::string>::iterator cl_it = headers.find("content-length");
-
-    if (te_it != headers.end() && cl_it != headers.end())
+    if (!(lineStream >> method >> target >> version) || (lineStream >> extraGarbage)) 
     {
         setError(400);
         return -1;
     }
-    if (te_it != headers.end())
+    if (target[0] != '/') 
     {
-        if (toLower(te_it->second) != "chunked")
-        {
-            setError(400);
-            return -1;
-        }
-        std::string rawBodyData(raw, parsedSize);
-        if (!parseChunkedBody(rawBodyData, body, bodyConsumed))
-            return 0;
+        setError(400);
+        return -1;
     }
-    else if (cl_it != headers.end())
+    method = toUpper(method);
+    if (!spliteTarget()) 
     {
-        const std::string &lengthString = cl_it->second;
-        if (lengthString.empty())
+        return -1;
+    }
+    parsedSize = crlf + 2;
+    state = PARSE_HEADERS;
+    return 1;
+}
+
+
+// return: 1 (success), 0 (incomplete headers), -1 (syntax error)
+int HttpRequest::parseHeaders(const std::string &raw) 
+{
+    size_t headerEnd = raw.find("\r\n\r\n", parsedSize);
+    if (headerEnd == std::string::npos) 
+    {
+        return 0;
+    }
+
+    std::string headerSection = raw.substr(parsedSize, headerEnd - parsedSize);
+    std::istringstream headerStream(headerSection);
+    std::string line;
+
+    while (std::getline(headerStream, line)) 
+    {
+        if (!line.empty() && line[line.size() - 1] == '\r') 
         {
-            setError(400);
-            return -1;
+            line.erase(line.size() - 1);
         }
-        std::istringstream sizeStream(lengthString);
-        size_t contentLength = 0;
-        sizeStream >> contentLength;
-        if (sizeStream.fail() || !sizeStream.eof())
+        if (line.empty()) 
+        {
+            continue;
+        }
+
+        size_t delimiterPos = line.find(':');
+        if (delimiterPos == std::string::npos) 
         {
             setError(400);
             return -1;
         }
 
-        if (raw.size() - parsedSize < contentLength)
+        std::string key = toLower(trim(line.substr(0, delimiterPos)));
+        std::string val = trim(line.substr(delimiterPos + 1));
+
+        if ((key == "content-length" || key == "host") && headers.count(key)) 
+        {
+            setError(400);
+            return -1;
+        }
+
+        if (headers.count(key)) 
+        {
+            headers[key] += ", " + val;
+        }
+        else 
+        {
+            headers[key] = val;
+        }
+    }
+    if (version != "HTTP/1.1" && version != "HTTP/1.0")
+    {
+        setError(505); 
+        return -1;
+    }
+    if (version == "HTTP/1.1" && headers.find("host") == headers.end())
+    {
+        setError(400);
+        return -1;
+    }
+    parsedSize = headerEnd + 4;
+    state = PARSE_BODY;
+    return 1;
+}
+
+// return: 1 (success), 0 (more data needed), -1 (error/413)
+int HttpRequest::parseBody(const std::string &raw) 
+{
+    size_t bodyConsumed = 0;
+    std::string te = toLower(getHeader("transfer-encoding"));
+    std::string cl = getHeader("content-length");
+    if (!te.empty() && !cl.empty()) 
+    { 
+        setError(400); return -1; 
+    }
+    if (te == "chunked") 
+    {
+        if (!parseChunkedBody(raw, body, bodyConsumed, parsedSize)) 
+        {
             return 0;
-        body.assign(raw.data() + parsedSize, contentLength);
+        }
+    } 
+    else if (!cl.empty()) 
+    {
+        size_t contentLength = static_cast<size_t>(std::atoll(cl.c_str()));
+        if (raw.size() - parsedSize < contentLength) 
+        {
+            return 0;
+        }
+        body.clear();
+        body.reserve(contentLength);
+        body.append(raw, parsedSize, contentLength);
         bodyConsumed = contentLength;
     }
     parsedSize += bodyConsumed;
@@ -368,26 +662,30 @@ int HttpRequest::parseBody(const std::string &raw)
     return 1;
 }
 
-int HttpRequest::parse(const std::string &rawRequestData)
+
+// return: 1 (Fully Parsed), 0 (Needs More Data), -1 (Fatal Error), 2 (Headers Finished/Body Next)
+int HttpRequest::parse(const std::string &rawRequestData) 
 {
-    while (state != PARSE_COMPLETE && state != PARSE_ERROR)
+    while (state != PARSE_COMPLETE && state != PARSE_ERROR) 
     {
+        State prevState = state;
         int status = 0;
         switch (state) 
         {
-            case PARSE_REQUEST_LINE:
-                status = parseRequestLine(rawRequestData); break;
-            case PARSE_HEADERS:
-                status = parseHeaders(rawRequestData); break;
-            case PARSE_BODY:
-                status = parseBody(rawRequestData); break;
-            default: 
-                return 1;
+            case PARSE_REQUEST_LINE: status = parseRequestLine(rawRequestData); break;
+            case PARSE_HEADERS:      status = parseHeaders(rawRequestData); break;
+            case PARSE_BODY:         status = parseBody(rawRequestData); break;
+            default:                 setError(500); return -1;
         }
-        if (status <= 0) return status; // 0 = Need more data, -1 = Error
+        if (status <= 0) 
+            return status;
+        if (prevState == PARSE_HEADERS && state == PARSE_BODY) 
+            return 2;
     }
     return 1;
 }
+
+
 
 #include "HttpResponse.hpp"
 
@@ -473,13 +771,15 @@ const Location* HttpHandler::matchLocation(const std::string &path)
 {
     const Location* bestMatch = NULL;
     size_t bestLength = 0;
-
     for (size_t i = 0; i < serverConfig->Locations.size(); ++i)
     {
-        const Location& loc = serverConfig->Locations[i];
-        if (path.compare(0, loc.path.size(), loc.path) == 0)
+        const Location &loc = serverConfig->Locations[i];
+        if (path.size() >= loc.path.size() && path.compare(0, loc.path.size(), loc.path) == 0)
         {
-            if (loc.path == "/" || path.size() == loc.path.size() || path[loc.path.size()] == '/')
+            if (loc.path == "/" || 
+                path.size() == loc.path.size() || 
+                loc.path[loc.path.size() - 1] == '/' || 
+                path[loc.path.size()] == '/')
             {
                 if (loc.path.size() > bestLength)
                 {
@@ -540,29 +840,30 @@ std::vector<std::string> HttpHandler::resolveIndexFiles(const Location *loc)
 void HttpHandler::resolveRoute(const HttpRequest &request, RouteMatch& match)
 {
     match.location = NULL;
-    match.requestPath.clear();
-    match.root.clear();
-    match.fullPath.clear();
-
-    std::string requestPath = request.getRequestPath();
-
-    const Location* location = matchLocation(requestPath);
-    if (!location)
-        return;
-
-    std::string root = location->root.empty() ? serverConfig->root : location->root;
-    std::string relativePath = requestPath;
-    if (location->path != "/")
+    match.requestPath = request.getRequestPath();
+    
+    const Location *location = matchLocation(match.requestPath);
+    if (location)
     {
-        relativePath = requestPath.substr(location->path.size());
-        if (relativePath.empty())
-            relativePath = "/";
+        match.location = location;
+        match.root = location->root.empty() ? serverConfig->root : location->root;
+
+        std::string relativePath = match.requestPath;
+        if (location->path != "/")
+        {
+            relativePath = match.requestPath.substr(location->path.size());
+            if (relativePath.empty() || relativePath[0] != '/')
+            {
+                relativePath = "/" + relativePath;
+            }
+        }
+        match.fullPath = joinPath(match.root, relativePath);
     }
-    std::string fullPath = joinPath(root, relativePath);
-    match.location = location;
-    match.requestPath = requestPath;
-    match.root = root;
-    match.fullPath = fullPath;
+    else
+    {
+        match.root = serverConfig->root;
+        match.fullPath = joinPath(match.root, match.requestPath);
+    }
 }
 
 HttpResponse resolveRedirection(const RouteMatch &match)
@@ -596,27 +897,33 @@ HttpResponse resolveRedirection(const RouteMatch &match)
     return response;
 }
 
+
 HttpResult HttpHandler::process(const HttpRequest& request)
 {
     if (request.getErrorCode() != 0)
+    {
         return HttpResult::makeResponse(ErrorPage(request.getErrorCode(), "Bad Request", *serverConfig));
+    }
 
     RouteMatch match;
     resolveRoute(request, match);
-    if (!match.location)
-        return HttpResult::makeResponse(ErrorPage(404, "Not Found", *serverConfig));
-
-    if (match.location->redirectCode != 0)
+    if (match.location && match.location->redirectCode != 0)
     {
         return HttpResult::makeResponse(resolveRedirection(match));
     }
     std::string method = request.getMethod();
-    if (!isMethodAllowed(method, *match.location))
+    bool allowed = match.location ? isMethodAllowed(method, *match.location) : (method == "GET");
+    
+    if (!allowed)
+    {
         return HttpResult::makeResponse(ErrorPage(405, "Method Not Allowed", *serverConfig));
+    }
+
     if (request.getBody().size() > static_cast<size_t>(serverConfig->client_max_body_size))
     {
         return HttpResult::makeResponse(ErrorPage(413, "Payload Too Large", *serverConfig));
     }
+
     if (isDirectory(match.fullPath))
     {
         std::vector<std::string> indexes = resolveIndexFiles(match.location);
@@ -632,13 +939,23 @@ HttpResult HttpHandler::process(const HttpRequest& request)
                 break;
             }
         }
+
         if (!foundIndex)
         {
-            if (method == "GET" && match.location->autoindex == "on")
+            bool autoIndexOn = (match.location && match.location->autoindex == "on");
+            if (method == "GET" && autoIndexOn)
+            {
                 return HttpResult::makeResponse(resolveAutoIndexing(match, *serverConfig));
+            }
             return HttpResult::makeResponse(ErrorPage(403, "Forbidden", *serverConfig));
         }
     }
+
+    if (!fileExists(match.fullPath) && method != "POST")
+    {
+        return HttpResult::makeResponse(ErrorPage(404, "Not Found", *serverConfig));
+    }
+
     if (match.location && !match.location->cgiExt.empty())
     {
         if (match.fullPath.size() >= match.location->cgiExt.size() &&
@@ -651,12 +968,22 @@ HttpResult HttpHandler::process(const HttpRequest& request)
 
     HttpResponse response;
     if (method == "GET")
+    {
         response = HttpMethods::GET(match, *serverConfig);
+    }
     else if (method == "DELETE")
-       response = HttpMethods::DELETE(match, *serverConfig);
+    {
+        response = HttpMethods::DELETE(match, *serverConfig);
+    }
     else if (method == "POST")
+    {
         response = HttpMethods::POST(request, match, *serverConfig);
+    }
     else 
+    {
         response = ErrorPage(501, "Not Implemented", *serverConfig);
+    }
+
     return HttpResult::makeResponse(response);
 }
+

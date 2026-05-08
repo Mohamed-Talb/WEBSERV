@@ -14,6 +14,7 @@ WEBSERV_SRC = main.cpp Helpers.cpp Errors.cpp \
 	HTTP/HttpUtils/HttpUtils.cpp \
 	HTTP/HttpUtils/ErrorPagesBuilder.cpp \
 	HTTP/HttpUtils/AutoIndexing.cpp \
+	HTTP/HttpUtils/normalizePath.cpp \
 	HTTP/Methods/GET.cpp \
 	HTTP/Methods/POST.cpp \
 	HTTP/Methods/DELETE.cpp \

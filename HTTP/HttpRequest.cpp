@@ -1,5 +1,6 @@
 #include "HttpRequest.hpp"
 #include "../Helpers.hpp"
+#include "HttpUtils/HttpUtils.hpp"
 
 HttpRequest::HttpRequest() : maxBodySize(0), state(PARSE_REQUEST_LINE), parsedSize(0), errorCode(0) {}
 HttpRequest::~HttpRequest() {}
@@ -68,6 +69,7 @@ bool HttpRequest::spliteTarget()
         setError(400);
         return false;
     }
+    requestPath = normalizePath(requestPath);
     return true;
 }
 
@@ -197,9 +199,11 @@ int HttpRequest::parseHeaders(const std::string &raw)
     {
         return 0;
     }
+
     std::string headerSection = raw.substr(parsedSize, headerEnd - parsedSize);
     std::istringstream headerStream(headerSection);
     std::string line;
+
     while (std::getline(headerStream, line)) 
     {
         if (!line.empty() && line[line.size() - 1] == '\r') 
@@ -210,19 +214,23 @@ int HttpRequest::parseHeaders(const std::string &raw)
         {
             continue;
         }
+
         size_t delimiterPos = line.find(':');
         if (delimiterPos == std::string::npos) 
         {
             setError(400);
             return -1;
         }
+
         std::string key = toLower(trim(line.substr(0, delimiterPos)));
         std::string val = trim(line.substr(delimiterPos + 1));
+
         if ((key == "content-length" || key == "host") && headers.count(key)) 
         {
             setError(400);
             return -1;
         }
+
         if (headers.count(key)) 
         {
             headers[key] += ", " + val;
@@ -232,11 +240,20 @@ int HttpRequest::parseHeaders(const std::string &raw)
             headers[key] = val;
         }
     }
+    if (version != "HTTP/1.1" && version != "HTTP/1.0")
+    {
+        setError(505); 
+        return -1;
+    }
+    if (version == "HTTP/1.1" && headers.find("host") == headers.end())
+    {
+        setError(400);
+        return -1;
+    }
     parsedSize = headerEnd + 4;
     state = PARSE_BODY;
     return 1;
 }
-
 
 // return: 1 (success), 0 (more data needed), -1 (error/413)
 int HttpRequest::parseBody(const std::string &raw) 

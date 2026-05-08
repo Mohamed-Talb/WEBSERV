@@ -12,6 +12,6 @@ HttpResponse HttpMethods::GET(const RouteMatch &match, const ServerConfig &confi
         return response;
     }
 
-    return ErrorPage(404, "Not Found", config);
+    return ErrorPage(404, config);
 }
 
