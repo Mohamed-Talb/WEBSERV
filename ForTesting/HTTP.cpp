@@ -664,7 +664,6 @@ HttpResult HttpHandler::process(const HttpRequest& request)
     return HttpResult::makeResponse(response);
 }
 
-
 #include "HttpRequest.hpp"
 #include "../Helpers.hpp"
 #include "HttpUtils/HttpUtils.hpp"
@@ -756,6 +755,7 @@ const std::string &HttpRequest::getRequestPath() const { return requestPath; }
 int HttpRequest::getErrorCode() const { return errorCode; }
 size_t HttpRequest::getParsedSize() const { return parsedSize; }
 State HttpRequest::getState() const { return state; }
+void  HttpRequest::setParsedSize(size_t size) {parsedSize = size;}
 
 
 void HttpRequest::reset() 
@@ -767,23 +767,21 @@ void HttpRequest::reset()
     state = PARSE_REQUEST_LINE;
 }
 
-
-// true (full chunked body found), false (incomplete data or error)
-bool HttpRequest::parseChunkedBody(const std::string &raw, std::string &decodedBody, size_t &totalConsumed, size_t startPos) 
+// return: 1 (final chunk found), 0 (needs more data), -1 (error)
+int HttpRequest::parseChunkedBody(const std::string &raw) 
 {
-    decodedBody.clear();
-    totalConsumed = 0;
-    size_t currentPosition = startPos;
     const size_t CRLF_SIZE = 2;
     const std::string CRLF = "\r\n";
+
     while (true) 
     {
-        size_t chunkHeaderEndPos = raw.find(CRLF, currentPosition);
+        size_t chunkHeaderEndPos = raw.find(CRLF, parsedSize);
         if (chunkHeaderEndPos == std::string::npos) 
         {
-            return false;
+            return 0;
         }
-        std::string chunkHeader = raw.substr(currentPosition, chunkHeaderEndPos - currentPosition);
+
+        std::string chunkHeader = raw.substr(parsedSize, chunkHeaderEndPos - parsedSize);
         size_t extensionStartPos = chunkHeader.find(';');
         if (extensionStartPos != std::string::npos)
         {
@@ -792,39 +790,43 @@ bool HttpRequest::parseChunkedBody(const std::string &raw, std::string &decodedB
         size_t dataChunkSize = 0;
         std::istringstream hexStream(chunkHeader);
         hexStream >> std::hex >> dataChunkSize;
+        
         if (hexStream.fail() || !hexStream.eof()) 
         {
-            return false;
+            setError(400);
+            return -1;
         }
-        currentPosition = chunkHeaderEndPos + CRLF_SIZE;
-        if (raw.size() < currentPosition + dataChunkSize + CRLF_SIZE) 
+        size_t dataStartPos = chunkHeaderEndPos + CRLF_SIZE;
+        size_t totalChunkBlockSize = (dataStartPos - parsedSize) + dataChunkSize + CRLF_SIZE;
+        if (raw.size() - parsedSize < totalChunkBlockSize) 
         {
-            return false;
+            return 0;
         }
-        if (decodedBody.size() + dataChunkSize > maxBodySize) 
+        if (maxBodySize > 0 && body.size() + dataChunkSize > maxBodySize) 
         {
             setError(413);
-            return false;
+            return -1;
         }
         if (dataChunkSize == 0) 
         {
-            if (raw.compare(currentPosition, CRLF_SIZE, CRLF) != 0) 
+            if (raw.compare(dataStartPos, CRLF_SIZE, CRLF) != 0) 
             {
-                return false;
+                setError(400);
+                return -1;
             }
-            totalConsumed = (currentPosition + CRLF_SIZE) - startPos;
-            return true;
+            parsedSize += totalChunkBlockSize;
+            return 1;
         }
-        decodedBody.append(raw, currentPosition, dataChunkSize);
-        currentPosition += dataChunkSize;
-        if (raw.compare(currentPosition, CRLF_SIZE, CRLF) != 0) 
+        if (raw.compare(dataStartPos + dataChunkSize, CRLF_SIZE, CRLF) != 0) 
         {
-            return false;
+            setError(400);
+            return -1;
         }
-        currentPosition += CRLF_SIZE;
+        body.append(raw, dataStartPos, dataChunkSize);
+        parsedSize += totalChunkBlockSize; 
+        
     }
 }
-
 
 // return: 1 (success), 0 (incomplete CRLF), -1 (syntax error)
 int HttpRequest::parseRequestLine(const std::string &raw) 
@@ -866,7 +868,6 @@ int HttpRequest::parseHeaders(const std::string &raw)
     {
         return 0;
     }
-
     std::string headerSection = raw.substr(parsedSize, headerEnd - parsedSize);
     std::istringstream headerStream(headerSection);
     std::string line;
@@ -881,14 +882,12 @@ int HttpRequest::parseHeaders(const std::string &raw)
         {
             continue;
         }
-
         size_t delimiterPos = line.find(':');
         if (delimiterPos == std::string::npos) 
         {
             setError(400);
             return -1;
         }
-
         std::string key = toLower(trim(line.substr(0, delimiterPos)));
         std::string val = trim(line.substr(delimiterPos + 1));
 
@@ -897,7 +896,6 @@ int HttpRequest::parseHeaders(const std::string &raw)
             setError(400);
             return -1;
         }
-
         if (headers.count(key)) 
         {
             headers[key] += ", " + val;
@@ -922,40 +920,48 @@ int HttpRequest::parseHeaders(const std::string &raw)
     return 1;
 }
 
-// return: 1 (success), 0 (more data needed), -1 (error/413)
 int HttpRequest::parseBody(const std::string &raw) 
 {
-    size_t bodyConsumed = 0;
     std::string te = toLower(getHeader("transfer-encoding"));
     std::string cl = getHeader("content-length");
+    
     if (!te.empty() && !cl.empty()) 
     { 
-        setError(400); return -1; 
+        setError(400); 
+        return -1; 
     }
+    
     if (te == "chunked") 
     {
-        if (!parseChunkedBody(raw, body, bodyConsumed, parsedSize)) 
-        {
-            return 0;
-        }
+        int status = parseChunkedBody(raw);
+        if (status <= 0) return status; 
     } 
     else if (!cl.empty()) 
     {
-        size_t contentLength = static_cast<size_t>(std::atoll(cl.c_str()));
-        if (raw.size() - parsedSize < contentLength) 
-        {
-            return 0;
+        size_t contentLength = 0;
+        std::istringstream iss(cl);
+        iss >> contentLength;
+
+        if (maxBodySize > 0 && contentLength > maxBodySize) {
+            setError(413);
+            return -1;
         }
-        body.clear();
-        body.reserve(contentLength);
-        body.append(raw, parsedSize, contentLength);
-        bodyConsumed = contentLength;
+        size_t needed = contentLength - body.size();
+        size_t available = raw.size() - parsedSize;
+        size_t toCopy = std::min(needed, available);
+
+        if (toCopy > 0) {
+            body.append(raw, parsedSize, toCopy);
+            parsedSize += toCopy;
+        }
+
+        if (body.size() < contentLength)
+            return 0;
     }
-    parsedSize += bodyConsumed;
+    
     state = PARSE_COMPLETE;
     return 1;
 }
-
 
 // return: 1 (Fully Parsed), 0 (Needs More Data), -1 (Fatal Error), 2 (Headers Finished/Body Next)
 int HttpRequest::parse(const std::string &rawRequestData) 
@@ -977,79 +983,4 @@ int HttpRequest::parse(const std::string &rawRequestData)
             return 2;
     }
     return 1;
-}
-
-
-
-#include "HttpResponse.hpp"
-
-HttpResponse::HttpResponse() : statusCode(200), reasonPhrase("OK")
-{
-    headers["Connection"] = "keep-alive";
-}
-
-HttpResponse::HttpResponse(int code, const std::string& reason) : statusCode(code), reasonPhrase(reason)
-{
-    headers["Connection"] = "keep-alive";
-}
-
-HttpResponse::~HttpResponse() {}
-
-void HttpResponse::setHeader(const std::string& name, const std::string& value)
-{
-    headers[name] = value;
-}
-
-void HttpResponse::setBody(const std::string &content)
-{
-    body = content;
-
-    std::ostringstream sizeStream;
-    sizeStream << body.size();
-    headers["Content-Length"] = sizeStream.str();
-}
-
-void HttpResponse::writeBody(const std::string &chunk)
-{
-    body += chunk;
-
-    std::ostringstream sizeStream;
-    sizeStream << body.size();
-    headers["Content-Length"] = sizeStream.str();
-}
-
-bool HttpResponse::setBodyFromFile(const std::string &filePath)
-{
-    std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
-
-    if (!file.is_open())
-        return false;
-
-    std::ostringstream buffer;
-    buffer << file.rdbuf();
-
-    if (file.bad())
-        return false;
-
-    body = buffer.str();
-
-    std::ostringstream sizeStream;
-    sizeStream << body.size();
-    headers["Content-Length"] = sizeStream.str();
-
-    return true;
-}
-
-std::string HttpResponse::toString() const
-{
-    std::ostringstream responseStream;
-    responseStream << "HTTP/1.1 " << statusCode << " " << reasonPhrase << "\r\n";
-
-    std::map<std::string, std::string>::const_iterator headerIterator;
-    for (headerIterator = headers.begin(); headerIterator != headers.end(); ++headerIterator)
-    {
-        responseStream << headerIterator->first << ": " << headerIterator->second << "\r\n";
-    }
-    responseStream << "\r\n" << body;
-    return responseStream.str();
 }
