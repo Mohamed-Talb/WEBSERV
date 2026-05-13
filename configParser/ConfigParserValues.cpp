@@ -81,12 +81,53 @@ int ConfigParser::parsePortValue(const std::string &value)
     return port;
 }
 
+
 size_t ConfigParser::parseBodySizeValue(const std::string &value)
 {
-    if (!isOnlyDigits(value))
-        throw std::runtime_error("Invalid client_max_body_size value: " + value);
+    if (value.empty())
+        throw std::runtime_error("Empty client_max_body_size directive value");
 
-    return static_cast<size_t>(std::atol(value.c_str()));
+    size_t i = 0;
+    while (i < value.size() && std::isdigit(static_cast<unsigned char>(value[i])))
+    {
+        i++;
+    }
+    if (i < value.size() && value[i] == '.')
+    {
+        throw std::runtime_error("Invalid client_max_body_size: decimals are not allowed.");
+    }
+    if (i == 0)
+        throw std::runtime_error("Invalid body size syntax (missing digits): " + value);
+
+    std::string numericPart = value.substr(0, i);
+    std::string unitPart = value.substr(i);
+
+    size_t baseSize = 0;
+    std::istringstream iss(numericPart);
+    iss >> baseSize;
+
+    if (iss.fail())
+        throw std::runtime_error("Numeric overflow parsing body size base: " + numericPart);
+    std::string unit = toUpper(trim(unitPart)); 
+    size_t multiplier = 1;
+
+    if (unit.empty() || unit == "B") {
+        multiplier = 1;
+    } else if (unit == "K" || unit == "KB") {
+        multiplier = 1024;
+    } else if (unit == "M" || unit == "MB") {
+        multiplier = 1024 * 1024;
+    } else if (unit == "G" || unit == "GB") {
+        multiplier = 1024 * 1024 * 1024;
+    } else {
+        throw std::runtime_error("Unsupported byte size unit suffix: '" + unitPart + "'");
+    }
+    if (baseSize > 0 && multiplier > std::numeric_limits<size_t>::max() / baseSize)
+    {
+        throw std::runtime_error("Calculated client_max_body_size exceeds physical address space limits: " + value);
+    }
+
+    return baseSize * multiplier;
 }
 
 std::string ConfigParser::parseErrorPagePathValue(const std::string &raw)

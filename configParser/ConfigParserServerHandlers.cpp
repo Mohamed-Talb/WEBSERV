@@ -82,6 +82,7 @@ void ConfigParser::handleErrorPage(ServerConfig &conf)
 
     tokens.expect("Expected error_page");
 
+    // Extract all tokens until the closing semicolon
     while (tokens.hasMore() && tokens.current() != ";")
     {
         values.push_back(tokens.expect("Missing error_page value"));
@@ -89,6 +90,8 @@ void ConfigParser::handleErrorPage(ServerConfig &conf)
 
     if (!tokens.hasMore())
         throw std::runtime_error("Missing ';' after error_page directive");
+
+    // Strictly enforce minimum syntax: at least one code and one target path
     if (values.size() < 2)
         throw std::runtime_error("Invalid error_page syntax: requires at least one status code and a target path");
 
@@ -102,7 +105,7 @@ void ConfigParser::handleErrorPage(ServerConfig &conf)
         int errorCode = 0;
         std::istringstream stream(values[i]);
         stream >> errorCode;
-
+        
         if (stream.fail())
             throw std::runtime_error("Invalid error_page status code (overflow): " + values[i]);
 
@@ -118,48 +121,17 @@ void ConfigParser::handleErrorPage(ServerConfig &conf)
     tokens.expectSemicolon("error_page");
 }
 
-
-size_t ConfigParser::parseBodySizeValue(const std::string &value)
+void ConfigParser::handleClientMaxBodySize(ServerConfig &conf)
 {
-    if (value.empty())
-        throw std::runtime_error("Empty client_max_body_size directive value");
+    if (conf.seenDirectives["client_max_body_size"])
+        throw std::runtime_error("duplicate client_max_body_size directive");
 
-    size_t i = 0;
-    while (i < value.size() && std::isdigit(static_cast<unsigned char>(value[i])))
-    {
-        i++;
-    }
+    conf.seenDirectives["client_max_body_size"] = true;
+    tokens.expect("Expected client_max_body_size");
 
-    if (i == 0)
-        throw std::runtime_error("Invalid body size syntax (missing digits): " + value);
-
-    std::string numericPart = value.substr(0, i);
-    std::string unitPart = value.substr(i);
-
-    size_t baseSize = 0;
-    std::istringstream iss(numericPart);
-    iss >> baseSize;
-
-    if (iss.fail())
-        throw std::runtime_error("Numeric overflow parsing body size base: " + numericPart);
-    std::string unit = toUpper(trim(unitPart)); 
-    size_t multiplier = 1;
-
-    if (unit.empty() || unit == "B") {
-        multiplier = 1;
-    } else if (unit == "K" || unit == "KB") {
-        multiplier = 1024;
-    } else if (unit == "M" || unit == "MB") {
-        multiplier = 1024 * 1024;
-    } else if (unit == "G" || unit == "GB") {
-        multiplier = 1024 * 1024 * 1024;
-    } else {
-        throw std::runtime_error("Unsupported byte size unit suffix: '" + unitPart + "'");
-    }
-    if (baseSize > 0 && multiplier > std::numeric_limits<size_t>::max() / baseSize)
-    {
-        throw std::runtime_error("Calculated client_max_body_size exceeds physical address space limits: " + value);
-    }
-
-    return baseSize * multiplier;
+    std::string value = tokens.expect("Missing body size value");
+    conf.client_max_body_size = parseBodySizeValue(value);
+    if (conf.client_max_body_size == 0)
+        throw std::runtime_error("Invalide client_max_body_size");
+    tokens.expectSemicolon("client_max_body_size");
 }
