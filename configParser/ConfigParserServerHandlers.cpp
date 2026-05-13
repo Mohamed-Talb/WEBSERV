@@ -83,47 +83,83 @@ void ConfigParser::handleErrorPage(ServerConfig &conf)
     tokens.expect("Expected error_page");
 
     while (tokens.hasMore() && tokens.current() != ";")
+    {
         values.push_back(tokens.expect("Missing error_page value"));
+    }
 
     if (!tokens.hasMore())
-        throw std::runtime_error("Missing ';' after error_page");
-
+        throw std::runtime_error("Missing ';' after error_page directive");
     if (values.size() < 2)
-        throw std::runtime_error("Invalid error_page syntax: missing codes or path");
+        throw std::runtime_error("Invalid error_page syntax: requires at least one status code and a target path");
 
-    std::string path = parseErrorPagePathValue(values.back());
+    size_t pathIndex = values.size() - 1;
+    std::string path = parseErrorPagePathValue(values[pathIndex]);
 
-    for (size_t i = 0; i < values.size() - 1; ++i)
+    for (size_t i = 0; i < pathIndex; ++i)
     {
         if (!isOnlyDigits(values[i]))
-            throw std::runtime_error("Invalid error code in config: " + values[i]);
+            throw std::runtime_error("Invalid error_page code syntax (non-numeric): " + values[i]);
+        int errorCode = 0;
+        std::istringstream stream(values[i]);
+        stream >> errorCode;
 
-        unsigned long code = static_cast<unsigned long>(std::atol(values[i].c_str()));
+        if (stream.fail())
+            throw std::runtime_error("Invalid error_page status code (overflow): " + values[i]);
 
-        if (code < 300 || code > 599)
-            throw std::runtime_error("Invalid error code in config: " + values[i]);
-
-        int errorCode = static_cast<int>(code);
+        if (!isValidErrorCode(errorCode))
+            throw std::runtime_error("Unsupported or invalid HTTP error status code: " + values[i]);
 
         if (conf.errorPage.count(errorCode))
-            throw std::runtime_error("duplicate error_page code: " + values[i]);
+            throw std::runtime_error("Duplicate error_page declaration for status code: " + values[i]);
 
         conf.errorPage[errorCode] = path;
     }
+
     tokens.expectSemicolon("error_page");
 }
 
-void ConfigParser::handleClientMaxBodySize(ServerConfig &conf)
+
+size_t ConfigParser::parseBodySizeValue(const std::string &value)
 {
-    if (conf.seenDirectives["client_max_body_size"])
-        throw std::runtime_error("duplicate client_max_body_size directive");
+    if (value.empty())
+        throw std::runtime_error("Empty client_max_body_size directive value");
 
-    conf.seenDirectives["client_max_body_size"] = true;
-    tokens.expect("Expected client_max_body_size");
+    size_t i = 0;
+    while (i < value.size() && std::isdigit(static_cast<unsigned char>(value[i])))
+    {
+        i++;
+    }
 
-    std::string value = tokens.expect("Missing body size value");
-    conf.client_max_body_size = parseBodySizeValue(value);
-    if (conf.client_max_body_size == 0)
-        throw std::runtime_error("Invalide client_max_body_size");
-    tokens.expectSemicolon("client_max_body_size");
+    if (i == 0)
+        throw std::runtime_error("Invalid body size syntax (missing digits): " + value);
+
+    std::string numericPart = value.substr(0, i);
+    std::string unitPart = value.substr(i);
+
+    size_t baseSize = 0;
+    std::istringstream iss(numericPart);
+    iss >> baseSize;
+
+    if (iss.fail())
+        throw std::runtime_error("Numeric overflow parsing body size base: " + numericPart);
+    std::string unit = toUpper(trim(unitPart)); 
+    size_t multiplier = 1;
+
+    if (unit.empty() || unit == "B") {
+        multiplier = 1;
+    } else if (unit == "K" || unit == "KB") {
+        multiplier = 1024;
+    } else if (unit == "M" || unit == "MB") {
+        multiplier = 1024 * 1024;
+    } else if (unit == "G" || unit == "GB") {
+        multiplier = 1024 * 1024 * 1024;
+    } else {
+        throw std::runtime_error("Unsupported byte size unit suffix: '" + unitPart + "'");
+    }
+    if (baseSize > 0 && multiplier > std::numeric_limits<size_t>::max() / baseSize)
+    {
+        throw std::runtime_error("Calculated client_max_body_size exceeds physical address space limits: " + value);
+    }
+
+    return baseSize * multiplier;
 }

@@ -12,4 +12,6 @@ std::string joinPath(std::string left, std::string right);
 std::string mergeSlashes(const std::string &path);
 bool        isOnlyDigits(const std::string &s);
 bool        isValidHost(const std::string &host);
+bool        isValidErrorCode(int code);
+
 #endif

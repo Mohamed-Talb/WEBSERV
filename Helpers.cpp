@@ -142,3 +142,26 @@ bool isValidHost(const std::string &host)
 
     return dots == 4;
 }
+
+
+bool isValidErrorCode(int code)
+{
+    switch (code)
+    {
+        case 400: // Bad Request
+        case 403: // Forbidden
+        case 404: // Not Found
+        case 405: // Method Not Allowed
+        case 408: // Request Timeout
+        case 413: // Payload Too Large
+        case 500: // Internal Server Error
+        case 501: // Not Implemented
+        case 502: // Bad Gateway
+        case 503: // Service Unavailable
+        case 504: // Gateway Timeout
+        case 505: // HTTP Version Not Supported
+            return true;
+        default:
+            return false;
+    }
+}
