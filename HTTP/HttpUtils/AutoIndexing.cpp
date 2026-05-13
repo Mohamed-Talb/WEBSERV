@@ -64,7 +64,6 @@ HttpResponse resolveAutoIndexing(const RouteMatch &match, const ServerConfig &se
 
     if (urlBase[urlBase.size() - 1] != '/')
         urlBase += "/";
-
     response.writeBody("<html>");
     response.writeBody("<head><title>Index of ");
     response.writeBody(htmlEscaping(urlBase));

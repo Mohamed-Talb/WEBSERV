@@ -52,7 +52,7 @@ HttpResponse resolveAutoIndexing(const RouteMatch &match, const ServerConfig &se
     DIR *dir = opendir(match.fullPath.c_str());
 
     if (dir == NULL)
-        return ErrorPage(403, "Forbidden", serverConfig);
+        return ErrorPage(403, serverConfig);
 
     HttpResponse response(200, "OK");
     response.setHeader("Content-Type", "text/html");
@@ -106,15 +106,43 @@ HttpResponse resolveAutoIndexing(const RouteMatch &match, const ServerConfig &se
 
 #include "HttpUtils.hpp"
 
-HttpResponse ErrorPage(int statusCode, const std::string &statusReason, const ServerConfig &config)
+
+std::string getReasonPhrase(int statusCode)
 {
+    switch (statusCode)
+    {
+        case 200: return "OK";
+        case 201: return "Created";
+        case 204: return "No Content";
+        case 301: return "Moved Permanently";
+        case 302: return "Found";
+        case 303: return "See Other";
+        case 307: return "Temporary Redirect";
+        case 308: return "Permanent Redirect";
+        case 400: return "Bad Request";
+        case 403: return "Forbidden";
+        case 404: return "Not Found";
+        case 405: return "Method Not Allowed";
+        case 413: return "Payload Too Large";
+        case 500: return "Internal Server Error";
+        case 501: return "Not Implemented";
+        case 505: return "HTTP Version Not Supported";
+        default:  return "Unknown Error";
+    }
+}
+
+HttpResponse ErrorPage(int statusCode, const ServerConfig &config)
+{
+
+    std::string statusReason = getReasonPhrase(statusCode);
+    
     std::string errorPageContent;
     std::string errorPath;
     std::map<int, std::string>::const_iterator it = config.errorPage.find(statusCode);
     
     if (it != config.errorPage.end()) 
     {
-        errorPath = config.root + it->second;
+        errorPath = joinPath(config.root, it->second); // Safer to use joinPath here!
     }
     if (!errorPath.empty() && readFile(errorPath, errorPageContent))
     {
@@ -124,13 +152,14 @@ HttpResponse ErrorPage(int statusCode, const std::string &statusReason, const Se
         return response;
     }
     std::ostringstream defaultHtml;
-    defaultHtml << "<html><head><title>" << statusCode << " " << statusReason << "</title></head>"
-                << "<body><center><h1>" << statusCode << " " << statusReason << "</h1></center>"
+    defaultHtml << "<html><head><title>" << statusCode << " " << statusReason << "</title></head>\n"
+                << "<body><center><h1>" << statusCode << " " << statusReason << "</h1></center>\n"
                 << "<hr><center>webserv/1.0</center></body></html>";
 
     HttpResponse response(statusCode, statusReason);
     response.setBody(defaultHtml.str());
-    response.setHeader("Content-Type","text/html");
+    response.setHeader("Content-Type", "text/html");
+    
     return response;
 }
 
@@ -153,32 +182,67 @@ std::string contentType(const std::string &path)
         mimeTypes.insert(std::make_pair(".jpeg", "image/jpeg"));
         mimeTypes.insert(std::make_pair(".gif", "image/gif"));
     }
-    size_t pos = path.find_last_of('.');
-    if (pos == std::string::npos) 
-        return "application/octet-stream";
-    std::string ext = toLower(path.substr(pos));
+    size_t dotPos = path.find_last_of('.');
+    size_t slashPos = path.find_last_of('/');
+    if (dotPos == std::string::npos || (slashPos != std::string::npos && slashPos > dotPos))
+    {
+        return "application/octet-stream"; // Default binary type
+    }
+    std::string ext = toLower(path.substr(dotPos));
     std::map<std::string, std::string>::const_iterator it = mimeTypes.find(ext);
     if (it != mimeTypes.end()) 
+    {
         return it->second;
+    }
+
     return "application/octet-stream";
+}
+
+#include <vector>
+#include <sstream>
+
+std::string normalizePath(const std::string &path)
+{
+    std::vector<std::string> stack;
+    std::istringstream iss(path);
+    std::string token;
+
+    while (std::getline(iss, token, '/'))
+    {
+        if (token.empty() || token == ".")
+        {
+            continue;
+        }
+        else if (token == "..")
+        {
+            if (!stack.empty())
+                stack.pop_back();
+        }
+        else
+        {
+            stack.push_back(token); 
+        }
+    }
+    std::string normalized = "";
+    for (size_t i = 0; i < stack.size(); ++i)
+    {
+        normalized += "/" + stack[i];
+    }
+    return normalized.empty() ? "/" : normalized;
 }
 
 #include "Methods.hpp"
 
 HttpResponse HttpMethods::DELETE(const RouteMatch &match, const ServerConfig& config)
 {
-    if (match.requestPath.find("..") != std::string::npos)
-        return ErrorPage(403, "Forbidden", config);
-
     if (!fileExists(match.fullPath))
-        return ErrorPage(404, "Not Found", config);
+        return ErrorPage(404, config);
 
     if (!deleteFile(match.fullPath))
-        return ErrorPage(403, "Forbidden", config);
+        return ErrorPage(403, config);
 
     return HttpResponse(204, "No Content");
 }
-
 #include "Methods.hpp"
 
 HttpResponse HttpMethods::GET(const RouteMatch &match, const ServerConfig &config)
@@ -193,9 +257,8 @@ HttpResponse HttpMethods::GET(const RouteMatch &match, const ServerConfig &confi
         return response;
     }
 
-    return ErrorPage(404, "Not Found", config);
+    return ErrorPage(404, config);
 }
-
 
 #include "Methods.hpp"
 
@@ -326,13 +389,13 @@ static bool writeBufferToFile(const std::string &filePath, const char *data, siz
 HttpResponse HttpMethods::POST(const HttpRequest &request, const RouteMatch &match, const ServerConfig &config)
 {
     if (!match.location)
-        return ErrorPage(500, "Internal Server Error", config);
+        return ErrorPage(500, config);
 
     if (!match.location || match.location->uploadEnabled != "on")
-        return ErrorPage(403, "Forbidden", config);
+        return ErrorPage(403, config);
 
     if (match.location->uploadPath.empty() || !isDirectory(match.location->uploadPath))
-        return ErrorPage(500, "Internal Server Error", config);
+        return ErrorPage(500, config);
 
     std::string contentType = request.getHeader("content-type");
     std::string outputPath;
@@ -343,11 +406,11 @@ HttpResponse HttpMethods::POST(const HttpRequest &request, const RouteMatch &mat
     {
         std::string boundary;
         if (!extractBoundary(contentType, boundary))
-            return ErrorPage(400, "Bad Request", config);
+            return ErrorPage(400, config);
 
         MultipartFileInfo fileInfo;
         if (!parseMultipartFileInfo(request.getBody(), boundary, fileInfo))
-            return ErrorPage(400, "Bad Request", config);
+            return ErrorPage(400, config);
 
         outputPath = joinPath(match.location->uploadPath, fileInfo.filename);
         dataStart = request.getBody().data() + fileInfo.contentStart;
@@ -361,10 +424,10 @@ HttpResponse HttpMethods::POST(const HttpRequest &request, const RouteMatch &mat
     }
 
     if (!dataStart || (dataStart + dataLength > request.getBody().data() + request.getBody().size()))
-        return ErrorPage(400, "Bad Request", config);
+        return ErrorPage(400, config);
 
     if (!writeBufferToFile(outputPath, dataStart, dataLength))
-        return ErrorPage(500, "Internal Server Error", config);
+        return ErrorPage(500, config);
 
     HttpResponse response(201, "Created");
     response.setBody("File uploaded successfully to: " + outputPath + "\n");
@@ -373,8 +436,238 @@ HttpResponse HttpMethods::POST(const HttpRequest &request, const RouteMatch &mat
     return response;
 }
 
+
+#include "HttpHandler.hpp"
+
+
+HttpHandler::HttpHandler(const ServerConfig &serverConfig) : serverConfig(&serverConfig) {}
+
+HttpHandler::~HttpHandler() {}
+
+const Location* HttpHandler::matchLocation(const std::string &path)
+{
+    const Location* bestMatch = NULL;
+    size_t bestLength = 0;
+    for (size_t i = 0; i < serverConfig->Locations.size(); ++i)
+    {
+        const Location &loc = serverConfig->Locations[i];
+        if (path.size() >= loc.path.size() && path.compare(0, loc.path.size(), loc.path) == 0)
+        {
+            if (loc.path == "/" || 
+                path.size() == loc.path.size() || 
+                loc.path[loc.path.size() - 1] == '/' || 
+                path[loc.path.size()] == '/')
+            {
+                if (loc.path.size() > bestLength)
+                {
+                    bestMatch = &loc;
+                    bestLength = loc.path.size();
+                }
+            }
+        }
+    }
+    return bestMatch;
+}
+
+bool HttpHandler::isMethodAllowed(const std::string &method, const Location &loc)
+{
+    std::cout << loc.path << std::endl;   
+    std::cout << loc.root << std::endl;   
+    if (loc.methods.empty())
+        return true;
+    for (size_t i = 0; i < loc.methods.size(); ++i)
+    {
+        std::cout << loc.methods[i] << std::endl;
+        if (toUpper(loc.methods[i]) == method)
+            return true;
+    }
+    return false;
+}
+
+const Location *HttpHandler::getCgiLocation(const HttpRequest &request)
+{
+    std::string requestPath = request.getRequestPath();
+    const Location *matchedLocation = matchLocation(requestPath);
+    
+    if (!matchedLocation) return NULL;
+
+    if (!matchedLocation->cgiExt.empty())
+    {
+        if (requestPath.size() >= matchedLocation->cgiExt.size() &&
+            requestPath.compare(requestPath.size() - matchedLocation->cgiExt.size(), 
+                                matchedLocation->cgiExt.size(), matchedLocation->cgiExt) == 0)
+        {
+            return matchedLocation;
+        }
+    }
+    return NULL;
+}
+
+std::vector<std::string> HttpHandler::resolveIndexFiles(const Location *loc)
+{
+    if (loc && !loc->indexes.empty())
+        return loc->indexes;
+    if (!serverConfig->indexes.empty())
+        return serverConfig->indexes;
+    std::vector<std::string> defaults;
+    defaults.push_back("index.html");
+    return defaults;
+}
+
+void HttpHandler::resolveRoute(const HttpRequest &request, RouteMatch& match)
+{
+    match.location = NULL;
+    match.requestPath = request.getRequestPath();
+    
+    const Location *location = matchLocation(match.requestPath);
+    if (location)
+    {
+        match.location = location;
+        match.root = location->root.empty() ? serverConfig->root : location->root;
+
+        std::string relativePath = match.requestPath;
+        if (location->path != "/")
+        {
+            relativePath = match.requestPath.substr(location->path.size());
+            if (relativePath.empty() || relativePath[0] != '/')
+            {
+                relativePath = "/" + relativePath;
+            }
+        }
+        match.fullPath = joinPath(match.root, relativePath);
+    }
+    else
+    {
+        match.root = serverConfig->root;
+        match.fullPath = joinPath(match.root, match.requestPath);
+    }
+}
+
+HttpResponse resolveRedirection(const RouteMatch &match)
+{
+    int code = match.location->redirectCode;
+
+    std::string reason;
+    switch (code)
+    {
+        case 301: reason = "Moved Permanently"; break;
+        case 302: reason = "Found"; break;
+        case 303: reason = "See Other"; break;
+        case 307: reason = "Temporary Redirect"; break;
+        case 308: reason = "Permanent Redirect"; break;
+        default:
+            HttpResponse error(500, "Internal Server Error");
+            error.setHeader("Content-Length", "0");
+            return error;
+    }
+    if (match.location->redirectTarget.empty())
+    {
+        HttpResponse error(500, "Internal Server Error");
+        error.setHeader("Content-Length", "0");
+        return error;
+    }
+
+    HttpResponse response(code, reason);
+    response.setHeader("Location", match.location->redirectTarget);
+    response.setHeader("Content-Length", "0");
+
+    return response;
+}
+
+
+HttpResult HttpHandler::process(const HttpRequest& request)
+{
+    if (request.getErrorCode() != 0)
+    {
+        return HttpResult::makeResponse(ErrorPage(request.getErrorCode(), *serverConfig));
+    }
+
+    RouteMatch match;
+    resolveRoute(request, match);
+    if (match.location && match.location->redirectCode != 0)
+    {
+        return HttpResult::makeResponse(resolveRedirection(match));
+    }
+    std::string method = request.getMethod();
+    bool allowed = match.location ? isMethodAllowed(method, *match.location) : (method == "GET");
+    
+    if (!allowed)
+    {
+        return HttpResult::makeResponse(ErrorPage(405, *serverConfig));
+    }
+
+    if (request.getBody().size() > static_cast<size_t>(serverConfig->client_max_body_size))
+    {
+        return HttpResult::makeResponse(ErrorPage(413, *serverConfig));
+    }
+
+    if (isDirectory(match.fullPath))
+    {
+        std::vector<std::string> indexes = resolveIndexFiles(match.location);
+        bool foundIndex = false;
+        for (size_t i = 0; i < indexes.size(); ++i)
+        {
+            std::string candidatePath = joinPath(match.fullPath, indexes[i]);
+            if (fileExists(candidatePath))
+            {
+                match.requestPath = joinPath(match.requestPath, indexes[i]);
+                match.fullPath = candidatePath;
+                foundIndex = true;
+                break;
+            }
+        }
+
+        if (!foundIndex)
+        {
+            bool autoIndexOn = (match.location && match.location->autoindex == "on");
+            if (method == "GET" && autoIndexOn)
+            {
+                return HttpResult::makeResponse(resolveAutoIndexing(match, *serverConfig));
+            }
+            return HttpResult::makeResponse(ErrorPage(403,*serverConfig));
+        }
+    }
+
+    if (!fileExists(match.fullPath) && method != "POST")
+    {
+        return HttpResult::makeResponse(ErrorPage(404, *serverConfig));
+    }
+
+    if (match.location && !match.location->cgiExt.empty())
+    {
+        if (match.fullPath.size() >= match.location->cgiExt.size() &&
+            match.fullPath.compare(match.fullPath.size() - match.location->cgiExt.size(), 
+                                   match.location->cgiExt.size(), match.location->cgiExt) == 0)
+        {
+            return HttpResult::makeCgi(match.location, match.fullPath);
+        }
+    }
+
+    HttpResponse response;
+    if (method == "GET")
+    {
+        response = HttpMethods::GET(match, *serverConfig);
+    }
+    else if (method == "DELETE")
+    {
+        response = HttpMethods::DELETE(match, *serverConfig);
+    }
+    else if (method == "POST")
+    {
+        response = HttpMethods::POST(request, match, *serverConfig);
+    }
+    else 
+    {
+        response = ErrorPage(501,*serverConfig);
+    }
+
+    return HttpResult::makeResponse(response);
+}
+
+
 #include "HttpRequest.hpp"
 #include "../Helpers.hpp"
+#include "HttpUtils/HttpUtils.hpp"
 
 HttpRequest::HttpRequest() : maxBodySize(0), state(PARSE_REQUEST_LINE), parsedSize(0), errorCode(0) {}
 HttpRequest::~HttpRequest() {}
@@ -443,6 +736,7 @@ bool HttpRequest::spliteTarget()
         setError(400);
         return false;
     }
+    requestPath = normalizePath(requestPath);
     return true;
 }
 
@@ -759,231 +1053,3 @@ std::string HttpResponse::toString() const
     responseStream << "\r\n" << body;
     return responseStream.str();
 }
-
-#include "HttpHandler.hpp"
-
-
-HttpHandler::HttpHandler(const ServerConfig &serverConfig) : serverConfig(&serverConfig) {}
-
-HttpHandler::~HttpHandler() {}
-
-const Location* HttpHandler::matchLocation(const std::string &path)
-{
-    const Location* bestMatch = NULL;
-    size_t bestLength = 0;
-    for (size_t i = 0; i < serverConfig->Locations.size(); ++i)
-    {
-        const Location &loc = serverConfig->Locations[i];
-        if (path.size() >= loc.path.size() && path.compare(0, loc.path.size(), loc.path) == 0)
-        {
-            if (loc.path == "/" || 
-                path.size() == loc.path.size() || 
-                loc.path[loc.path.size() - 1] == '/' || 
-                path[loc.path.size()] == '/')
-            {
-                if (loc.path.size() > bestLength)
-                {
-                    bestMatch = &loc;
-                    bestLength = loc.path.size();
-                }
-            }
-        }
-    }
-    return bestMatch;
-}
-
-bool HttpHandler::isMethodAllowed(const std::string &method, const Location &loc)
-{
-    std::cout << loc.path << std::endl;   
-    std::cout << loc.root << std::endl;   
-    if (loc.methods.empty())
-        return true;
-    for (size_t i = 0; i < loc.methods.size(); ++i)
-    {
-        std::cout << loc.methods[i] << std::endl;
-        if (toUpper(loc.methods[i]) == method)
-            return true;
-    }
-    return false;
-}
-
-const Location *HttpHandler::getCgiLocation(const HttpRequest &request)
-{
-    std::string requestPath = request.getRequestPath();
-    const Location *matchedLocation = matchLocation(requestPath);
-    
-    if (!matchedLocation) return NULL;
-
-    if (!matchedLocation->cgiExt.empty())
-    {
-        if (requestPath.size() >= matchedLocation->cgiExt.size() &&
-            requestPath.compare(requestPath.size() - matchedLocation->cgiExt.size(), 
-                                matchedLocation->cgiExt.size(), matchedLocation->cgiExt) == 0)
-        {
-            return matchedLocation;
-        }
-    }
-    return NULL;
-}
-
-std::vector<std::string> HttpHandler::resolveIndexFiles(const Location *loc)
-{
-    if (loc && !loc->indexes.empty())
-        return loc->indexes;
-    if (!serverConfig->indexes.empty())
-        return serverConfig->indexes;
-    std::vector<std::string> defaults;
-    defaults.push_back("index.html");
-    return defaults;
-}
-
-void HttpHandler::resolveRoute(const HttpRequest &request, RouteMatch& match)
-{
-    match.location = NULL;
-    match.requestPath = request.getRequestPath();
-    
-    const Location *location = matchLocation(match.requestPath);
-    if (location)
-    {
-        match.location = location;
-        match.root = location->root.empty() ? serverConfig->root : location->root;
-
-        std::string relativePath = match.requestPath;
-        if (location->path != "/")
-        {
-            relativePath = match.requestPath.substr(location->path.size());
-            if (relativePath.empty() || relativePath[0] != '/')
-            {
-                relativePath = "/" + relativePath;
-            }
-        }
-        match.fullPath = joinPath(match.root, relativePath);
-    }
-    else
-    {
-        match.root = serverConfig->root;
-        match.fullPath = joinPath(match.root, match.requestPath);
-    }
-}
-
-HttpResponse resolveRedirection(const RouteMatch &match)
-{
-    int code = match.location->redirectCode;
-
-    std::string reason;
-    switch (code)
-    {
-        case 301: reason = "Moved Permanently"; break;
-        case 302: reason = "Found"; break;
-        case 303: reason = "See Other"; break;
-        case 307: reason = "Temporary Redirect"; break;
-        case 308: reason = "Permanent Redirect"; break;
-        default:
-            HttpResponse error(500, "Internal Server Error");
-            error.setHeader("Content-Length", "0");
-            return error;
-    }
-    if (match.location->redirectTarget.empty())
-    {
-        HttpResponse error(500, "Internal Server Error");
-        error.setHeader("Content-Length", "0");
-        return error;
-    }
-
-    HttpResponse response(code, reason);
-    response.setHeader("Location", match.location->redirectTarget);
-    response.setHeader("Content-Length", "0");
-
-    return response;
-}
-
-
-HttpResult HttpHandler::process(const HttpRequest& request)
-{
-    if (request.getErrorCode() != 0)
-    {
-        return HttpResult::makeResponse(ErrorPage(request.getErrorCode(), "Bad Request", *serverConfig));
-    }
-
-    RouteMatch match;
-    resolveRoute(request, match);
-    if (match.location && match.location->redirectCode != 0)
-    {
-        return HttpResult::makeResponse(resolveRedirection(match));
-    }
-    std::string method = request.getMethod();
-    bool allowed = match.location ? isMethodAllowed(method, *match.location) : (method == "GET");
-    
-    if (!allowed)
-    {
-        return HttpResult::makeResponse(ErrorPage(405, "Method Not Allowed", *serverConfig));
-    }
-
-    if (request.getBody().size() > static_cast<size_t>(serverConfig->client_max_body_size))
-    {
-        return HttpResult::makeResponse(ErrorPage(413, "Payload Too Large", *serverConfig));
-    }
-
-    if (isDirectory(match.fullPath))
-    {
-        std::vector<std::string> indexes = resolveIndexFiles(match.location);
-        bool foundIndex = false;
-        for (size_t i = 0; i < indexes.size(); ++i)
-        {
-            std::string candidatePath = joinPath(match.fullPath, indexes[i]);
-            if (fileExists(candidatePath))
-            {
-                match.requestPath = joinPath(match.requestPath, indexes[i]);
-                match.fullPath = candidatePath;
-                foundIndex = true;
-                break;
-            }
-        }
-
-        if (!foundIndex)
-        {
-            bool autoIndexOn = (match.location && match.location->autoindex == "on");
-            if (method == "GET" && autoIndexOn)
-            {
-                return HttpResult::makeResponse(resolveAutoIndexing(match, *serverConfig));
-            }
-            return HttpResult::makeResponse(ErrorPage(403, "Forbidden", *serverConfig));
-        }
-    }
-
-    if (!fileExists(match.fullPath) && method != "POST")
-    {
-        return HttpResult::makeResponse(ErrorPage(404, "Not Found", *serverConfig));
-    }
-
-    if (match.location && !match.location->cgiExt.empty())
-    {
-        if (match.fullPath.size() >= match.location->cgiExt.size() &&
-            match.fullPath.compare(match.fullPath.size() - match.location->cgiExt.size(), 
-                                   match.location->cgiExt.size(), match.location->cgiExt) == 0)
-        {
-            return HttpResult::makeCgi(match.location, match.fullPath);
-        }
-    }
-
-    HttpResponse response;
-    if (method == "GET")
-    {
-        response = HttpMethods::GET(match, *serverConfig);
-    }
-    else if (method == "DELETE")
-    {
-        response = HttpMethods::DELETE(match, *serverConfig);
-    }
-    else if (method == "POST")
-    {
-        response = HttpMethods::POST(request, match, *serverConfig);
-    }
-    else 
-    {
-        response = ErrorPage(501, "Not Implemented", *serverConfig);
-    }
-
-    return HttpResult::makeResponse(response);
-}
-

@@ -178,7 +178,6 @@ void Client::handleRead()
     while (true)
     {
         int parseStatus = activeRequest.parse(readBuffer);
-        // readBuffer.erase(0, activeRequest.getParsedSize());
         if (activeRequest.getErrorCode() != 0) 
         {
             errorsHandler(activeRequest.getErrorCode());
@@ -187,10 +186,19 @@ void Client::handleRead()
         if (parseStatus == 2)
         {
             processRequestHeaders();
-            if (state == SENDING_RESPONSE) return; // Exit if 413 was triggered
+            if (state == SENDING_RESPONSE) 
+                return;
             continue;
         }
-        if (parseStatus == 0) break; 
+        if (parseStatus == 0) 
+        {
+            if (activeRequest.getParsedSize() > 0) 
+            {
+                consumeReadBuffer(activeRequest.getParsedSize());
+                activeRequest.setParsedSize(0);
+            }
+            break; 
+        }
         executeRequest();
         if (state == PROCESSING_CGI) 
             break;
