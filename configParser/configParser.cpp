@@ -81,7 +81,7 @@ void ConfigParser::parseServerBlock(ServerConfig &conf)
         {
             tokens.expect("Expected '}'");
             std ::sort(conf.Locations.begin(), conf.Locations.end(), CompareLocations());
-            conf.validate();
+            conf.finalizeAndValidate();
             return;
         }
 

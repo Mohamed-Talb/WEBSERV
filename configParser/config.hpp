@@ -38,7 +38,7 @@ struct ServerConfig
     std::map<int, std::string> errorPage;
     std::map<std::string, bool> seenDirectives;
     ServerConfig();
-    void validate() const;
+    void finalizeAndValidate();
 };
 
 #endif

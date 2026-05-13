@@ -50,19 +50,19 @@ const Location *HttpHandler::getCgiLocation(const HttpRequest &request)
     std::string requestPath = request.getRequestPath();
     const Location *matchedLocation = matchLocation(requestPath);
     
-    if (!matchedLocation) return NULL;
-
-    if (!matchedLocation->cgiExt.empty())
+    if (!matchedLocation || matchedLocation->cgiExt.empty()) 
+        return NULL;
+    if (requestPath.size() >= matchedLocation->cgiExt.size())
     {
-        if (requestPath.size() >= matchedLocation->cgiExt.size() &&
-            requestPath.compare(requestPath.size() - matchedLocation->cgiExt.size(), 
-                                matchedLocation->cgiExt.size(), matchedLocation->cgiExt) == 0)
+        size_t extOffset = requestPath.size() - matchedLocation->cgiExt.size();
+        if (requestPath.compare(extOffset, matchedLocation->cgiExt.size(), matchedLocation->cgiExt) == 0)
         {
             return matchedLocation;
         }
     }
     return NULL;
 }
+
 
 std::vector<std::string> HttpHandler::resolveIndexFiles(const Location *loc)
 {
@@ -84,12 +84,15 @@ void HttpHandler::resolveRoute(const HttpRequest &request, RouteMatch& match)
     if (location)
     {
         match.location = location;
-        match.root = location->root.empty() ? serverConfig->root : location->root;
-
+        match.root = location->root; 
+        
         std::string relativePath = match.requestPath;
         if (location->path != "/")
         {
-            relativePath = match.requestPath.substr(location->path.size());
+            if (match.requestPath.size() >= location->path.size())
+            {
+                relativePath = match.requestPath.substr(location->path.size());
+            }
             if (relativePath.empty() || relativePath[0] != '/')
             {
                 relativePath = "/" + relativePath;
@@ -193,14 +196,15 @@ HttpResult HttpHandler::process(const HttpRequest& request)
     {
         return HttpResult::makeResponse(ErrorPage(404, *serverConfig));
     }
-
     if (match.location && !match.location->cgiExt.empty())
     {
-        if (match.fullPath.size() >= match.location->cgiExt.size() &&
-            match.fullPath.compare(match.fullPath.size() - match.location->cgiExt.size(), 
-                                   match.location->cgiExt.size(), match.location->cgiExt) == 0)
+        if (match.fullPath.size() >= match.location->cgiExt.size())
         {
-            return HttpResult::makeCgi(match.location, match.fullPath);
+            size_t extOffset = match.fullPath.size() - match.location->cgiExt.size();
+            if (match.fullPath.compare(extOffset, match.location->cgiExt.size(), match.location->cgiExt) == 0)
+            {
+                return HttpResult::makeCgi(match.location, match.fullPath);
+            }
         }
     }
 

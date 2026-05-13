@@ -42,11 +42,29 @@ void Location::validateLocation() const
     }
 }
 
-ServerConfig::ServerConfig() : port(80),host("127.0.0.1"),root("./www"),client_max_body_size(1048576) 
-{}
+ServerConfig::ServerConfig() 
+    : port(80), 
+    host("127.0.0.1"), 
+    root("./www"), 
+    client_max_body_size(1048576)
+{
+    indexes.push_back("index.html");
+    serverName.push_back(""); 
+}
 
-void ServerConfig::validate() const 
+void ServerConfig::finalizeAndValidate() 
 {
     for (size_t i = 0; i < Locations.size(); ++i)
-        Locations[i].validateLocation();
+    {
+        Location &loc = Locations[i];
+        if (loc.root.empty()) 
+        {
+            loc.root = this->root;
+        }
+        if (loc.indexes.empty()) 
+        {
+            loc.indexes = this->indexes;
+        }
+        loc.validateLocation();
+    }
 }
