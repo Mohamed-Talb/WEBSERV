@@ -111,22 +111,30 @@ size_t ConfigParser::parseBodySizeValue(const std::string &value)
     std::string unit = toUpper(trim(unitPart)); 
     size_t multiplier = 1;
 
-    if (unit.empty() || unit == "B") {
+    if (unit.empty() || unit == "B") 
+    {
         multiplier = 1;
-    } else if (unit == "K" || unit == "KB") {
+    }
+    else if (unit == "K" || unit == "KB")
+    {
         multiplier = 1024;
-    } else if (unit == "M" || unit == "MB") {
+    }
+    else if (unit == "M" || unit == "MB")
+    {
         multiplier = 1024 * 1024;
-    } else if (unit == "G" || unit == "GB") {
+    } 
+    else if (unit == "G" || unit == "GB")
+    {
         multiplier = 1024 * 1024 * 1024;
-    } else {
+    }
+    else
+    {
         throw std::runtime_error("Unsupported byte size unit suffix: '" + unitPart + "'");
     }
     if (baseSize > 0 && multiplier > std::numeric_limits<size_t>::max() / baseSize)
     {
         throw std::runtime_error("Calculated client_max_body_size exceeds physical address space limits: " + value);
     }
-
     return baseSize * multiplier;
 }
 
