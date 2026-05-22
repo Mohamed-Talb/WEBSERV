@@ -44,7 +44,6 @@ class ConfigParser
     void parseServerBlock(ServerConfig &conf);
 
     // Server directive handlers
-    void serverHost(ServerConfig &conf);
     void serverRoot(ServerConfig &conf);
     void serverIndex(ServerConfig &conf);
     void serverListen(ServerConfig &conf);

@@ -26,11 +26,18 @@ struct Location
     void validateLocation() const;
 };
 
-struct ServerConfig 
+struct Listen
 {
     int port;
     std::string host;
+    Listen() : port(80), host("127.0.0.1"){};
+};
+
+
+struct ServerConfig 
+{
     std::string root;
+    std::vector<Listen> listens;
     ssize_t client_max_body_size;
     std::vector<Location> Locations;
     std::vector<std::string> indexes;

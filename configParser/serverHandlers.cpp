@@ -1,33 +1,42 @@
 #include "configParser.hpp"
 
-void ConfigParser::serverHost(ServerConfig &conf)
-{
-    if (conf.seenDirectives["host"])
-        throw std::runtime_error("duplicate host directive");
-
-    conf.seenDirectives["host"] = true;
-    
-    this->tokens.expect("Expected host");
-    
-    conf.host = this->tokens.expect("Missing host");
-    
-    if (!isValidHost(conf.host))
-        throw std::runtime_error("Invalid host: " + conf.host);
-        
-    this->tokens.expectSemicolon("host");
-}
-
 void ConfigParser::serverListen(ServerConfig &conf)
 {
     if (conf.seenDirectives["listen"])
         throw std::runtime_error("duplicate listen directive");
 
     conf.seenDirectives["listen"] = true;
-    
     this->tokens.expect("Expected listen");
-
-    conf.port = valuesParser::parsePortValue(this->tokens);
     
+    std::string value = tokens.expect("Missing listen Value");
+    Listen currListen;
+    if (value.find(':') == std::string::npos)
+    {
+        if (value.find('.') != std::string::npos)
+            value = value + ":80";
+        else
+            value = "0.0.0.0:" + value;
+    }
+    size_t colonPos = value.find(':');
+    
+    if (colonPos == 0)
+        throw std::runtime_error("Invalid listen syntax (missing IP before colon): " + value);
+    if (colonPos == value.length() - 1)
+        throw std::runtime_error("Invalid listen syntax (missing port after colon): " + value);
+    
+    std::string ipPart = value.substr(0, colonPos);
+    if (ipPart == "localhost")
+        ipPart = "127.0.0.1";
+        
+    if (!isValidHost(ipPart))
+        throw std::runtime_error("Invalid host: " + ipPart);
+        
+    currListen.host = ipPart;
+
+    std::string portPart = value.substr(colonPos + 1);
+    currListen.port = valuesParser::parsePortValue(portPart); 
+    conf.listens.push_back(currListen);
+
     this->tokens.expectSemicolon("listen");
 }
 
@@ -41,7 +50,6 @@ void ConfigParser::serverRoot(ServerConfig &conf)
     this->tokens.expect("Expected root");
 
     conf.root = valuesParser::parseFilesystemPath(this->tokens);
-
     this->tokens.expectSemicolon("root");
 }
 
@@ -51,9 +59,7 @@ void ConfigParser::serverNames(ServerConfig &conf)
         throw std::runtime_error("duplicate server_name directive");
 
     conf.seenDirectives["server_name"] = true;
-
     this->tokens.expect("Expected server_name");
-
     conf.serverName = valuesParser::parseWordListUntilSemicolon(this->tokens, "server_name");
 }
 

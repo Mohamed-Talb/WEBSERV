@@ -72,10 +72,8 @@ Multiple slashes should be collapsed:
 namespace valuesParser
 {
 
-int parsePortValue(TokenStream &tokens)
+int parsePortValue(std::string value)
 {
-    std::string value = tokens.expect("Missing port");
-
     if (!isOnlyDigits(value))
         throw std::runtime_error("Invalid port: " + value);
 

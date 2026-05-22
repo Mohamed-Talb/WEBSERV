@@ -42,9 +42,7 @@ void Location::validateLocation() const
     }
 }
 
-ServerConfig::ServerConfig() 
-    : port(80), 
-    host("127.0.0.1"), 
+ServerConfig::ServerConfig() :
     root("./www"), 
     client_max_body_size(1048576)
 {
@@ -54,6 +52,10 @@ ServerConfig::ServerConfig()
 
 void ServerConfig::finalizeAndValidate() 
 {
+    if (listens.empty()) 
+    {
+        listens.push_back(Listen());
+    }
     for (size_t i = 0; i < Locations.size(); ++i)
     {
         Location &loc = Locations[i];

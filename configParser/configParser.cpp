@@ -8,7 +8,6 @@
 
 void ConfigParser::initServerDispatch()
 {
-    serverDispatch["host"] = &ConfigParser::serverHost;
     serverDispatch["listen"] = &ConfigParser::serverListen;
     serverDispatch["root"] = &ConfigParser::serverRoot;
     serverDispatch["server_name"] = &ConfigParser::serverNames;
