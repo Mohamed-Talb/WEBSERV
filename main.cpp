@@ -1,12 +1,5 @@
 #include "Server/Server.hpp"
 
-std::vector<ServerConfig> parseConfig(const std::string &configFile)
-{
-    std::vector<std::string> tokens = tokenize(configFile);
-    ConfigParser parser(tokens);
-    return parser.parse();
-}
-
 int main(int ac, char **av)
 {
     signal(SIGPIPE, SIG_IGN);
@@ -17,7 +10,8 @@ int main(int ac, char **av)
     }
     try
     {
-        std::vector<ServerConfig> configs = parseConfig(av[1]);
+        ConfigParser CP;
+        std::vector<ServerConfig> configs = CP.loadeConfig(av[1]);
         Server server;
         server.init(configs);
         server.runEventLoop();
@@ -29,7 +23,5 @@ int main(int ac, char **av)
     }
 }
 
-// Timeout Management (The Slowloris Vulnerability)
-// in client handlRead if the httpparser return a error custo the error page for client config
-// sort the locations inside the config 
 // 405 Method Not Allowed -> http://localhost:8080/upload.html;
+// handl duplacated server names

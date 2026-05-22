@@ -12,12 +12,8 @@
 #include <algorithm>
 #include <limits>  
 #include <sstream>
-
-
-
-std::vector<std::string> tokenize(const std::string &filepath);
-
-
+#include "tokenStream.hpp"
+#include "valuesParser.hpp"
 
 struct CompareLocations
 {
@@ -27,11 +23,10 @@ struct CompareLocations
     }
 };
 
-#include "tokenStream.hpp"
-
 class ConfigParser
 {
-private:
+
+    private:
     TokenStream tokens;
 
     typedef void (ConfigParser::*ServerHandler)(ServerConfig &);
@@ -49,43 +44,29 @@ private:
     void parseServerBlock(ServerConfig &conf);
 
     // Server directive handlers
-    void handleHost(ServerConfig &conf);
-    void handleRoot(ServerConfig &conf);
-    void handleIndex(ServerConfig &conf);
-    void handleListen(ServerConfig &conf);
-    void handleLocation(ServerConfig &conf);
-    void handleErrorPage(ServerConfig &conf);
-    void handleServerName(ServerConfig &conf);
-    void handleClientMaxBodySize(ServerConfig &conf);
+    void serverHost(ServerConfig &conf);
+    void serverRoot(ServerConfig &conf);
+    void serverIndex(ServerConfig &conf);
+    void serverListen(ServerConfig &conf);
+    void serverLocation(ServerConfig &conf);
+    void serverErrorPages(ServerConfig &conf);
+    void serverNames(ServerConfig &conf);
+    void serverClientMaxBodySize(ServerConfig &conf);
 
     // Location directive handlers
-    void handleLocRoot(Location &loc);
-    void handleLocIndex(Location &loc);
-    void handleLocCgiExt(Location &loc);
-    void handleLocUpload(Location &loc);
-    void handleLocCgiPath(Location &loc);
-    void handleLocMethods(Location &loc);
-    void handleLocRedirect(Location &loc);
-    void handleLocAutoindex(Location &loc);
-    void handleLocUploadPath(Location &loc);
-
-    // Specific value parsers / normalizers
-    std::string parseCgiPathValue();
-    std::string parseLocationPath();
-    std::string parseFilesystemPath();
-    std::vector<std::string> parseIndexesList();
-    int parsePortValue(const std::string &value);
-    size_t parseBodySizeValue(const std::string &value);
-    std::string parseCgiExtValue(const std::string &raw);
-    std::string parseErrorPagePathValue(const std::string &raw);
-    std::string parseRedirectTargetValue(const std::string &target);
-    std::vector<std::string> parseWordListUntilSemicolon(const std::string &directiveName);
+    void locationRoot(Location &loc);
+    void locationIndex(Location &loc);
+    void locationCgiExt(Location &loc);
+    void locationUpload(Location &loc);
+    void locationCgiPath(Location &loc);
+    void locationMethods(Location &loc);
+    void locationRedirect(Location &loc);
+    void locationAutoindex(Location &loc);
+    void locationUploadPath(Location &loc);
 
     public:
-    std::vector<ServerConfig> parse();
-    ConfigParser(const std::vector<std::string> &tokens);
+    ConfigParser();
+    std::vector<ServerConfig> loadeConfig(std::string configFile);
 };
-
-std::vector<ServerConfig> parseConfig(const std::string &configFile);
 
 #endif

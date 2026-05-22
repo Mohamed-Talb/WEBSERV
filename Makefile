@@ -4,10 +4,10 @@ WEBSERV_SRC = main.cpp Helpers.cpp Errors.cpp \
 	Server/Client.cpp \
 	configParser/config.cpp \
 	configParser/configParser.cpp \
-	configParser/ConfigParserValues.cpp \
-	configParser/ConfigParserLocationHandlers.cpp \
-	configParser/ConfigParserServerHandlers.cpp \
-	configParser/Lexer.cpp \
+	configParser/valuesParser.cpp \
+	configParser/locationHandlers.cpp \
+	configParser/serverHandlers.cpp \
+	configParser/tokenStream.cpp \
 	HTTP/HttpHandler.cpp \
 	HTTP/HttpRequest.cpp \
 	HTTP/HttpResponse.cpp \

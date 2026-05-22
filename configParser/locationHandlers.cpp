@@ -1,6 +1,6 @@
 #include "configParser.hpp"
 
-void ConfigParser::handleLocMethods(Location &loc)
+void ConfigParser::locationMethods(Location &loc)
 {
     if (loc.seenDirectives["methods"])
         throw std::runtime_error("duplicate methods directive");
@@ -9,7 +9,7 @@ void ConfigParser::handleLocMethods(Location &loc)
 
     tokens.expect("Expected methods");
 
-    std::vector<std::string> methods = parseWordListUntilSemicolon("methods");
+    std::vector<std::string> methods = valuesParser::parseWordListUntilSemicolon(tokens, "methods");
     for (size_t i = 0; i < methods.size(); ++i)
     {
         std::string currMethod = toUpper(methods[i]);
@@ -25,7 +25,7 @@ void ConfigParser::handleLocMethods(Location &loc)
     }
 }
 
-void ConfigParser::handleLocRoot(Location &loc)
+void ConfigParser::locationRoot(Location &loc)
 {
     if (loc.seenDirectives["root"])
         throw std::runtime_error("duplicate root directive in location");
@@ -33,12 +33,12 @@ void ConfigParser::handleLocRoot(Location &loc)
     loc.seenDirectives["root"] = true;
     tokens.expect("Expected root");
 
-    loc.root = parseFilesystemPath();
+    loc.root = valuesParser::parseFilesystemPath(tokens);
 
     tokens.expectSemicolon("root");
 }
 
-void ConfigParser::handleLocAutoindex(Location &loc)
+void ConfigParser::locationAutoindex(Location &loc)
 {
     if (loc.seenDirectives["autoindex"])
         throw std::runtime_error("duplicate autoindex directive");
@@ -54,17 +54,17 @@ void ConfigParser::handleLocAutoindex(Location &loc)
     tokens.expectSemicolon("autoindex");
 }
 
-void ConfigParser::handleLocIndex(Location &loc)
+void ConfigParser::locationIndex(Location &loc)
 {
     if (loc.seenDirectives["index"])
         throw std::runtime_error("duplicate index directive in location");
 
     loc.seenDirectives["index"] = true;
     tokens.expect("Expected index");
-    loc.indexes = parseIndexesList();
+    loc.indexes = valuesParser::parseIndexesList(tokens);
 }
 
-void ConfigParser::handleLocCgiPath(Location &loc)
+void ConfigParser::locationCgiPath(Location &loc)
 {
     if (loc.seenDirectives["cgi_path"])
         throw std::runtime_error("duplicate cgi_path directive");
@@ -73,12 +73,12 @@ void ConfigParser::handleLocCgiPath(Location &loc)
 
     tokens.expect("Expected cgi_path");
 
-    loc.cgiPath = parseCgiPathValue();
+    loc.cgiPath = valuesParser::parseCgiPathValue(tokens);
 
     tokens.expectSemicolon("cgi_path");
 }
 
-void ConfigParser::handleLocCgiExt(Location &loc)
+void ConfigParser::locationCgiExt(Location &loc)
 {
     if (loc.seenDirectives["cgi_ext"])
         throw std::runtime_error("duplicate cgi_ext directive");
@@ -86,13 +86,12 @@ void ConfigParser::handleLocCgiExt(Location &loc)
     loc.seenDirectives["cgi_ext"] = true;
     tokens.expect("Expected cgi_ext");
 
-    std::string value = tokens.expect("Missing cgi_ext");
-    loc.cgiExt = parseCgiExtValue(value);
+    loc.cgiExt = valuesParser::parseCgiExtValue(tokens);
 
     tokens.expectSemicolon("cgi_ext");
 }
 
-void ConfigParser::handleLocRedirect(Location &loc)
+void ConfigParser::locationRedirect(Location &loc)
 {
     if (loc.seenDirectives["redirect"])
         throw std::runtime_error("duplicate redirect directive");
@@ -113,14 +112,12 @@ void ConfigParser::handleLocRedirect(Location &loc)
     if (loc.redirectCode != 301 && loc.redirectCode != 302)
         throw std::runtime_error("Invalid redirect code");
 
-    loc.redirectTarget = parseRedirectTargetValue(
-        tokens.expect("Missing redirect target")
-    );
+    loc.redirectTarget = valuesParser::parseRedirectTargetValue(tokens);
 
     tokens.expectSemicolon("redirect");
 }
 
-void ConfigParser::handleLocUpload(Location &loc)
+void ConfigParser::locationUpload(Location &loc)
 {
     if (loc.seenDirectives["upload"])
         throw std::runtime_error("duplicate upload directive");
@@ -136,7 +133,7 @@ void ConfigParser::handleLocUpload(Location &loc)
     tokens.expectSemicolon("upload");
 }
 
-void ConfigParser::handleLocUploadPath(Location &loc)
+void ConfigParser::locationUploadPath(Location &loc)
 {
     if (loc.seenDirectives["upload_path"])
         throw std::runtime_error("duplicate upload_path directive");
@@ -147,7 +144,7 @@ void ConfigParser::handleLocUploadPath(Location &loc)
 
     tokens.expect("Expected upload_path");
 
-    loc.uploadPath = parseFilesystemPath();
+    loc.uploadPath = valuesParser::parseFilesystemPath(tokens);
 
     tokens.expectSemicolon("upload_path");
 }

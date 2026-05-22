@@ -1,4 +1,8 @@
-#include "configParser.hpp"
+#include "valuesParser.hpp"
+#include "../Helpers.hpp"
+#include <cstdlib>
+#include <sstream>
+#include <stdexcept>
 
 /*
 ===============================================================================
@@ -65,8 +69,13 @@ Multiple slashes should be collapsed:
     "///img//cat.png" → "/img/cat.png"
 */
 
-int ConfigParser::parsePortValue(const std::string &value)
+namespace valuesParser
 {
+
+int parsePortValue(TokenStream &tokens)
+{
+    std::string value = tokens.expect("Missing port");
+
     if (!isOnlyDigits(value))
         throw std::runtime_error("Invalid port: " + value);
 
@@ -81,9 +90,10 @@ int ConfigParser::parsePortValue(const std::string &value)
     return port;
 }
 
-
-size_t ConfigParser::parseBodySizeValue(const std::string &value)
+size_t parseBodySizeValue(TokenStream &tokens)
 {
+    std::string value = tokens.expect("Missing body size value");
+
     if (value.empty())
         throw std::runtime_error("Empty client_max_body_size directive value");
 
@@ -138,8 +148,9 @@ size_t ConfigParser::parseBodySizeValue(const std::string &value)
     return baseSize * multiplier;
 }
 
-std::string ConfigParser::parseErrorPagePathValue(const std::string &raw)
+std::string parseErrorPagePathValue(TokenStream &tokens)
 {
+    std::string raw = tokens.expect("Missing error_page path");
     std::string path = mergeSlashes(raw);
 
     if (path.empty())
@@ -154,8 +165,9 @@ std::string ConfigParser::parseErrorPagePathValue(const std::string &raw)
     return path;
 }
 
-std::string ConfigParser::parseCgiExtValue(const std::string &raw)
+std::string parseCgiExtValue(TokenStream &tokens)
 {
+    std::string raw = tokens.expect("Missing cgi_ext");
     std::string ext = raw;
 
     if (ext.empty())
@@ -173,8 +185,10 @@ std::string ConfigParser::parseCgiExtValue(const std::string &raw)
     return ext;
 }
 
-std::string ConfigParser::parseRedirectTargetValue(const std::string &target)
+std::string parseRedirectTargetValue(TokenStream &tokens)
 {
+    std::string target = tokens.expect("Missing redirect target");
+
     if (target.empty())
         throw std::runtime_error("Missing redirect target");
 
@@ -188,7 +202,7 @@ std::string ConfigParser::parseRedirectTargetValue(const std::string &target)
     return target;
 }
 
-std::string ConfigParser::parseFilesystemPath()
+std::string parseFilesystemPath(TokenStream &tokens)
 {
     std::string root = tokens.expect("Missing root");
 
@@ -206,7 +220,7 @@ std::string ConfigParser::parseFilesystemPath()
     return root;
 }
 
-std::string ConfigParser::parseLocationPath()
+std::string parseLocationPath(TokenStream &tokens)
 {
     std::string path = tokens.expect("Missing location path");
 
@@ -225,7 +239,7 @@ std::string ConfigParser::parseLocationPath()
 }
 
 
-std::vector<std::string> ConfigParser::parseWordListUntilSemicolon(const std::string &directiveName)
+std::vector<std::string> parseWordListUntilSemicolon(TokenStream &tokens, const std::string &directiveName)
 {
     std::vector<std::string> values;
 
@@ -243,9 +257,9 @@ std::vector<std::string> ConfigParser::parseWordListUntilSemicolon(const std::st
 }
 
 
-std::vector<std::string> ConfigParser::parseIndexesList()
+std::vector<std::string> parseIndexesList(TokenStream &tokens)
 {
-    std::vector<std::string> indexes = parseWordListUntilSemicolon("index");
+    std::vector<std::string> indexes = parseWordListUntilSemicolon(tokens, "index");
 
     for (size_t i = 0; i < indexes.size(); ++i)
     {
@@ -264,7 +278,7 @@ std::vector<std::string> ConfigParser::parseIndexesList()
     return indexes;
 }
 
-std::string ConfigParser::parseCgiPathValue()
+std::string parseCgiPathValue(TokenStream &tokens)
 {
     std::string path = tokens.expect("Missing cgi_path");
 
@@ -279,4 +293,6 @@ std::string ConfigParser::parseCgiPathValue()
     if (path.find("..") != std::string::npos)
         throw std::runtime_error("Invalid cgi_path: directory traversal");
     return path;
+}
+
 }

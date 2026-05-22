@@ -261,7 +261,7 @@ int HttpRequest::parseBody(const std::string &raw)
     std::string te = toLower(getHeader("transfer-encoding"));
     std::string cl = getHeader("content-length");
     
-    if (!te.empty() && !cl.empty()) 
+    if (!te.empty() && !cl.empty()) /// ?????????????
     { 
         setError(400); 
         return -1; 
@@ -286,7 +286,8 @@ int HttpRequest::parseBody(const std::string &raw)
         size_t available = raw.size() - parsedSize;
         size_t toCopy = std::min(needed, available);
 
-        if (toCopy > 0) {
+        if (toCopy > 0) 
+        {
             body.append(raw, parsedSize, toCopy);
             parsedSize += toCopy;
         }
