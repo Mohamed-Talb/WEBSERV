@@ -1,17 +1,16 @@
 #ifndef VALUESPARSER_HPP
 #define VALUESPARSER_HPP
 
+#include <map>
 #include <string>
 #include <vector>
-#include <map>
-#include <stdexcept>
-#include <cstdlib>
-#include <sys/types.h>
-#include "../Helpers.hpp"
-#include "config.hpp"
-#include <algorithm>
 #include <limits>  
 #include <sstream>
+#include <cstdlib>
+#include <algorithm>
+#include <stdexcept>
+#include <sys/types.h>
+#include "../Helpers.hpp"
 #include "tokenStream.hpp"
 
 namespace valuesParser
