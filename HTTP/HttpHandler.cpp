@@ -9,9 +9,9 @@ const Location* HttpHandler::matchLocation(const std::string &path)
 {
     const Location* bestMatch = NULL;
     size_t bestLength = 0;
-    for (size_t i = 0; i < serverConfig->Locations.size(); ++i)
+    for (size_t i = 0; i < serverConfig->locations.size(); ++i)
     {
-        const Location &loc = serverConfig->Locations[i];
+        const Location &loc = serverConfig->locations[i];
         if (path.size() >= loc.path.size() && path.compare(0, loc.path.size(), loc.path) == 0)
         {
             if (loc.path == "/" || 

@@ -10,8 +10,6 @@ void logError(const std::string& context, const std::string& msg)
 void throwError(ConfigErrorType type, const std::string &target)
 {
     std::string message = "[Config Error] ";
-
-    // The "Dictionary" - mapping the Enum to the English text
     switch (type)
     {
         case ERR_DUPLICATE_DIRECTIVE:

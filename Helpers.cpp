@@ -143,6 +143,43 @@ bool isValidHost(const std::string &host)
     return dots == 4;
 }
 
+bool isValidServerName(const std::string &name)
+{
+    if (name.empty() || name.length() > 253)
+        return false;
+
+    if (name == "_")
+        return true;
+
+    if (name[0] == '-' || name[0] == '.' || name[name.length() - 1] == '-' || name[name.length() - 1] == '.')
+        return false;
+
+    size_t labelLength = 0;
+
+    for (size_t i = 0; i < name.length(); ++i)
+    {
+        char c = name[i];
+
+        if (std::isalnum(c) || c == '-')
+        {
+            labelLength++;
+            if (labelLength > 63)
+                return false;
+        }
+        else if (c == '.')
+        {
+            if (i > 0 && name[i - 1] == '.')
+                return false; 
+            labelLength = 0; 
+        }
+        else
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 
 bool isValidErrorCode(int code)
 {

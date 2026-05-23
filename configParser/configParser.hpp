@@ -29,8 +29,8 @@ class ConfigParser
     private:
     TokenStream tokens;
 
-    void checkDuplicate(ServerConfig &conf, const std::string &directive) const;
     void checkDuplicate(Location &loc, const std::string &directive) const;
+    void checkDuplicate(ServerConfig &conf, const std::string &directive) const;
 
     typedef void (ConfigParser::*ServerHandler)(ServerConfig &);
     typedef void (ConfigParser::*LocationHandler)(Location &);

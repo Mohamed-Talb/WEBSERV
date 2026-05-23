@@ -13,5 +13,5 @@ std::string mergeSlashes(const std::string &path);
 bool        isOnlyDigits(const std::string &s);
 bool        isValidHost(const std::string &host);
 bool        isValidErrorCode(int code);
-
+bool        isValidServerName(const std::string &name);
 #endif

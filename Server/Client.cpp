@@ -71,9 +71,9 @@ const ServerConfig *Client::matchConfig(const std::string& rawHost) const
 
     for (size_t i = 0; i < configs.size(); ++i) 
     {
-        for (size_t j = 0; j < configs[i].serverName.size(); ++j) 
+        for (size_t j = 0; j < configs[i].serverNames.size(); ++j) 
         {
-            if (toLower(configs[i].serverName[j]) == host) 
+            if (toLower(configs[i].serverNames[j]) == host) 
                 return &configs[i];
         }
     }

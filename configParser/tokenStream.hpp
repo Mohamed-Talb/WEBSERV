@@ -5,8 +5,8 @@
 #include <string>
 #include <fstream>
 #include <sstream>
+#include <iostream>
 #include <stdexcept>
-
 
 class TokenStream
 {

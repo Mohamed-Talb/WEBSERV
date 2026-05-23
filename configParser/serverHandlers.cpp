@@ -48,7 +48,15 @@ void ConfigParser::serverNames(ServerConfig &conf)
 {
     this->checkDuplicate(conf, "server_name");
     this->tokens.expect("Expected server_name");
-    conf.serverName = valuesParser::parseWordListUntilSemicolon(this->tokens, "server_name");
+    conf.serverNames = valuesParser::parseWordListUntilSemicolon(this->tokens, "server_name");
+    for (size_t i = 0; i < conf.serverNames.size(); ++i)
+    {
+        if (!isValidServerName(conf.serverNames[i]))
+        {
+            throwError(ERR_INVALID_VALUE, conf.serverNames[i] + " (invalid server_name format)");
+        }
+    }
+    tokens.expectSemicolon("server_name");
 }
 
 void ConfigParser::serverIndex(ServerConfig &conf)
@@ -56,6 +64,7 @@ void ConfigParser::serverIndex(ServerConfig &conf)
     this->checkDuplicate(conf, "index");    
     this->tokens.expect("Expected index");
     conf.indexes = valuesParser::parseIndexesList(this->tokens);
+    tokens.expectSemicolon("index");
 }
 
 void ConfigParser::serverClientMaxBodySize(ServerConfig &conf)
@@ -108,10 +117,8 @@ void ConfigParser::serverErrorPages(ServerConfig &conf)
                     oss << codes[i];
                     throwError(ERR_DUPLICATE_VALUE, oss.str());
                 }
-
                 conf.errorPage[codes[i]] = path;
             }
-            
             break;
         }
     }
@@ -124,11 +131,10 @@ void ConfigParser::serverLocation(ServerConfig &conf)
 
     Location loc;
     this->parseLocationBlock(loc); 
-
-    for (size_t i = 0; i < conf.Locations.size(); ++i)
+    for (size_t i = 0; i < conf.locations.size(); ++i)
     {
-        if (conf.Locations[i].path == loc.path)
+        if (conf.locations[i].path == loc.path)
             throwError(ERR_DUPLICATE_VALUE, loc.path);
     }
-    conf.Locations.push_back(loc);
+    conf.locations.push_back(loc);
 }

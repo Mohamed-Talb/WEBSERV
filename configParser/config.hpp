@@ -7,6 +7,13 @@
 #include <stdexcept>
 #include <sys/types.h>
 
+struct Listen
+{
+    int port;
+    std::string host;
+    Listen() : port(80), host("127.0.0.1"){};
+};
+
 struct Location 
 {
     std::string path;
@@ -35,14 +42,6 @@ struct Location
     };
 };
 
-struct Listen
-{
-    int port;
-    std::string host;
-    Listen() : port(80), host("127.0.0.1"){};
-};
-
-
 struct ServerConfig 
 {
     int port; // !!
@@ -51,15 +50,15 @@ struct ServerConfig
     std::string root;
     std::vector<Listen> listens;
     ssize_t client_max_body_size;
-    std::vector<Location> Locations;
+    std::vector<Location> locations;
     std::vector<std::string> indexes;
-    std::vector<std::string> serverName;
+    std::vector<std::string> serverNames;
     std::map<int, std::string> errorPage;
     std::map<std::string, bool> seenDirectives;
     ServerConfig() : root("./www"), client_max_body_size(1048576)
     {
         indexes.push_back("index.html");
-        serverName.push_back(""); 
+        serverNames.push_back(""); 
     }
 };
 

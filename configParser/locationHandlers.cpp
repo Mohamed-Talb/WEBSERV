@@ -19,6 +19,7 @@ void ConfigParser::locationMethods(Location &loc)
         }
         loc.methods.push_back(currMethod);
     }
+    tokens.expectSemicolon("methods");
 }
 
 void ConfigParser::locationRoot(Location &loc)

@@ -65,9 +65,9 @@ void ConfigParser::validateServer(ServerConfig &conf)
     }
     conf.host = conf.listens[0].host;
     conf.port = conf.listens[0].port;
-    for (size_t i = 0; i < conf.Locations.size(); ++i)
+    for (size_t i = 0; i < conf.locations.size(); ++i)
     {
-        Location &loc = conf.Locations[i];
+        Location &loc = conf.locations[i];
         if (loc.root.empty()) 
         {
             loc.root = conf.root;
@@ -151,13 +151,11 @@ void ConfigParser::parseServerBlock(ServerConfig &conf)
         if (tokens.current() == "}")
         {
             tokens.expect("Expected '}'");
-            std ::sort(conf.Locations.begin(), conf.Locations.end(), CompareLocations());
+            std::sort(conf.locations.begin(), conf.locations.end(), CompareLocations());
             validateServer(conf);
             return;
         }
-
         std::string key = tokens.current();
-
         std::map<std::string, ServerHandler>::iterator handler;
         handler = serverDispatch.find(key);
 

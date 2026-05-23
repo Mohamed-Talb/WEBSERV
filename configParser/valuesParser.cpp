@@ -252,8 +252,6 @@ std::vector<std::string> parseWordListUntilSemicolon(TokenStream &tokens, const 
 
     if (values.empty())
         throwError(ERR_MISSING_VALUE, directiveName + " (requires at least one value)");
-        
-    tokens.expectSemicolon(directiveName);
     return values;
 }
 
@@ -274,7 +272,6 @@ std::vector<std::string> parseIndexesList(TokenStream &tokens)
         if (indexes[i].find("..") != std::string::npos)
             throwError(ERR_INVALID_VALUE, indexes[i] + " (directory traversal not allowed)");
     }
-
     return indexes;
 }
 
@@ -292,7 +289,6 @@ std::string parseCgiPathValue(TokenStream &tokens)
 
     if (path.find("..") != std::string::npos)
         throwError(ERR_INVALID_VALUE, path + " (directory traversal not allowed)");
-        
     return path;
 }
 
