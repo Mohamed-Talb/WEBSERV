@@ -41,6 +41,22 @@ void ConfigParser::validateLocation(Location &loc)
     }
 }
 
+void ConfigParser::checkDuplicate(ServerConfig &conf, const std::string &directive) const
+{
+    if (conf.seenDirectives[directive])
+        throw std::runtime_error("duplicate " + directive + " directive in server block");
+    
+    conf.seenDirectives[directive] = true;
+}
+
+void ConfigParser::checkDuplicate(Location &loc, const std::string &directive) const
+{
+    if (loc.seenDirectives[directive])
+        throw std::runtime_error("duplicate " + directive + " directive in location block");
+    
+    loc.seenDirectives[directive] = true;
+}
+
 void ConfigParser::validateServer(ServerConfig &conf) 
 {
     if (conf.listens.empty())

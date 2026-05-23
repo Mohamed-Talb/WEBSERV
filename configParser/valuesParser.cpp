@@ -68,6 +68,7 @@ Multiple slashes should be collapsed:
 
     "///img//cat.png" → "/img/cat.png"
 */
+#include "../Errors.hpp"
 
 namespace valuesParser
 {
@@ -75,25 +76,25 @@ namespace valuesParser
 int parsePortValue(std::string value)
 {
     if (!isOnlyDigits(value))
-        throw std::runtime_error("Invalid port: " + value);
+        throwError(ERR_INVALID_VALUE, value + " (must be numeric)");
 
     if (value.size() > 5)
-        throw std::runtime_error("Invalid port: " + value);
+        throwError(ERR_INVALID_VALUE, value + " (too long)");
 
     int port = std::atoi(value.c_str());
 
     if (port <= 0 || port > 65535)
-        throw std::runtime_error("Invalid port: " + value);
+        throwError(ERR_INVALID_VALUE, value + " (must be between 1 and 65535)");
 
     return port;
 }
 
 size_t parseBodySizeValue(TokenStream &tokens)
 {
-    std::string value = tokens.expect("Missing body size value");
+    std::string value = tokens.expect("client_max_body_size value"); // The expect string gets caught by EOF handler if missing
 
     if (value.empty())
-        throw std::runtime_error("Empty client_max_body_size directive value");
+        throwError(ERR_MISSING_VALUE, "client_max_body_size");
 
     size_t i = 0;
     while (i < value.size() && std::isdigit(static_cast<unsigned char>(value[i])))
@@ -102,10 +103,10 @@ size_t parseBodySizeValue(TokenStream &tokens)
     }
     if (i < value.size() && value[i] == '.')
     {
-        throw std::runtime_error("Invalid client_max_body_size: decimals are not allowed.");
+        throwError(ERR_INVALID_VALUE, value + " (decimals are not allowed)");
     }
     if (i == 0)
-        throw std::runtime_error("Invalid body size syntax (missing digits): " + value);
+        throwError(ERR_INVALID_VALUE, value + " (missing digits)");
 
     std::string numericPart = value.substr(0, i);
     std::string unitPart = value.substr(i);
@@ -115,7 +116,8 @@ size_t parseBodySizeValue(TokenStream &tokens)
     iss >> baseSize;
 
     if (iss.fail())
-        throw std::runtime_error("Numeric overflow parsing body size base: " + numericPart);
+        throwError(ERR_INVALID_VALUE, numericPart + " (numeric overflow)");
+
     std::string unit = toUpper(trim(unitPart)); 
     size_t multiplier = 1;
 
@@ -137,25 +139,25 @@ size_t parseBodySizeValue(TokenStream &tokens)
     }
     else
     {
-        throw std::runtime_error("Unsupported byte size unit suffix: '" + unitPart + "'");
+        throwError(ERR_INVALID_VALUE, unitPart + " (unsupported byte size unit suffix)");
     }
     if (baseSize > 0 && multiplier > std::numeric_limits<size_t>::max() / baseSize)
     {
-        throw std::runtime_error("Calculated client_max_body_size exceeds physical address space limits: " + value);
+        throwError(ERR_INVALID_VALUE, value + " (exceeds physical address space limits)");
     }
     return baseSize * multiplier;
 }
 
 std::string parseErrorPagePathValue(TokenStream &tokens)
 {
-    std::string raw = tokens.expect("Missing error_page path");
+    std::string raw = tokens.expect("error_page path");
     std::string path = mergeSlashes(raw);
 
     if (path.empty())
-        throw std::runtime_error("Invalid error_page path");
+        throwError(ERR_MISSING_VALUE, "error_page path");
 
     if (path.find("..") != std::string::npos)
-        throw std::runtime_error("Invalid error_page path");
+        throwError(ERR_INVALID_VALUE, path + " (directory traversal not allowed)");
 
     if (path[0] != '/')
         path = "/" + path;
@@ -165,44 +167,44 @@ std::string parseErrorPagePathValue(TokenStream &tokens)
 
 std::string parseCgiExtValue(TokenStream &tokens)
 {
-    std::string raw = tokens.expect("Missing cgi_ext");
+    std::string raw = tokens.expect("cgi_ext");
     std::string ext = raw;
 
     if (ext.empty())
-        throw std::runtime_error("Invalid cgi_ext");
+        throwError(ERR_MISSING_VALUE, "cgi_ext");
 
     if (ext.find("..") != std::string::npos || ext.find("/") != std::string::npos)
-        throw std::runtime_error("Invalid cgi_ext");
+        throwError(ERR_INVALID_VALUE, ext + " (invalid characters in extension)");
 
     if (ext[0] != '.')
         ext = "." + ext;
 
     if (ext.size() == 1)
-        throw std::runtime_error("Invalid cgi_ext");
+        throwError(ERR_INVALID_VALUE, ext + " (extension cannot be just '.')");
 
     return ext;
 }
 
 std::string parseRedirectTargetValue(TokenStream &tokens)
 {
-    std::string target = tokens.expect("Missing redirect target");
+    std::string target = tokens.expect("redirect target");
 
     if (target.empty())
-        throw std::runtime_error("Missing redirect target");
+        throwError(ERR_MISSING_VALUE, "redirect target");
 
     if (target.find("..") != std::string::npos)
-        throw std::runtime_error("Invalid redirect target");
+        throwError(ERR_INVALID_VALUE, target + " (directory traversal not allowed)");
 
     if (target[0] != '/' && target.find("http://") != 0  &&
         target.find("https://") != 0)
-        throw std::runtime_error("redirect target must be path or URL");
+        throwError(ERR_INVALID_VALUE, target + " (must be absolute path or URL)");
 
     return target;
 }
 
 std::string parseFilesystemPath(TokenStream &tokens)
 {
-    std::string root = tokens.expect("Missing root");
+    std::string root = tokens.expect("path");
 
     root = mergeSlashes(root);
 
@@ -210,32 +212,31 @@ std::string parseFilesystemPath(TokenStream &tokens)
         root.erase(root.size() - 1);
 
     if (root.empty())
-        throw std::runtime_error("Invalid root path");
+        throwError(ERR_INVALID_VALUE, root + " (empty path)");
 
     if (root.find("..") != std::string::npos)
-        throw std::runtime_error("Invalid root path: directory traversal");
+        throwError(ERR_INVALID_VALUE, root + " (directory traversal not allowed)");
 
     return root;
 }
 
 std::string parseLocationPath(TokenStream &tokens)
 {
-    std::string path = tokens.expect("Missing location path");
+    std::string path = tokens.expect("location path");
 
     path = mergeSlashes(path);
 
     if (path.empty() || path[0] != '/')
-        throw std::runtime_error("Location path must start with '/'");
+        throwError(ERR_INVALID_VALUE, path + " (must start with '/')");
 
     while (path.size() > 1 && path[path.size() - 1] == '/')
         path.erase(path.size() - 1);
 
     if (path.find("..") != std::string::npos)
-        throw std::runtime_error("Invalid location path: directory traversal");
+        throwError(ERR_INVALID_VALUE, path + " (directory traversal not allowed)");
 
     return path;
 }
-
 
 std::vector<std::string> parseWordListUntilSemicolon(TokenStream &tokens, const std::string &directiveName)
 {
@@ -243,17 +244,18 @@ std::vector<std::string> parseWordListUntilSemicolon(TokenStream &tokens, const 
 
     while (tokens.hasMore() && tokens.current() != ";")
     {
-        values.push_back(tokens.expect("Missing value for " + directiveName));
+        values.push_back(tokens.expect(directiveName + " value"));
     }
+    
     if (!tokens.hasMore())
-        throw std::runtime_error("Missing ';' after " + directiveName);
+        throwError(ERR_MISSING_SEMICOLON, directiveName);
 
     if (values.empty())
-        throw std::runtime_error(directiveName + " directive requires at least one value");
+        throwError(ERR_MISSING_VALUE, directiveName + " (requires at least one value)");
+        
     tokens.expectSemicolon(directiveName);
     return values;
 }
-
 
 std::vector<std::string> parseIndexesList(TokenStream &tokens)
 {
@@ -267,10 +269,10 @@ std::vector<std::string> parseIndexesList(TokenStream &tokens)
             indexes[i].erase(0, 1);
 
         if (indexes[i].empty())
-            throw std::runtime_error("Index cannot be empty");
+            throwError(ERR_INVALID_VALUE, "Empty index name");
 
         if (indexes[i].find("..") != std::string::npos)
-            throw std::runtime_error("Invalid index path: directory traversal");
+            throwError(ERR_INVALID_VALUE, indexes[i] + " (directory traversal not allowed)");
     }
 
     return indexes;
@@ -278,7 +280,7 @@ std::vector<std::string> parseIndexesList(TokenStream &tokens)
 
 std::string parseCgiPathValue(TokenStream &tokens)
 {
-    std::string path = tokens.expect("Missing cgi_path");
+    std::string path = tokens.expect("cgi_path");
 
     path = mergeSlashes(path);
 
@@ -286,10 +288,11 @@ std::string parseCgiPathValue(TokenStream &tokens)
         path.erase(path.size() - 1);
 
     if (path.empty())
-        throw std::runtime_error("Invalid cgi_path");
+        throwError(ERR_INVALID_VALUE, "Empty cgi_path");
 
     if (path.find("..") != std::string::npos)
-        throw std::runtime_error("Invalid cgi_path: directory traversal");
+        throwError(ERR_INVALID_VALUE, path + " (directory traversal not allowed)");
+        
     return path;
 }
 

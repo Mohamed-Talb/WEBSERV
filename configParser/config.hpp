@@ -27,7 +27,7 @@ struct Location
     std::vector<std::string> allowedMethods;
     std::map<std::string, bool> seenDirectives;
     
-    Location() : redirectCode(0), autoindex("off"), uploadEnabled("off") 
+    Location() : autoindex("off"), uploadEnabled("off") ,redirectCode(0)
     {
         allowedMethods.push_back("GET");
         allowedMethods.push_back("DELETE");
