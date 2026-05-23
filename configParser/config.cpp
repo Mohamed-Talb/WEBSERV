@@ -52,8 +52,12 @@ ServerConfig::ServerConfig() :
 
 void ServerConfig::finalizeAndValidate() 
 {
-    if (listens.empty()) 
+    if (listens.empty())
+    {
         listens.push_back(Listen());
+    }
+    host = listens[0].host;
+    port = listens[0].port;
     for (size_t i = 0; i < Locations.size(); ++i)
     {
         Location &loc = Locations[i];
