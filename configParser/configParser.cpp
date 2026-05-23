@@ -6,6 +6,64 @@
 #include <algorithm>
 #include "../Helpers.hpp"
 
+void ConfigParser::validateLocation(Location &loc)
+{
+    if (loc.uploadEnabled == "on" && loc.uploadPath.empty())
+        throw std::runtime_error("upload on requires upload_path");
+
+    if (loc.uploadEnabled == "off" && !loc.uploadPath.empty())
+        throw std::runtime_error("upload_path set but upload is off");
+
+    if (!loc.cgiExt.empty() && loc.cgiPath.empty())
+        throw std::runtime_error("cgi_ext requires cgi_path");
+
+    if (!loc.cgiPath.empty() && loc.cgiExt.empty())
+        throw std::runtime_error("cgi_path requires cgi_ext");
+
+    if (loc.autoindex != "on" && loc.autoindex != "off")
+        throw std::runtime_error("autoindex must be 'on' or 'off'");
+
+    if (loc.redirectCode != 0)
+    {
+        if (loc.redirectCode != 301 && loc.redirectCode != 302)
+            throw std::runtime_error("Invalid redirect code");
+
+        if (loc.redirectTarget.empty())
+            throw std::runtime_error("Missing redirect target");
+
+        if (loc.redirectTarget.find("..") != std::string::npos)
+            throw std::runtime_error("Invalid redirect target");
+
+        if (loc.redirectTarget[0] != '/' && loc.redirectTarget.find("http://") != 0 && loc.redirectTarget.find("https://") != 0)
+        {
+            throw std::runtime_error("redirect target must be path or URL");
+        }
+    }
+}
+
+void ConfigParser::validateServer(ServerConfig &conf) 
+{
+    if (conf.listens.empty())
+    {
+        conf.listens.push_back(Listen());
+    }
+    conf.host = conf.listens[0].host;
+    conf.port = conf.listens[0].port;
+    for (size_t i = 0; i < conf.Locations.size(); ++i)
+    {
+        Location &loc = conf.Locations[i];
+        if (loc.root.empty()) 
+        {
+            loc.root = conf.root;
+        }
+        if (loc.indexes.empty()) 
+        {
+            loc.indexes = conf.indexes;
+        }
+        validateLocation(loc);
+    }
+}
+
 void ConfigParser::initServerDispatch()
 {
     serverDispatch["listen"] = &ConfigParser::serverListen;
@@ -49,7 +107,7 @@ void ConfigParser::parseLocationBlock(Location &loc)
         if (tokens.current() == "}")
         {
             tokens.expect("Expected '}'");
-            loc.validateLocation();
+            validateLocation(loc);
             return;
         }
         std::string key = tokens.current();
@@ -78,7 +136,7 @@ void ConfigParser::parseServerBlock(ServerConfig &conf)
         {
             tokens.expect("Expected '}'");
             std ::sort(conf.Locations.begin(), conf.Locations.end(), CompareLocations());
-            conf.finalizeAndValidate();
+            validateServer(conf);
             return;
         }
 

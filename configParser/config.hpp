@@ -11,19 +11,28 @@ struct Location
 {
     std::string path;
     std::string root;
-    int redirectCode;
     std::string cgiExt;
     std::string cgiPath;
+    
     std::string autoindex;
-    std::string redirectTarget;
-    std::string uploadEnabled;
+    
     std::string uploadPath;
-    std::vector<std::string> indexes;
+    std::string uploadEnabled;
+    
+    int redirectCode;
+    std::string redirectTarget;
+
     std::vector<std::string> methods;
-    std::map<std::string, bool> seenDirectives;
+    std::vector<std::string> indexes;
     std::vector<std::string> allowedMethods;
-    Location();
-    void validateLocation() const;
+    std::map<std::string, bool> seenDirectives;
+    
+    Location() : redirectCode(0), autoindex("off"), uploadEnabled("off") 
+    {
+        allowedMethods.push_back("GET");
+        allowedMethods.push_back("DELETE");
+        allowedMethods.push_back("POST");
+    };
 };
 
 struct Listen
@@ -36,9 +45,9 @@ struct Listen
 
 struct ServerConfig 
 {
-    int port;
-    std::string host; 
-    // ..... // I will leave this for now to avoid a server error
+    int port; // !!
+    std::string host;// !! 
+    // ..... I will leave this for now to avoid a server error
     std::string root;
     std::vector<Listen> listens;
     ssize_t client_max_body_size;
@@ -47,8 +56,11 @@ struct ServerConfig
     std::vector<std::string> serverName;
     std::map<int, std::string> errorPage;
     std::map<std::string, bool> seenDirectives;
-    ServerConfig();
-    void finalizeAndValidate();
+    ServerConfig() : root("./www"), client_max_body_size(1048576)
+    {
+        indexes.push_back("index.html");
+        serverName.push_back(""); 
+    }
 };
 
 #endif

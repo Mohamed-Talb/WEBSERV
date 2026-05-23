@@ -43,6 +43,9 @@ class ConfigParser
     void parseLocationBlock(Location &loc);
     void parseServerBlock(ServerConfig &conf);
 
+    //
+    void validateServer(ServerConfig &conf);
+    void validateLocation(Location &loc);
     // Server directive handlers
     void serverRoot(ServerConfig &conf);
     void serverIndex(ServerConfig &conf);
