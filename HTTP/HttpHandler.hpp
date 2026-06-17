@@ -9,7 +9,7 @@
 #include "../Helpers.hpp"
 #include "HttpRequest.hpp"
 #include "HttpResponse.hpp"
-#include "../configParser/config.hpp"
+#include "../configParser/configParser.hpp"
 #include "RouteMatch.hpp"
 
 #include <vector>
@@ -26,7 +26,7 @@
 
 #include "HttpResponse.hpp"
 #include "RouteMatch.hpp"
-#include "../configParser/config.hpp"
+#include "../configParser/configParser.hpp"
 #include <string>
 
 enum HttpResultType

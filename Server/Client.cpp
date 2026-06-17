@@ -26,7 +26,8 @@ Client::~Client()
     }
     if (activeCgi)
     {
-        delete activeCgi;
+        server->removeHandler(activeCgi->getFD(), false); 
+        delete activeCgi; // erase the handler for cgi too
         activeCgi = NULL;
     }
 }
@@ -80,6 +81,13 @@ const ServerConfig *Client::matchConfig(const std::string& rawHost) const
     return &configs[0]; 
 }
 
+void Client::terminateCgi()
+{
+    activeCgi->killCgi();
+    const ServerConfig& currConfig = (activeConfig) ? *activeConfig : configs[0];
+    onCgiDone(ErrorPage(504, currConfig));
+}
+
 void Client::onCgiDone(HttpResponse response)
 {
     appendToWriteBuffer(response.toString());
@@ -90,7 +98,7 @@ void Client::onCgiDone(HttpResponse response)
     if (activeCgi) 
     {
         server->removeHandler(activeCgi->getFD(), false); 
-        delete activeCgi;
+        delete activeCgi; // destroying the cgi object this function was called from??!?! 
         activeCgi = NULL;
     }
     server->modifyHandler(this, EPOLLOUT);
@@ -174,7 +182,6 @@ void Client::handleRead()
 {
     if (state == PROCESSING_CGI || !readingFromSocket())
         return;
-    std::cout << readBuffer << std::endl;
     while (true)
     {
         int parseStatus = activeRequest.parse(readBuffer);
@@ -223,7 +230,7 @@ void Client::handleWrite()
             server->removeHandler(socketFD);
             return;
         }
-        if (bytes == 0) return;       
+        if (bytes == 0) return;
         consumeWriteBuffer(static_cast<size_t>(bytes));
         timeout = time(NULL);
     }

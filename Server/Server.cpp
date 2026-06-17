@@ -68,18 +68,30 @@ const std::vector<ServerConfig>& Server::getConfigs() const
 void Server::checkTimeout()
 {
     time_t curr_time = time(NULL);
-    for (std::map<int, IEventHandler *>::iterator i = fdHandlers.begin(); i != fdHandlers.end();)
+    std::vector<Client *> expiredClients;
+    std::vector<Client *> cgiTimeoutClients;
+
+    for (std::map<int, IEventHandler *>::iterator it = fdHandlers.begin(); it != fdHandlers.end(); it++)
     {
-        Client *client = dynamic_cast<Client *>(i->second);
-        if (client != NULL)
+        Client *client = dynamic_cast<Client *>(it->second);
+        if (client != NULL && difftime(curr_time, client->timeout) > TIMEOUT_DURATION)
         {
-            if (client->state != PROCESSING_CGI && difftime(curr_time, client->timeout) > 30) // hardcoded to 30 sec for now
-            {
-                removeHandler(i++->first);
-                continue;
-            }
+            if (client->state != PROCESSING_CGI)
+                expiredClients.push_back(client);
+            else
+                cgiTimeoutClients.push_back(client);
         }
-        i++;
+    }
+
+    // client timeout
+    for (size_t i = 0; i < expiredClients.size(); i++)
+        removeHandler(expiredClients[i]->getFD());
+
+    // cgi timeout
+    for (size_t i = 0; i < cgiTimeoutClients.size(); i++)
+    {
+        Client *client = cgiTimeoutClients[i];
+        client->terminateCgi();
     }
 }
 
@@ -128,13 +140,10 @@ void Server::runEventLoop()
                 handler->handleRead();
                 if (fdHandlers.find(fd) == fdHandlers.end())
                     continue;
-                std::cout << "EPOLLIN" << std::endl;
             }
             else if (currEvent & EPOLLOUT)
             {
-                std::cout << "EPOLLOUT" << std::endl;
                 handler->handleWrite();
-                std::cout << "EPOLLOUT2" << std::endl;
             }
         }
         checkTimeout();

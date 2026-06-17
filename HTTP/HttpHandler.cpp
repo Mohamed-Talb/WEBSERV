@@ -32,13 +32,10 @@ const Location* HttpHandler::matchLocation(const std::string &path)
 
 bool HttpHandler::isMethodAllowed(const std::string &method, const Location &loc)
 {
-    std::cout << loc.path << std::endl;   
-    std::cout << loc.root << std::endl;   
     if (loc.methods.empty())
         return true;
     for (size_t i = 0; i < loc.methods.size(); ++i)
     {
-        std::cout << loc.methods[i] << std::endl;
         if (toUpper(loc.methods[i]) == method)
             return true;
     }

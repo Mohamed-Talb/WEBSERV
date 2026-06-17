@@ -17,10 +17,12 @@ int CGI::getFD() const
 
 char **CGI::buildEnv(const HttpRequest &request)
 {
-    char** envp = new char*[3];
+    char** envp = new char*[5];
     envp[0] = strdup(("REQUEST_METHOD=" + request.getMethod()).c_str());
     envp[1] = strdup(("QUERY_STRING=" + request.getQuery()).c_str());
-    envp[2] = NULL;
+    envp[2] = strdup(("CONTENT_TYPE=" + request.getHeader("content-type")).c_str());
+    envp[3] = strdup((std::string("CONTENT_LENGTH=") + request.getHeader("content-length")).c_str());
+    envp[4] = NULL;
     return envp;
 }
 
@@ -41,6 +43,7 @@ CGI::CGI(Client* client, Server *srv, const HttpRequest &request,
       parentClient(client)
 {
     (void)location;
+    client->timeout = time(NULL);
     requestBody = request.getBody();
     char **envp = buildEnv(request);
 
@@ -81,6 +84,15 @@ CGI::~CGI()
     waitpid(cgiPid, NULL, WNOHANG);
 }
 
+void CGI::killCgi()
+{
+    if (cgiPid > 0)
+    {
+        kill(cgiPid, SIGKILL);
+        cgiPid = -1;
+    }
+}
+
 void CGI::handleWrite()
 {
     if (state != WRITING_INPUT)
@@ -88,7 +100,6 @@ void CGI::handleWrite()
 
     if (writeOffset >= requestBody.size())
     {
-        std::cout << "[DEBUG] Finished writing to CGI. Switching to EPOLLIN." << std::endl;
         server->removeHandler(pipeInFd, false);
         close(pipeInFd);
         state = READING_OUTPUT;
@@ -188,12 +199,10 @@ void CGI::handleRead()
         ssize_t bytesRead = read(pipeOutFd, buffer, sizeof(buffer));
         if (bytesRead > 0)
         {
-            std::cout << "[DEBUG] Read " << bytesRead << " bytes from CGI." << std::endl;
             rawOutputBuffer.append(buffer, bytesRead);
         }
         else if (bytesRead == 0)
         {
-            std::cout << "[DEBUG] CGI sent EOF (0 bytes). Parsing output!" << std::endl;
             waitpid(cgiPid, NULL, 0);
             HttpResponse finalResponse = parseCgiOutput(rawOutputBuffer);
             
@@ -206,7 +215,6 @@ void CGI::handleRead()
             if (errno == EAGAIN || errno == EWOULDBLOCK)
                 return; // Nothing more to read right now
 
-            std::cout << "[DEBUG] CGI pipe read error!" << std::endl;
             HttpResponse err(500, "Internal Server Error");
             state = DONE;
             parentClient->onCgiDone(err);

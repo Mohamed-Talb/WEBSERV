@@ -40,6 +40,7 @@ class Client : public IEventHandler
 
     bool isConnected() const;
     void onCgiDone(HttpResponse response);
+    void terminateCgi();
 
     bool hasPendingWrite() const;
     void consumeReadBuffer(size_t bytes);

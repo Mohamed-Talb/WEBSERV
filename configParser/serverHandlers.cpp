@@ -3,7 +3,10 @@
 
 void ConfigParser::serverListen(ServerConfig &conf)
 {
-    this->checkDuplicate(conf, "listen");
+    if (conf.seenDirectives["listen"])
+        throw std::runtime_error("Error: Only one listen directive allowed per server block");
+
+    conf.seenDirectives["listen"] = true;
     this->tokens.expect("Expected listen");
     
     std::string value = tokens.expect("Missing listen Value");

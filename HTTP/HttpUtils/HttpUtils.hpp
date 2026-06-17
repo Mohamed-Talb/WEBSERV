@@ -10,7 +10,7 @@
 #include "../HttpHandler.hpp"
 #include "../HttpResponse.hpp"
 #include "../RouteMatch.hpp"
-#include "../../configParser/config.hpp"
+#include "../../configParser/configParser.hpp"
 
 
 

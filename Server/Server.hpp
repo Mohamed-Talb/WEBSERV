@@ -16,6 +16,8 @@
 #include "../HTTP/HttpHandler.hpp"
 #include "../configParser/configParser.hpp"
 
+#define TIMEOUT_DURATION 30
+
 class Server
 {
     private:

@@ -2,7 +2,7 @@
 #define ROUTEMATCH_HPP
 
 #include <string>
-#include "../configParser/config.hpp"
+#include "../configParser/configParser.hpp"
 
 struct RouteMatch
 {
