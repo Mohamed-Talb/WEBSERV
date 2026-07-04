@@ -127,7 +127,9 @@ bool Client::readingFromSocket()
     {
         // if (readBuffer.size() > ABSOLUTE_MAX_BUFFER)
         //     break ;
+        std::cout << "ifhellooooooo\n";
         ssize_t bytes = recv(socketFD, buf, sizeof(buf), 0);
+        std::cout << "hellooooooo\n";
         if (bytes == 0)
         {
             server->removeHandler(socketFD);

@@ -56,7 +56,7 @@ void Listener::handleRead()
 {
     while (true)
     {
-        int clientFD = accept(socketFD, NULL, NULL);     
+        int clientFD = accept(socketFD, NULL, NULL);
         if (clientFD < 0)
         {
             break; 
