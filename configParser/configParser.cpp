@@ -177,9 +177,8 @@ std::vector<ServerConfig> ConfigParser::loadeConfig(std::string configFile)
     while (tokens.hasMore())
     {
         if (tokens.current() != "server")
-        {
             throw std::runtime_error("Expected server block");
-        }
+        
         ServerConfig conf;
         parseServerBlock(conf);
         servers.push_back(conf);

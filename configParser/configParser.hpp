@@ -54,6 +54,7 @@ struct ServerConfig
     int port; // !!
     std::string host;// !! 
     // ..... I will leave this for now to avoid a server error
+    
     std::string root;
     std::vector<Listen> listens;
     ssize_t client_max_body_size;
