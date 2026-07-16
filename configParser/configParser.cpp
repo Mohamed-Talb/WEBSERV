@@ -1,10 +1,25 @@
 #include "configParser.hpp"
-#include <fstream>
+
+#include <algorithm>
 #include <sstream>
 #include <stdexcept>
-#include <cstdlib>
-#include <algorithm>
-#include "../Helpers.hpp"
+
+namespace
+{
+    std::runtime_error tokenError(const std::string &message, const Token &token)
+    {
+        std::ostringstream error;
+
+        error << "Config error at line "
+              << token.line
+              << ", column "
+              << token.column
+              << ": "
+              << message;
+
+        return std::runtime_error(error.str());
+    }
+}
 
 void ConfigParser::validateLocation(Location &loc)
 {
@@ -34,7 +49,9 @@ void ConfigParser::validateLocation(Location &loc)
         if (loc.redirectTarget.find("..") != std::string::npos)
             throw std::runtime_error("Invalid redirect target");
 
-        if (loc.redirectTarget[0] != '/' && loc.redirectTarget.find("http://") != 0 && loc.redirectTarget.find("https://") != 0)
+        if (loc.redirectTarget[0] != '/'
+            && loc.redirectTarget.find("http://") != 0
+            && loc.redirectTarget.find("https://") != 0)
         {
             throw std::runtime_error("redirect target must be path or URL");
         }
@@ -44,38 +61,45 @@ void ConfigParser::validateLocation(Location &loc)
 void ConfigParser::checkDuplicate(ServerConfig &conf, const std::string &directive) const
 {
     if (conf.seenDirectives[directive])
-        throw std::runtime_error("duplicate " + directive + " directive in server block");
-    
+    {
+        throw std::runtime_error(
+            "duplicate " + directive + " directive in server block"
+        );
+    }
+
     conf.seenDirectives[directive] = true;
 }
 
 void ConfigParser::checkDuplicate(Location &loc, const std::string &directive) const
 {
     if (loc.seenDirectives[directive])
-        throw std::runtime_error("duplicate " + directive + " directive in location block");
-    
+    {
+        throw std::runtime_error(
+            "duplicate " + directive + " directive in location block"
+        );
+    }
+
     loc.seenDirectives[directive] = true;
 }
 
-void ConfigParser::validateServer(ServerConfig &conf) 
+void ConfigParser::validateServer(ServerConfig &conf)
 {
     if (conf.listens.empty())
-    {
         conf.listens.push_back(Listen());
-    }
+
     conf.host = conf.listens[0].host;
     conf.port = conf.listens[0].port;
+
     for (size_t i = 0; i < conf.locations.size(); ++i)
     {
         Location &loc = conf.locations[i];
-        if (loc.root.empty()) 
-        {
+
+        if (loc.root.empty())
             loc.root = conf.root;
-        }
-        if (loc.indexes.empty()) 
-        {
+
+        if (loc.indexes.empty())
             loc.indexes = conf.indexes;
-        }
+
         validateLocation(loc);
     }
 }
@@ -110,78 +134,97 @@ ConfigParser::ConfigParser()
     initLocationDispatch();
 }
 
- 
 void ConfigParser::parseLocationBlock(Location &loc)
 {
-
-    loc.path = valuesParser::parseLocationPath(this->tokens);
-
-    if (tokens.expect("Expected '{'") != "{")
-        throw std::runtime_error("Expected '{'");
-    while (tokens.hasMore())
+    loc.path = valuesParser::parseLocationPath(tokens);
+    tokens.expect("{");
+    while (!tokens.atEnd())
     {
-        if (tokens.current() == "}")
+        if (tokens.peek().text == "}")
         {
-            tokens.expect("Expected '}'");
+            tokens.expect("}");
             validateLocation(loc);
             return;
         }
-        std::string key = tokens.current();
+
+        /*
+         * Look at the directive without consuming it.
+         * The selected handler will consume the directive.
+         */
+        const Token &directiveToken = tokens.peek();
+        const std::string &directive = directiveToken.text;
+
         std::map<std::string, LocationHandler>::iterator handler;
-        handler = locationDispatch.find(key);
+        handler = locationDispatch.find(directive);
 
         if (handler == locationDispatch.end())
-            throw std::runtime_error("Unknown location directive: " + key);
+        {
+            throw tokenError(
+                "unknown location directive '" + directive + "'",
+                directiveToken
+            );
+        }
 
         (this->*(handler->second))(loc);
     }
-    throw std::runtime_error("Unclosed location block");
+
+    throw std::runtime_error(
+        "Unclosed location block: expected '}' before end of file"
+    );
 }
 
 void ConfigParser::parseServerBlock(ServerConfig &conf)
 {
-    if (tokens.expect("Expected server") != "server")
-        throw std::runtime_error("Expected server block");
+    tokens.expect("server");
+    tokens.expect("{");
 
-    if (tokens.expect("Expected '{'") != "{")
-        throw std::runtime_error("Expected '{'");
-
-    while (tokens.hasMore())
+    while (!tokens.atEnd())
     {
-        if (tokens.current() == "}")
+        if (tokens.peek().text == "}")
         {
-            tokens.expect("Expected '}'");
-            std::sort(conf.locations.begin(), conf.locations.end(), CompareLocations());
+            tokens.expect("}");
+            std::sort(conf.locations.begin(),conf.locations.end(),CompareLocations());
             validateServer(conf);
             return;
         }
-        std::string key = tokens.current();
+        const Token &directiveToken = tokens.peek();
+        const std::string &directive = directiveToken.text;
+
         std::map<std::string, ServerHandler>::iterator handler;
-        handler = serverDispatch.find(key);
+        handler = serverDispatch.find(directive);
 
         if (handler == serverDispatch.end())
-            throw std::runtime_error("Unknown server directive: " + key);
+        {
+            throw tokenError(
+                "unknown server directive '" + directive + "'",
+                directiveToken
+            );
+        }
 
         (this->*(handler->second))(conf);
     }
-    throw std::runtime_error("Unclosed server block");
+
+    throw std::runtime_error(
+        "Unclosed server block: expected '}' before end of file"
+    );
 }
 
 std::vector<ServerConfig> ConfigParser::loadeConfig(std::string configFile)
 {
-    
     tokens = TokenStream(configFile);
+
     std::vector<ServerConfig> servers;
-    if (!tokens.hasMore())
+
+    if (tokens.atEnd())
         throw std::runtime_error("Empty config file");
-    while (tokens.hasMore())
+
+    while (!tokens.atEnd())
     {
-        if (tokens.current() != "server")
-            throw std::runtime_error("Expected server block");
-        
         ServerConfig conf;
+
         parseServerBlock(conf);
         servers.push_back(conf);
     }
+
     return servers;
 }

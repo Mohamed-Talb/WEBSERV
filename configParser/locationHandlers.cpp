@@ -3,79 +3,86 @@
 
 void ConfigParser::locationMethods(Location &loc)
 {
-    this->checkDuplicate(loc, "methods");
-    tokens.expect("Expected methods");
+    checkDuplicate(loc, "methods");
+    tokens.expect("methods");
+
     std::vector<std::string> methods = valuesParser::parseWordListUntilSemicolon(tokens, "methods");
+
     for (size_t i = 0; i < methods.size(); ++i)
     {
-        std::string currMethod = toUpper(methods[i]);
-        if (std::find(loc.allowedMethods.begin(), loc.allowedMethods.end(), currMethod) == loc.allowedMethods.end())
-        {
-            throwError(ERR_INVALID_VALUE, currMethod);
-        }
-        if (std::find(loc.methods.begin(), loc.methods.end(), currMethod) != loc.methods.end())
-        {
-            throwError(ERR_DUPLICATE_VALUE, currMethod);
-        }
-        loc.methods.push_back(currMethod);
+        std::string currentMethod = toUpper(methods[i]);
+
+        if (std::find(loc.allowedMethods.begin(), loc.allowedMethods.end(), currentMethod) == loc.allowedMethods.end())
+            throwError(ERR_INVALID_VALUE, currentMethod);
+
+        if (std::find(loc.methods.begin(), loc.methods.end(), currentMethod) != loc.methods.end())
+            throwError(ERR_DUPLICATE_VALUE, currentMethod);
+
+        loc.methods.push_back(currentMethod);
     }
-    tokens.expectSemicolon("methods");
+
+    tokens.expectSemicolon();
 }
 
 void ConfigParser::locationRoot(Location &loc)
 {
-    this->checkDuplicate(loc, "root");
-    
-    tokens.expect("Expected root");
+    checkDuplicate(loc, "root");
+    tokens.expect("root");
+
     loc.root = valuesParser::parseFilesystemPath(tokens);
-    tokens.expectSemicolon("root");
+
+    tokens.expectSemicolon();
 }
 
 void ConfigParser::locationAutoindex(Location &loc)
 {
-    this->checkDuplicate(loc, "autoindex");
-    tokens.expect("Expected autoindex");
-    loc.autoindex = tokens.expect("Missing autoindex value");
+    checkDuplicate(loc, "autoindex");
+    tokens.expect("autoindex");
+
+    loc.autoindex = tokens.expectValue("autoindex value").text;
+
     if (loc.autoindex != "on" && loc.autoindex != "off")
         throwError(ERR_INVALID_VALUE, loc.autoindex);
 
-    tokens.expectSemicolon("autoindex");
+    tokens.expectSemicolon();
 }
 
 void ConfigParser::locationIndex(Location &loc)
 {
-    this->checkDuplicate(loc, "index");
-    
-    tokens.expect("Expected index");
+    checkDuplicate(loc, "index");
+    tokens.expect("index");
+
     loc.indexes = valuesParser::parseIndexesList(tokens);
-    tokens.expectSemicolon("index"); 
+
+    tokens.expectSemicolon();
 }
 
 void ConfigParser::locationCgiPath(Location &loc)
 {
-    this->checkDuplicate(loc, "cgi_path");
+    checkDuplicate(loc, "cgi_path");
+    tokens.expect("cgi_path");
 
-    tokens.expect("Expected cgi_path");
     loc.cgiPath = valuesParser::parseCgiPathValue(tokens);
-    tokens.expectSemicolon("cgi_path");
+
+    tokens.expectSemicolon();
 }
 
 void ConfigParser::locationCgiExt(Location &loc)
 {
-    this->checkDuplicate(loc, "cgi_ext");
-    
-    tokens.expect("Expected cgi_ext");
+    checkDuplicate(loc, "cgi_ext");
+    tokens.expect("cgi_ext");
+
     loc.cgiExt = valuesParser::parseCgiExtValue(tokens);
-    tokens.expectSemicolon("cgi_ext");
+
+    tokens.expectSemicolon();
 }
 
 void ConfigParser::locationRedirect(Location &loc)
 {
-    this->checkDuplicate(loc, "redirect");
+    checkDuplicate(loc, "return");
+    tokens.expect("return");
 
-    tokens.expect("Expected redirect");
-
-    std::string codeValue = tokens.expect("Missing redirect code");
+    std::string codeValue = tokens.expectValue("redirect status code").text;
 
     if (!isOnlyDigits(codeValue))
         throwError(ERR_INVALID_VALUE, codeValue);
@@ -87,27 +94,26 @@ void ConfigParser::locationRedirect(Location &loc)
 
     loc.redirectTarget = valuesParser::parseRedirectTargetValue(tokens);
 
-    tokens.expectSemicolon("redirect");
+    tokens.expectSemicolon();
 }
 
 void ConfigParser::locationUpload(Location &loc)
 {
-    this->checkDuplicate(loc, "upload");
-    
-    tokens.expect("Expected upload");
+    checkDuplicate(loc, "upload");
+    tokens.expect("upload");
 
-    loc.uploadEnabled = tokens.expect("Missing upload value");
+    loc.uploadEnabled = tokens.expectValue("upload value").text;
 
     if (loc.uploadEnabled != "on" && loc.uploadEnabled != "off")
         throwError(ERR_INVALID_VALUE, loc.uploadEnabled);
 
-    tokens.expectSemicolon("upload");
+    tokens.expectSemicolon();
 }
 
 void ConfigParser::locationUploadPath(Location &loc)
 {
-    this->checkDuplicate(loc, "upload_path");
-    tokens.expect("Expected upload_path");
+    checkDuplicate(loc, "upload_path");
+    tokens.expect("upload_path");
     loc.uploadPath = valuesParser::parseFilesystemPath(tokens);
-    tokens.expectSemicolon("upload_path");
+    tokens.expectSemicolon();
 }

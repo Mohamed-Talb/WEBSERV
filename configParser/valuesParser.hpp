@@ -11,7 +11,7 @@
 #include <stdexcept>
 #include <sys/types.h>
 #include "../Helpers.hpp"
-#include "tokenStream.hpp"
+#include "./Tokenize/tokenStream.hpp"
 
 namespace valuesParser
 {

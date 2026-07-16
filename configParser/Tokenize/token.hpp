@@ -10,9 +10,9 @@ struct Token
     size_t column;
     std::string text;
 
-    Token() : text(""), line(0), column(0) {}
+    Token() : line(0), column(0), text("") {}
     Token(const std::string &tokenText, size_t tokenLine, size_t tokenColumn) 
-        : text(tokenText),line(tokenLine),column(tokenColumn){}
+        : line(tokenLine),column(tokenColumn), text(tokenText) {}
 };
 
 #endif

@@ -1,92 +1,88 @@
 #include "tokenStream.hpp"
+#include "tokenizer.hpp"
 
-std::vector<std::string> fileToTokens(const std::string &filepath)
+#include <sstream>
+#include <stdexcept>
+
+TokenStream::TokenStream() : position(0) {}
+
+TokenStream::TokenStream(const std::string &filePath): tokens(Tokenizer::tokenize(filePath)), position(0) {}
+
+bool TokenStream::atEnd() const
 {
-    std::vector<std::string> tokens;
-    std::ifstream file(filepath.c_str());
-    std::string specials = "{;}";
+    return position >= tokens.size();
+}
 
-    if (!file.is_open())
-        throw std::runtime_error("Could not open config file: " + filepath);
+const Token &TokenStream::peek() const
+{
+    if (atEnd())
+        throw std::runtime_error("Unexpected end of configuration");
+    return tokens[position];
+}
 
-    std::string line;
-    while (std::getline(file, line))
+const Token &TokenStream::previous() const
+{
+    if (position == 0)
     {
-        size_t commentPos = line.find('#');
-
-        if (commentPos != std::string::npos)
-            line.erase(commentPos);
-
-        std::string processedLine;
-
-        for (size_t i = 0; i < line.size(); ++i)
-        {
-            if (specials.find(line[i]) != std::string::npos)
-            {
-                processedLine += ' ';
-                processedLine += line[i];
-                processedLine += ' ';
-            }
-            else
-            {
-                processedLine += line[i];
-            }
-        }
-        std::stringstream ss(processedLine);
-        std::string token;
-
-        while (ss >> token)
-            tokens.push_back(token);
+        throw std::runtime_error("No previous token");
     }
-    return tokens;
+    return tokens[position - 1];
 }
 
-
-TokenStream::TokenStream(std::string filePath)
+Token TokenStream::consume()
 {
-    tokens = fileToTokens(filePath);
-    it = tokens.begin();
-}
-
-TokenStream::TokenStream() {}
-
-TokenStream &TokenStream::operator=(const TokenStream &other)
-{
-    if (this != &other) 
+    if (atEnd())
     {
-        size_t offset = std::distance(other.tokens.begin(), other.it);
-        this->tokens = other.tokens;
-        this->it = this->tokens.begin() + offset;
+        throw std::runtime_error("Unexpected end of configuration");
     }
-    return *this;
+    Token token = tokens[position];
+    ++position;
+    return token;
 }
 
-bool TokenStream::hasMore() const
+bool TokenStream::isSpecialToken(const std::string &text) const
 {
-    return it != tokens.end();
+    return (text == "{" || text == "}" || text == ";");
 }
 
-const std::string &TokenStream::current() const
+void TokenStream::throwUnexpected(const std::string &expected) const
 {
-    if (it == tokens.end())
-        throw std::runtime_error("Unexpected end of config");
+    std::ostringstream message;
 
-    return *it;
+    message << "Config error";
+    if (atEnd())
+    {
+        message << ": expected " << expected << ", but reached end of file";
+        throw std::runtime_error(message.str());
+    }
+
+    const Token &token = peek();
+    message << " at line " << token.line << ", column " << token.column << ": expected " << expected << ", received '" << token.text << "'";
+    throw std::runtime_error(message.str());
 }
 
-std::string TokenStream::expect(const std::string &err)
+Token TokenStream::expect(const std::string &expected)
 {
-    if (it == tokens.end())
-        throw std::runtime_error(err);
-
-    std::string value = *it;
-    ++it;
-    return value;
+    if (atEnd() ||peek().text != expected)
+    {
+        throwUnexpected("'" + expected + "'");
+    }
+    return consume();
 }
 
-void TokenStream::expectSemicolon(const std::string &directive)
+Token TokenStream::expectValue(const std::string &description)
 {
-    if (it == tokens.end() || *it != ";")
-        throw std::runtime_error("Missing ';' after " + directive);
-    ++it;
+    if (atEnd())
+        throwUnexpected(description);
+
+    const Token &token = peek();
+    if (isSpecialToken(token.text))
+        throwUnexpected(description);
+
+    return consume();
+}
+
+void TokenStream::expectSemicolon()
+{
+    expect(";");
 }

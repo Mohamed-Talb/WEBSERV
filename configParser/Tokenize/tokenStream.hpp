@@ -1,22 +1,22 @@
-#ifndef TOKENSTREAM_HPP
-#define TOKENSTREAM_HPP
+#ifndef TOKEN_STREAM_HPP
+#define TOKEN_STREAM_HPP
 
-#include <vector>
 #include <string>
-#include <fstream>
-#include <sstream>
-#include <iostream>
-#include <stdexcept>
+#include <vector>
 #include "token.hpp"
 
 class TokenStream
 {
     private:
-        std::vector<Token> _tokens;
-        size_t _position;
+        std::vector<Token> tokens;
+        size_t position;
+
+        bool isSpecialToken(const std::string &text) const;
+        void throwUnexpected(const std::string &expected) const;
 
     public:
         TokenStream();
+
         explicit TokenStream(const std::string &filePath);
 
         bool atEnd() const;
@@ -27,8 +27,8 @@ class TokenStream
         Token consume();
 
         Token expect(const std::string &expected);
-        Token expectValue(const std::string &description);
 
+        Token expectValue(const std::string &description);
         void expectSemicolon();
 };
 

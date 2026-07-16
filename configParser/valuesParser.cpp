@@ -67,8 +67,15 @@ We follow Postel’s Law:
 Multiple slashes should be collapsed:
 
     "///img//cat.png" → "/img/cat.png"
-*/
+*/#include "valuesParser.hpp"
+#include "../Helpers.hpp"
 #include "../Errors.hpp"
+
+#include <cctype>
+#include <cstdlib>
+#include <limits>
+#include <sstream>
+#include <stdexcept>
 
 namespace valuesParser
 {
@@ -91,70 +98,55 @@ int parsePortValue(std::string value)
 
 size_t parseBodySizeValue(TokenStream &tokens)
 {
-    std::string value = tokens.expect("client_max_body_size value"); // The expect string gets caught by EOF handler if missing
+    std::string value = tokens.expectValue("client_max_body_size value").text;
 
-    if (value.empty())
-        throwError(ERR_MISSING_VALUE, "client_max_body_size");
+    size_t position = 0;
 
-    size_t i = 0;
-    while (i < value.size() && std::isdigit(static_cast<unsigned char>(value[i])))
-    {
-        i++;
-    }
-    if (i < value.size() && value[i] == '.')
-    {
-        throwError(ERR_INVALID_VALUE, value + " (decimals are not allowed)");
-    }
-    if (i == 0)
+    while (position < value.size() && std::isdigit(static_cast<unsigned char>(value[position])))
+        ++position;
+
+    if (position == 0)
         throwError(ERR_INVALID_VALUE, value + " (missing digits)");
 
-    std::string numericPart = value.substr(0, i);
-    std::string unitPart = value.substr(i);
+    if (position < value.size() && value[position] == '.')
+        throwError(ERR_INVALID_VALUE, value + " (decimals are not allowed)");
+
+    std::string numericPart = value.substr(0, position);
+    std::string unitPart = value.substr(position);
 
     size_t baseSize = 0;
-    std::istringstream iss(numericPart);
-    iss >> baseSize;
+    std::istringstream stream(numericPart);
 
-    if (iss.fail())
+    stream >> baseSize;
+
+    if (stream.fail())
         throwError(ERR_INVALID_VALUE, numericPart + " (numeric overflow)");
 
-    std::string unit = toUpper(trim(unitPart)); 
+    std::string unit = toUpper(trim(unitPart));
     size_t multiplier = 1;
 
-    if (unit.empty() || unit == "B") 
-    {
+    if (unit.empty() || unit == "B")
         multiplier = 1;
-    }
     else if (unit == "K" || unit == "KB")
-    {
         multiplier = 1024;
-    }
     else if (unit == "M" || unit == "MB")
-    {
         multiplier = 1024 * 1024;
-    } 
     else if (unit == "G" || unit == "GB")
-    {
         multiplier = 1024 * 1024 * 1024;
-    }
     else
-    {
         throwError(ERR_INVALID_VALUE, unitPart + " (unsupported byte size unit suffix)");
-    }
+
     if (baseSize > 0 && multiplier > std::numeric_limits<size_t>::max() / baseSize)
-    {
         throwError(ERR_INVALID_VALUE, value + " (exceeds physical address space limits)");
-    }
+
     return baseSize * multiplier;
 }
 
 std::string parseErrorPagePathValue(TokenStream &tokens)
 {
-    std::string raw = tokens.expect("error_page path");
-    std::string path = mergeSlashes(raw);
+    std::string path = tokens.expectValue("error_page path").text;
 
-    if (path.empty())
-        throwError(ERR_MISSING_VALUE, "error_page path");
+    path = mergeSlashes(path);
 
     if (path.find("..") != std::string::npos)
         throwError(ERR_INVALID_VALUE, path + " (directory traversal not allowed)");
@@ -167,66 +159,59 @@ std::string parseErrorPagePathValue(TokenStream &tokens)
 
 std::string parseCgiExtValue(TokenStream &tokens)
 {
-    std::string raw = tokens.expect("cgi_ext");
-    std::string ext = raw;
+    std::string extension = tokens.expectValue("cgi_ext value").text;
 
-    if (ext.empty())
-        throwError(ERR_MISSING_VALUE, "cgi_ext");
+    if (extension.find("..") != std::string::npos || extension.find('/') != std::string::npos)
+        throwError(ERR_INVALID_VALUE, extension + " (invalid characters in extension)");
 
-    if (ext.find("..") != std::string::npos || ext.find("/") != std::string::npos)
-        throwError(ERR_INVALID_VALUE, ext + " (invalid characters in extension)");
+    if (extension[0] != '.')
+        extension = "." + extension;
 
-    if (ext[0] != '.')
-        ext = "." + ext;
+    if (extension.size() == 1)
+        throwError(ERR_INVALID_VALUE, extension + " (extension cannot be just '.')");
 
-    if (ext.size() == 1)
-        throwError(ERR_INVALID_VALUE, ext + " (extension cannot be just '.')");
-
-    return ext;
+    return extension;
 }
 
 std::string parseRedirectTargetValue(TokenStream &tokens)
 {
-    std::string target = tokens.expect("redirect target");
-
-    if (target.empty())
-        throwError(ERR_MISSING_VALUE, "redirect target");
+    std::string target = tokens.expectValue("redirect target").text;
 
     if (target.find("..") != std::string::npos)
         throwError(ERR_INVALID_VALUE, target + " (directory traversal not allowed)");
 
-    if (target[0] != '/' && target.find("http://") != 0  &&
-        target.find("https://") != 0)
+    if (target[0] != '/'
+        && target.find("http://") != 0
+        && target.find("https://") != 0)
+    {
         throwError(ERR_INVALID_VALUE, target + " (must be absolute path or URL)");
+    }
 
     return target;
 }
 
 std::string parseFilesystemPath(TokenStream &tokens)
 {
-    std::string root = tokens.expect("path");
+    std::string path = tokens.expectValue("filesystem path").text;
 
-    root = mergeSlashes(root);
+    path = mergeSlashes(path);
 
-    while (root.size() > 1 && root[root.size() - 1] == '/')
-        root.erase(root.size() - 1);
+    while (path.size() > 1 && path[path.size() - 1] == '/')
+        path.erase(path.size() - 1);
 
-    if (root.empty())
-        throwError(ERR_INVALID_VALUE, root + " (empty path)");
+    if (path.find("..") != std::string::npos)
+        throwError(ERR_INVALID_VALUE, path + " (directory traversal not allowed)");
 
-    if (root.find("..") != std::string::npos)
-        throwError(ERR_INVALID_VALUE, root + " (directory traversal not allowed)");
-
-    return root;
+    return path;
 }
 
 std::string parseLocationPath(TokenStream &tokens)
 {
-    std::string path = tokens.expect("location path");
+    std::string path = tokens.expectValue("location path").text;
 
     path = mergeSlashes(path);
 
-    if (path.empty() || path[0] != '/')
+    if (path[0] != '/')
         throwError(ERR_INVALID_VALUE, path + " (must start with '/')");
 
     while (path.size() > 1 && path[path.size() - 1] == '/')
@@ -242,16 +227,15 @@ std::vector<std::string> parseWordListUntilSemicolon(TokenStream &tokens, const 
 {
     std::vector<std::string> values;
 
-    while (tokens.hasMore() && tokens.current() != ";")
-    {
-        values.push_back(tokens.expect(directiveName + " value"));
-    }
-    
-    if (!tokens.hasMore())
+    while (!tokens.atEnd() && tokens.peek().text != ";")
+        values.push_back(tokens.expectValue(directiveName + " value").text);
+
+    if (tokens.atEnd())
         throwError(ERR_MISSING_SEMICOLON, directiveName);
 
     if (values.empty())
         throwError(ERR_MISSING_VALUE, directiveName + " (requires at least one value)");
+
     return values;
 }
 
@@ -272,23 +256,22 @@ std::vector<std::string> parseIndexesList(TokenStream &tokens)
         if (indexes[i].find("..") != std::string::npos)
             throwError(ERR_INVALID_VALUE, indexes[i] + " (directory traversal not allowed)");
     }
+
     return indexes;
 }
 
 std::string parseCgiPathValue(TokenStream &tokens)
 {
-    std::string path = tokens.expect("cgi_path");
+    std::string path = tokens.expectValue("cgi_path value").text;
 
     path = mergeSlashes(path);
 
     while (path.size() > 1 && path[path.size() - 1] == '/')
         path.erase(path.size() - 1);
 
-    if (path.empty())
-        throwError(ERR_INVALID_VALUE, "Empty cgi_path");
-
     if (path.find("..") != std::string::npos)
         throwError(ERR_INVALID_VALUE, path + " (directory traversal not allowed)");
+
     return path;
 }
 

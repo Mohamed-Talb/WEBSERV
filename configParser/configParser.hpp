@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <sys/types.h>
 #include "../Helpers.hpp"
-#include "tokenStream.hpp"
+#include "./Tokenize/tokenStream.hpp"
 #include "valuesParser.hpp"
 
 struct Listen
