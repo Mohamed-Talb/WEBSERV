@@ -13,6 +13,7 @@
 #include "../Helpers.hpp"
 #include "./Tokenize/tokenStream.hpp"
 #include "valuesParser.hpp"
+#include "../Errors.hpp"
 
 struct Listen
 {
@@ -87,6 +88,8 @@ class ConfigParser
     void checkDuplicate(Location &loc, const std::string &directive) const;
     void checkDuplicate(ServerConfig &conf, const std::string &directive) const;
 
+    void configError(int errorCode) const;
+    
     typedef void (ConfigParser::*ServerHandler)(ServerConfig &);
     typedef void (ConfigParser::*LocationHandler)(Location &);
 

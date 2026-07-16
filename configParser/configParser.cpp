@@ -1,71 +1,24 @@
 #include "configParser.hpp"
+#include "../Errors.hpp"
 
 #include <algorithm>
-#include <sstream>
-#include <stdexcept>
-
-namespace
-{
-    std::runtime_error tokenError(const std::string &message, const Token &token)
-    {
-        std::ostringstream error;
-
-        error << "Config error at line "
-              << token.line
-              << ", column "
-              << token.column
-              << ": "
-              << message;
-
-        return std::runtime_error(error.str());
-    }
-}
 
 void ConfigParser::validateLocation(Location &loc)
 {
-    if (loc.uploadEnabled == "on" && loc.uploadPath.empty())
-        throw std::runtime_error("upload on requires upload_path");
-
-    if (loc.uploadEnabled == "off" && !loc.uploadPath.empty())
-        throw std::runtime_error("upload_path set but upload is off");
-
-    if (!loc.cgiExt.empty() && loc.cgiPath.empty())
-        throw std::runtime_error("cgi_ext requires cgi_path");
-
-    if (!loc.cgiPath.empty() && loc.cgiExt.empty())
-        throw std::runtime_error("cgi_path requires cgi_ext");
-
-    if (loc.autoindex != "on" && loc.autoindex != "off")
-        throw std::runtime_error("autoindex must be 'on' or 'off'");
-
-    if (loc.redirectCode != 0)
+    if ((loc.uploadEnabled == "on" && loc.uploadPath.empty())
+        || (loc.uploadEnabled == "off" && !loc.uploadPath.empty()))
     {
-        if (loc.redirectCode != 301 && loc.redirectCode != 302)
-            throw std::runtime_error("Invalid redirect code");
-
-        if (loc.redirectTarget.empty())
-            throw std::runtime_error("Missing redirect target");
-
-        if (loc.redirectTarget.find("..") != std::string::npos)
-            throw std::runtime_error("Invalid redirect target");
-
-        if (loc.redirectTarget[0] != '/'
-            && loc.redirectTarget.find("http://") != 0
-            && loc.redirectTarget.find("https://") != 0)
-        {
-            throw std::runtime_error("redirect target must be path or URL");
-        }
+        configError(ERR_INVALID_UPLOAD_CONFIG);
     }
+
+    if (loc.cgiExt.empty() != loc.cgiPath.empty())
+        configError(ERR_INVALID_CGI_CONFIG);
 }
 
 void ConfigParser::checkDuplicate(ServerConfig &conf, const std::string &directive) const
 {
     if (conf.seenDirectives[directive])
-    {
-        throw std::runtime_error(
-            "duplicate " + directive + " directive in server block"
-        );
-    }
+        configError(ERR_DUPLICATE_DIRECTIVE);
 
     conf.seenDirectives[directive] = true;
 }
@@ -73,11 +26,7 @@ void ConfigParser::checkDuplicate(ServerConfig &conf, const std::string &directi
 void ConfigParser::checkDuplicate(Location &loc, const std::string &directive) const
 {
     if (loc.seenDirectives[directive])
-    {
-        throw std::runtime_error(
-            "duplicate " + directive + " directive in location block"
-        );
-    }
+        configError(ERR_DUPLICATE_DIRECTIVE);
 
     loc.seenDirectives[directive] = true;
 }
@@ -99,8 +48,6 @@ void ConfigParser::validateServer(ServerConfig &conf)
 
         if (loc.indexes.empty())
             loc.indexes = conf.indexes;
-
-        validateLocation(loc);
     }
 }
 
@@ -138,43 +85,34 @@ void ConfigParser::parseLocationBlock(Location &loc)
 {
     loc.path = valuesParser::parseLocationPath(tokens);
     tokens.expect("{");
+
     while (!tokens.atEnd())
     {
         if (tokens.peek().text == "}")
         {
-            tokens.expect("}");
             validateLocation(loc);
+            tokens.expect("}");
             return;
         }
-
-        /*
-         * Look at the directive without consuming it.
-         * The selected handler will consume the directive.
-         */
-        const Token &directiveToken = tokens.peek();
-        const std::string &directive = directiveToken.text;
+        const std::string &directive = tokens.peek().text;
 
         std::map<std::string, LocationHandler>::iterator handler;
         handler = locationDispatch.find(directive);
 
         if (handler == locationDispatch.end())
-        {
-            throw tokenError(
-                "unknown location directive '" + directive + "'",
-                directiveToken
-            );
-        }
+            configError(ERR_UNKNOWN_LOCATION_DIRECTIVE);
 
         (this->*(handler->second))(loc);
     }
 
-    throw std::runtime_error(
-        "Unclosed location block: expected '}' before end of file"
-    );
+    configError(ERR_UNCLOSED_LOCATION);
 }
 
 void ConfigParser::parseServerBlock(ServerConfig &conf)
 {
+    if (tokens.atEnd() || tokens.peek().text != "server")
+        configError(ERR_EXPECTED_SERVER);
+
     tokens.expect("server");
     tokens.expect("{");
 
@@ -182,31 +120,25 @@ void ConfigParser::parseServerBlock(ServerConfig &conf)
     {
         if (tokens.peek().text == "}")
         {
-            tokens.expect("}");
-            std::sort(conf.locations.begin(),conf.locations.end(),CompareLocations());
+            std::sort(conf.locations.begin(), conf.locations.end(), CompareLocations());
             validateServer(conf);
+
+            tokens.expect("}");
             return;
         }
-        const Token &directiveToken = tokens.peek();
-        const std::string &directive = directiveToken.text;
+
+        const std::string &directive = tokens.peek().text;
 
         std::map<std::string, ServerHandler>::iterator handler;
         handler = serverDispatch.find(directive);
 
         if (handler == serverDispatch.end())
-        {
-            throw tokenError(
-                "unknown server directive '" + directive + "'",
-                directiveToken
-            );
-        }
+            configError(ERR_UNKNOWN_SERVER_DIRECTIVE);
 
         (this->*(handler->second))(conf);
     }
 
-    throw std::runtime_error(
-        "Unclosed server block: expected '}' before end of file"
-    );
+    configError(ERR_UNCLOSED_SERVER);
 }
 
 std::vector<ServerConfig> ConfigParser::loadeConfig(std::string configFile)
@@ -216,7 +148,7 @@ std::vector<ServerConfig> ConfigParser::loadeConfig(std::string configFile)
     std::vector<ServerConfig> servers;
 
     if (tokens.atEnd())
-        throw std::runtime_error("Empty config file");
+        configError(ERR_EMPTY_CONFIG);
 
     while (!tokens.atEnd())
     {

@@ -1,6 +1,10 @@
 #include "configParser.hpp"
 #include "../Errors.hpp"
 
+#include <algorithm>
+#include <cstdlib>
+#include <sstream>
+
 void ConfigParser::serverListen(ServerConfig &conf)
 {
     checkDuplicate(conf, "listen");
@@ -20,7 +24,7 @@ void ConfigParser::serverListen(ServerConfig &conf)
     size_t colonPosition = value.find(':');
 
     if (colonPosition == 0 || colonPosition == value.size() - 1)
-        throwError(ERR_INVALID_SYNTAX, value);
+        configError(ERR_INVALID_LISTEN);
 
     std::string host = value.substr(0, colonPosition);
     std::string port = value.substr(colonPosition + 1);
@@ -29,10 +33,18 @@ void ConfigParser::serverListen(ServerConfig &conf)
         host = "127.0.0.1";
 
     if (!isValidHost(host))
-        throwError(ERR_INVALID_VALUE, host);
+        configError(ERR_INVALID_HOST);
+
+    if (!isOnlyDigits(port) || port.size() > 5)
+        configError(ERR_INVALID_PORT);
+
+    int portNumber = std::atoi(port.c_str());
+
+    if (portNumber <= 0 || portNumber > 65535)
+        configError(ERR_INVALID_PORT);
 
     currentListen.host = host;
-    currentListen.port = valuesParser::parsePortValue(port);
+    currentListen.port = portNumber;
 
     conf.listens.push_back(currentListen);
 
@@ -54,18 +66,23 @@ void ConfigParser::serverNames(ServerConfig &conf)
     checkDuplicate(conf, "server_name");
     tokens.expect("server_name");
 
-    conf.serverNames = valuesParser::parseWordListUntilSemicolon(tokens, "server_name");
+    conf.serverNames.clear();
 
-    for (size_t i = 0; i < conf.serverNames.size(); ++i)
+    while (!tokens.atEnd() && tokens.peek().text != ";")
     {
-        if (!isValidServerName(conf.serverNames[i]))
-        {
-            throwError(
-                ERR_INVALID_VALUE,
-                conf.serverNames[i] + " (invalid server_name format)"
-            );
-        }
+        std::string serverName = tokens.expectValue("server name").text;
+
+        if (!isValidServerName(serverName))
+            configError(ERR_INVALID_SERVER_NAME);
+
+        conf.serverNames.push_back(serverName);
     }
+
+    if (conf.serverNames.empty())
+        configError(ERR_MISSING_VALUE);
+
+    if (tokens.atEnd())
+        configError(ERR_MISSING_SEMICOLON);
 
     tokens.expectSemicolon();
 }
@@ -88,12 +105,7 @@ void ConfigParser::serverClientMaxBodySize(ServerConfig &conf)
     conf.client_max_body_size = valuesParser::parseBodySizeValue(tokens);
 
     if (conf.client_max_body_size == 0)
-    {
-        throwError(
-            ERR_INVALID_VALUE,
-            "0 (client_max_body_size must be greater than 0)"
-        );
-    }
+        configError(ERR_INVALID_BODY_SIZE);
 
     tokens.expectSemicolon();
 }
@@ -104,68 +116,41 @@ void ConfigParser::serverErrorPages(ServerConfig &conf)
 
     std::vector<int> codes;
 
-    while (!tokens.atEnd() && tokens.peek().text != ";")
+    while (!tokens.atEnd() && tokens.peek().text != ";"
+        && isOnlyDigits(tokens.peek().text))
     {
-        std::string current = tokens.peek().text;
+        std::string codeValue = tokens.expectValue("error status code").text;
 
-        if (isOnlyDigits(current))
-        {
-            int errorCode = 0;
-            std::istringstream stream(current);
+        if (codeValue.size() > 3)
+            configError(ERR_INVALID_ERROR_CODE);
 
-            stream >> errorCode;
+        int errorCode = 0;
+        std::istringstream stream(codeValue);
 
-            if (stream.fail())
-                throwError(ERR_INVALID_VALUE, current);
+        stream >> errorCode;
 
-            if (!isValidErrorCode(errorCode))
-                throwError(ERR_INVALID_VALUE, current);
+        if (stream.fail() || !isValidErrorCode(errorCode))
+            configError(ERR_INVALID_ERROR_CODE);
 
-            codes.push_back(errorCode);
-            tokens.consume();
-        }
-        else
-        {
-            if (codes.empty())
-            {
-                throwError(
-                    ERR_MISSING_VALUE,
-                    "error_page (requires at least one status code)"
-                );
-            }
+        if (std::find(codes.begin(), codes.end(), errorCode) != codes.end())
+            configError(ERR_DUPLICATE_ERROR_CODE);
 
-            std::string path = valuesParser::parseErrorPagePathValue(tokens);
+        if (conf.errorPage.count(errorCode) != 0)
+            configError(ERR_DUPLICATE_ERROR_CODE);
 
-            for (size_t i = 0; i < codes.size(); ++i)
-            {
-                if (conf.errorPage.count(codes[i]) != 0)
-                {
-                    std::ostringstream codeText;
-                    codeText << codes[i];
-
-                    throwError(ERR_DUPLICATE_VALUE, codeText.str());
-                }
-
-                conf.errorPage[codes[i]] = path;
-            }
-
-            break;
-        }
+        codes.push_back(errorCode);
     }
 
     if (codes.empty())
-    {
-        throwError(
-            ERR_MISSING_VALUE,
-            "error_page (requires at least one status code)"
-        );
-    }
+        configError(ERR_MISSING_VALUE);
 
-    if (tokens.atEnd())
-        throwError(ERR_MISSING_SEMICOLON, "error_page");
+    if (tokens.atEnd() || tokens.peek().text == ";")
+        configError(ERR_MISSING_VALUE);
 
-    if (tokens.peek().text != ";")
-        throwError(ERR_INVALID_SYNTAX, tokens.peek().text);
+    std::string path = valuesParser::parseErrorPagePathValue(tokens);
+
+    for (size_t i = 0; i < codes.size(); ++i)
+        conf.errorPage[codes[i]] = path;
 
     tokens.expectSemicolon();
 }
@@ -175,13 +160,14 @@ void ConfigParser::serverLocation(ServerConfig &conf)
     tokens.expect("location");
 
     Location location;
-    parseLocationBlock(location);
+    location.path = valuesParser::parseLocationPath(tokens);
 
     for (size_t i = 0; i < conf.locations.size(); ++i)
     {
         if (conf.locations[i].path == location.path)
-            throwError(ERR_DUPLICATE_VALUE, location.path);
+            configError(ERR_DUPLICATE_LOCATION);
     }
 
+    parseLocationBlock(location);
     conf.locations.push_back(location);
 }

@@ -1,26 +1,36 @@
 #ifndef ERRORS_HPP
 #define ERRORS_HPP
-#include <iostream>
-#include <stdexcept>
-#include <string>
-#include <cerrno>
 
-class ServerException : public std::runtime_error
-{
-    public:
-    ServerException(const std::string& context, const std::string& msg);
-};
-void logError(const std::string& context, const std::string& msg);
+// PARSING ERRORS
+#define ERR_EXPECTED_SERVER          1
+#define ERR_EXPECTED_SERVER_BLOCK    2
+#define ERR_UNKNOWN_SERVER_DIRECTIVE 3
+#define ERR_UNKNOWN_LOCATION_DIRECTIVE 4
+#define ERR_DUPLICATE_LISTEN         5
+#define ERR_DUPLICATE_DIRECTIVE      6
+#define ERR_INVALID_LISTEN           7
+#define ERR_INVALID_HOST             8
+#define ERR_INVALID_PORT             9
+#define ERR_INVALID_AUTOINDEX        10
+#define ERR_INVALID_UPLOAD           11
+#define ERR_INVALID_REDIRECT_CODE    12
+#define ERR_MISSING_SEMICOLON        13
+#define ERR_MISSING_VALUE            14
+#define ERR_UNCLOSED_SERVER          15
+#define ERR_UNCLOSED_LOCATION        16
+#define ERR_INVALID_PATH             17
+#define ERR_INVALID_METHOD           18
+#define ERR_DUPLICATE_METHOD         19
+#define ERR_EMPTY_CONFIG             20
+#define ERR_INVALID_UPLOAD_CONFIG    21
+#define ERR_INVALID_CGI_CONFIG       22
+#define ERR_INVALID_SERVER_NAME       23
+#define ERR_INVALID_BODY_SIZE         24
+#define ERR_INVALID_ERROR_CODE        25
+#define ERR_DUPLICATE_ERROR_CODE      26
+#define ERR_DUPLICATE_LOCATION        27
+#define ERR_INVALID_BODY_SIZE         28
+#define ERR_INVALID_CGI_EXTENSION     29
+#define ERR_INVALID_REDIRECT_TARGET   30
 
-enum ConfigErrorType 
-{
-    ERR_DUPLICATE_DIRECTIVE,
-    ERR_DUPLICATE_VALUE,
-    ERR_MISSING_VALUE,
-    ERR_INVALID_VALUE,
-    ERR_MISSING_SEMICOLON,
-    ERR_INVALID_SYNTAX
-};
-
-void throwError(ConfigErrorType type, const std::string &target);
 #endif

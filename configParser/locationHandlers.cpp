@@ -1,25 +1,35 @@
 #include "configParser.hpp"
 #include "../Errors.hpp"
 
+#include <algorithm>
+#include <cstdlib>
+
 void ConfigParser::locationMethods(Location &loc)
 {
     checkDuplicate(loc, "methods");
     tokens.expect("methods");
 
-    std::vector<std::string> methods = valuesParser::parseWordListUntilSemicolon(tokens, "methods");
+    bool hasMethod = false;
 
-    for (size_t i = 0; i < methods.size(); ++i)
+    while (!tokens.atEnd() && tokens.peek().text != ";")
     {
-        std::string currentMethod = toUpper(methods[i]);
+        std::string currentMethod = toUpper(tokens.expectValue("HTTP method").text);
+        hasMethod = true;
 
         if (std::find(loc.allowedMethods.begin(), loc.allowedMethods.end(), currentMethod) == loc.allowedMethods.end())
-            throwError(ERR_INVALID_VALUE, currentMethod);
+            configError(ERR_INVALID_METHOD);
 
         if (std::find(loc.methods.begin(), loc.methods.end(), currentMethod) != loc.methods.end())
-            throwError(ERR_DUPLICATE_VALUE, currentMethod);
+            configError(ERR_DUPLICATE_METHOD);
 
         loc.methods.push_back(currentMethod);
     }
+
+    if (!hasMethod)
+        configError(ERR_MISSING_VALUE);
+
+    if (tokens.atEnd())
+        configError(ERR_MISSING_SEMICOLON);
 
     tokens.expectSemicolon();
 }
@@ -39,10 +49,16 @@ void ConfigParser::locationAutoindex(Location &loc)
     checkDuplicate(loc, "autoindex");
     tokens.expect("autoindex");
 
+    if (tokens.atEnd() || tokens.peek().text == ";"
+        || tokens.peek().text == "{" || tokens.peek().text == "}")
+    {
+        configError(ERR_MISSING_VALUE);
+    }
+
     loc.autoindex = tokens.expectValue("autoindex value").text;
 
     if (loc.autoindex != "on" && loc.autoindex != "off")
-        throwError(ERR_INVALID_VALUE, loc.autoindex);
+        configError(ERR_INVALID_AUTOINDEX);
 
     tokens.expectSemicolon();
 }
@@ -82,15 +98,27 @@ void ConfigParser::locationRedirect(Location &loc)
     checkDuplicate(loc, "return");
     tokens.expect("return");
 
+    if (tokens.atEnd() || tokens.peek().text == ";"
+        || tokens.peek().text == "{" || tokens.peek().text == "}")
+    {
+        configError(ERR_MISSING_VALUE);
+    }
+
     std::string codeValue = tokens.expectValue("redirect status code").text;
 
     if (!isOnlyDigits(codeValue))
-        throwError(ERR_INVALID_VALUE, codeValue);
+        configError(ERR_INVALID_REDIRECT_CODE);
 
     loc.redirectCode = std::atoi(codeValue.c_str());
 
     if (loc.redirectCode != 301 && loc.redirectCode != 302)
-        throwError(ERR_INVALID_VALUE, codeValue);
+        configError(ERR_INVALID_REDIRECT_CODE);
+
+    if (tokens.atEnd() || tokens.peek().text == ";"
+        || tokens.peek().text == "{" || tokens.peek().text == "}")
+    {
+        configError(ERR_MISSING_VALUE);
+    }
 
     loc.redirectTarget = valuesParser::parseRedirectTargetValue(tokens);
 
@@ -102,10 +130,14 @@ void ConfigParser::locationUpload(Location &loc)
     checkDuplicate(loc, "upload");
     tokens.expect("upload");
 
+    if (tokens.atEnd() || tokens.peek().text == ";" || tokens.peek().text == "{" || tokens.peek().text == "}")
+    {
+        configError(ERR_MISSING_VALUE);
+    }
     loc.uploadEnabled = tokens.expectValue("upload value").text;
 
     if (loc.uploadEnabled != "on" && loc.uploadEnabled != "off")
-        throwError(ERR_INVALID_VALUE, loc.uploadEnabled);
+        configError(ERR_INVALID_UPLOAD);
 
     tokens.expectSemicolon();
 }
@@ -114,6 +146,8 @@ void ConfigParser::locationUploadPath(Location &loc)
 {
     checkDuplicate(loc, "upload_path");
     tokens.expect("upload_path");
+
     loc.uploadPath = valuesParser::parseFilesystemPath(tokens);
+
     tokens.expectSemicolon();
 }
