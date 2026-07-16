@@ -33,12 +33,6 @@ void ConfigParser::checkDuplicate(Location &loc, const std::string &directive) c
 
 void ConfigParser::validateServer(ServerConfig &conf)
 {
-    if (conf.listens.empty())
-        conf.listens.push_back(Listen());
-
-    conf.host = conf.listens[0].host;
-    conf.port = conf.listens[0].port;
-
     for (size_t i = 0; i < conf.locations.size(); ++i)
     {
         Location &loc = conf.locations[i];

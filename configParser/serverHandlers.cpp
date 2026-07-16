@@ -4,14 +4,12 @@
 #include <algorithm>
 #include <cstdlib>
 #include <sstream>
-
 void ConfigParser::serverListen(ServerConfig &conf)
 {
     checkDuplicate(conf, "listen");
     tokens.expect("listen");
 
     std::string value = tokens.expectValue("listen value").text;
-    Listen currentListen;
 
     if (value.find(':') == std::string::npos)
     {
@@ -52,10 +50,8 @@ void ConfigParser::serverListen(ServerConfig &conf)
     if (port <= 0 || port > 65535)
         throwConfigError(tokens, ERR_INVALID_PORT);
 
-    currentListen.host = host;
-    currentListen.port = port;
-
-    conf.listens.push_back(currentListen);
+    conf.host = host;
+    conf.port = port;
     tokens.expectSemicolon();
 }
 

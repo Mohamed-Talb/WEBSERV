@@ -55,19 +55,16 @@ struct Location
 
 struct ServerConfig 
 {
-    int port; // !!
-    std::string host;// !! 
-    // ..... I will leave this for now to avoid a server error
-    
+    int port;
+    std::string host;
     std::string root;
-    std::vector<Listen> listens;
     ssize_t client_max_body_size;
     std::vector<Location> locations;
     std::vector<std::string> indexes;
     std::vector<std::string> serverNames;
     std::map<int, std::string> errorPage;
     std::map<std::string, bool> seenDirectives;
-    ServerConfig() : root("./www"), client_max_body_size(1048576)
+    ServerConfig() : port(80), host("127.0.0.1"), root("./www"), client_max_body_size(1048576)
     {
         indexes.push_back("index.html");
         serverNames.push_back(""); 
