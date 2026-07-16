@@ -17,19 +17,19 @@ void ConfigParser::locationMethods(Location &loc)
         hasMethod = true;
 
         if (std::find(loc.allowedMethods.begin(), loc.allowedMethods.end(), currentMethod) == loc.allowedMethods.end())
-            configError(ERR_INVALID_METHOD);
+            throwConfigError(tokens, ERR_INVALID_METHOD);
 
         if (std::find(loc.methods.begin(), loc.methods.end(), currentMethod) != loc.methods.end())
-            configError(ERR_DUPLICATE_METHOD);
+            throwConfigError(tokens, ERR_DUPLICATE_METHOD);
 
         loc.methods.push_back(currentMethod);
     }
 
     if (!hasMethod)
-        configError(ERR_MISSING_VALUE);
+        throwConfigError(tokens, ERR_MISSING_VALUE);
 
     if (tokens.atEnd())
-        configError(ERR_MISSING_SEMICOLON);
+        throwConfigError(tokens, ERR_MISSING_SEMICOLON);
 
     tokens.expectSemicolon();
 }
@@ -52,13 +52,13 @@ void ConfigParser::locationAutoindex(Location &loc)
     if (tokens.atEnd() || tokens.peek().text == ";"
         || tokens.peek().text == "{" || tokens.peek().text == "}")
     {
-        configError(ERR_MISSING_VALUE);
+        throwConfigError(tokens, ERR_MISSING_VALUE);
     }
 
     loc.autoindex = tokens.expectValue("autoindex value").text;
 
     if (loc.autoindex != "on" && loc.autoindex != "off")
-        configError(ERR_INVALID_AUTOINDEX);
+        throwConfigError(tokens, ERR_INVALID_AUTOINDEX);
 
     tokens.expectSemicolon();
 }
@@ -101,23 +101,23 @@ void ConfigParser::locationRedirect(Location &loc)
     if (tokens.atEnd() || tokens.peek().text == ";"
         || tokens.peek().text == "{" || tokens.peek().text == "}")
     {
-        configError(ERR_MISSING_VALUE);
+        throwConfigError(tokens, ERR_MISSING_VALUE);
     }
 
     std::string codeValue = tokens.expectValue("redirect status code").text;
 
     if (!isOnlyDigits(codeValue))
-        configError(ERR_INVALID_REDIRECT_CODE);
+        throwConfigError(tokens, ERR_INVALID_REDIRECT_CODE);
 
     loc.redirectCode = std::atoi(codeValue.c_str());
 
     if (loc.redirectCode != 301 && loc.redirectCode != 302)
-        configError(ERR_INVALID_REDIRECT_CODE);
+        throwConfigError(tokens, ERR_INVALID_REDIRECT_CODE);
 
     if (tokens.atEnd() || tokens.peek().text == ";"
         || tokens.peek().text == "{" || tokens.peek().text == "}")
     {
-        configError(ERR_MISSING_VALUE);
+        throwConfigError(tokens, ERR_MISSING_VALUE);
     }
 
     loc.redirectTarget = valuesParser::parseRedirectTargetValue(tokens);
@@ -132,12 +132,12 @@ void ConfigParser::locationUpload(Location &loc)
 
     if (tokens.atEnd() || tokens.peek().text == ";" || tokens.peek().text == "{" || tokens.peek().text == "}")
     {
-        configError(ERR_MISSING_VALUE);
+        throwConfigError(tokens, ERR_MISSING_VALUE);
     }
     loc.uploadEnabled = tokens.expectValue("upload value").text;
 
     if (loc.uploadEnabled != "on" && loc.uploadEnabled != "off")
-        configError(ERR_INVALID_UPLOAD);
+        throwConfigError(tokens, ERR_INVALID_UPLOAD);
 
     tokens.expectSemicolon();
 }

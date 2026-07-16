@@ -15,7 +15,6 @@
 
 namespace valuesParser
 {
-    int parsePortValue(std::string value);
     size_t parseBodySizeValue(TokenStream &tokens);
     std::string parseCgiExtValue(TokenStream &tokens);
     std::string parseCgiPathValue(TokenStream &tokens);

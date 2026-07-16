@@ -1,6 +1,12 @@
 #ifndef ERRORS_HPP
 #define ERRORS_HPP
 
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <cerrno>
+
+
 // PARSING ERRORS
 #define ERR_EXPECTED_SERVER          1
 #define ERR_EXPECTED_SERVER_BLOCK    2
@@ -29,8 +35,16 @@
 #define ERR_INVALID_ERROR_CODE        25
 #define ERR_DUPLICATE_ERROR_CODE      26
 #define ERR_DUPLICATE_LOCATION        27
-#define ERR_INVALID_BODY_SIZE         28
 #define ERR_INVALID_CGI_EXTENSION     29
 #define ERR_INVALID_REDIRECT_TARGET   30
+
+
+class ServerException : public std::runtime_error
+{
+    public:
+    ServerException(const std::string& context, const std::string& msg);
+};
+
+void logError(const std::string& context, const std::string& msg);
 
 #endif

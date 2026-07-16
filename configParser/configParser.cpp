@@ -8,17 +8,17 @@ void ConfigParser::validateLocation(Location &loc)
     if ((loc.uploadEnabled == "on" && loc.uploadPath.empty())
         || (loc.uploadEnabled == "off" && !loc.uploadPath.empty()))
     {
-        configError(ERR_INVALID_UPLOAD_CONFIG);
+        throwConfigError(tokens, ERR_INVALID_UPLOAD_CONFIG);
     }
 
     if (loc.cgiExt.empty() != loc.cgiPath.empty())
-        configError(ERR_INVALID_CGI_CONFIG);
+        throwConfigError(tokens, ERR_INVALID_CGI_CONFIG);
 }
 
 void ConfigParser::checkDuplicate(ServerConfig &conf, const std::string &directive) const
 {
     if (conf.seenDirectives[directive])
-        configError(ERR_DUPLICATE_DIRECTIVE);
+        throwConfigError(tokens, ERR_DUPLICATE_DIRECTIVE);
 
     conf.seenDirectives[directive] = true;
 }
@@ -26,7 +26,7 @@ void ConfigParser::checkDuplicate(ServerConfig &conf, const std::string &directi
 void ConfigParser::checkDuplicate(Location &loc, const std::string &directive) const
 {
     if (loc.seenDirectives[directive])
-        configError(ERR_DUPLICATE_DIRECTIVE);
+        throwConfigError(tokens, ERR_DUPLICATE_DIRECTIVE);
 
     loc.seenDirectives[directive] = true;
 }
@@ -81,37 +81,10 @@ ConfigParser::ConfigParser()
     initLocationDispatch();
 }
 
-void ConfigParser::parseLocationBlock(Location &loc)
-{
-    loc.path = valuesParser::parseLocationPath(tokens);
-    tokens.expect("{");
-
-    while (!tokens.atEnd())
-    {
-        if (tokens.peek().text == "}")
-        {
-            validateLocation(loc);
-            tokens.expect("}");
-            return;
-        }
-        const std::string &directive = tokens.peek().text;
-
-        std::map<std::string, LocationHandler>::iterator handler;
-        handler = locationDispatch.find(directive);
-
-        if (handler == locationDispatch.end())
-            configError(ERR_UNKNOWN_LOCATION_DIRECTIVE);
-
-        (this->*(handler->second))(loc);
-    }
-
-    configError(ERR_UNCLOSED_LOCATION);
-}
-
 void ConfigParser::parseServerBlock(ServerConfig &conf)
 {
     if (tokens.atEnd() || tokens.peek().text != "server")
-        configError(ERR_EXPECTED_SERVER);
+        throwConfigError(tokens, ERR_EXPECTED_SERVER);
 
     tokens.expect("server");
     tokens.expect("{");
@@ -133,12 +106,11 @@ void ConfigParser::parseServerBlock(ServerConfig &conf)
         handler = serverDispatch.find(directive);
 
         if (handler == serverDispatch.end())
-            configError(ERR_UNKNOWN_SERVER_DIRECTIVE);
+            throwConfigError(tokens, ERR_UNKNOWN_SERVER_DIRECTIVE);
 
         (this->*(handler->second))(conf);
     }
-
-    configError(ERR_UNCLOSED_SERVER);
+    throwConfigError(tokens, ERR_UNCLOSED_SERVER);
 }
 
 std::vector<ServerConfig> ConfigParser::loadeConfig(std::string configFile)
@@ -148,7 +120,7 @@ std::vector<ServerConfig> ConfigParser::loadeConfig(std::string configFile)
     std::vector<ServerConfig> servers;
 
     if (tokens.atEnd())
-        configError(ERR_EMPTY_CONFIG);
+        throwConfigError(tokens, ERR_EMPTY_CONFIG);
 
     while (!tokens.atEnd())
     {

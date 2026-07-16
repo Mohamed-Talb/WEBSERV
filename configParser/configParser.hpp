@@ -15,6 +15,9 @@
 #include "valuesParser.hpp"
 #include "../Errors.hpp"
 
+
+void throwConfigError(const TokenStream &tokens, int errorCode);
+
 struct Listen
 {
     int port;
@@ -87,8 +90,6 @@ class ConfigParser
 
     void checkDuplicate(Location &loc, const std::string &directive) const;
     void checkDuplicate(ServerConfig &conf, const std::string &directive) const;
-
-    void configError(int errorCode) const;
     
     typedef void (ConfigParser::*ServerHandler)(ServerConfig &);
     typedef void (ConfigParser::*LocationHandler)(Location &);
@@ -101,7 +102,6 @@ class ConfigParser
     void initLocationDispatch();
 
     // Main parse flow
-    void parseLocationBlock(Location &loc);
     void parseServerBlock(ServerConfig &conf);
 
     //
