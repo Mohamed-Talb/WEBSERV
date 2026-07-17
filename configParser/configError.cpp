@@ -68,7 +68,7 @@ void throwConfigError(const TokenStream &tokens, int errorCode)
     }
     else
     {
-        const Token &token = tokens.peek();
+        const Token &token = tokens.peekCurrent();
 
         message << " at line " << token.line  << ", column " << token.column << ": " << getErrorMessage(errorCode);
 

@@ -104,15 +104,14 @@ void ConfigParser::parseServerBlock(ServerConfig &conf)
 
     while (!tokens.atEnd())
     {
-        if (tokens.peek().text == "}")
+        if (tokens.peekCurrent().text == "}")
         {
             std::sort(conf.locations.begin(), conf.locations.end(), CompareLocations());
             validateServer(conf);
-
             tokens.expect("}");
             return;
         }
-        const std::string &directive = tokens.peek().text;
+        const std::string &directive = tokens.peekCurrent().text;
 
         std::map<std::string, ServerHandler>::iterator handler;
         handler = serverDispatch.find(directive);
@@ -128,7 +127,6 @@ void ConfigParser::parseServerBlock(ServerConfig &conf)
 std::vector<ServerConfig> ConfigParser::loadeConfig(std::string configFile)
 {
     tokens = TokenStream(configFile);
-
     std::vector<ServerConfig> servers;
 
     if (tokens.atEnd())

@@ -11,7 +11,7 @@ void ConfigParser::locationMethods(Location &loc)
 
     bool hasMethod = false;
 
-    while (!tokens.atEnd() && tokens.peek().text != ";")
+    while (!tokens.atEnd() && tokens.peekCurrent().text != ";")
     {
         const Token &methodToken = tokens.peekValue("HTTP method");
         std::string method = toUpper(methodToken.text);
@@ -35,7 +35,7 @@ void ConfigParser::locationMethods(Location &loc)
     if (tokens.atEnd())
         throwConfigError(tokens, ERR_MISSING_SEMICOLON);
 
-    tokens.expectSemicolon();
+    tokens.expect(";");
 }
 
 void ConfigParser::locationRoot(Location &loc)
@@ -45,7 +45,7 @@ void ConfigParser::locationRoot(Location &loc)
 
     loc.root = valuesParser::parseFilesystemPath(tokens);
 
-    tokens.expectSemicolon();
+    tokens.expect(";");
 }
 
 void ConfigParser::locationAutoindex(Location &loc)
@@ -61,7 +61,7 @@ void ConfigParser::locationAutoindex(Location &loc)
     loc.autoindex = valueToken.text;
     tokens.consume();
 
-    tokens.expectSemicolon();
+    tokens.expect(";");
 }
 
 void ConfigParser::locationIndex(Location &loc)
@@ -71,7 +71,7 @@ void ConfigParser::locationIndex(Location &loc)
 
     loc.indexes = valuesParser::parseIndexesList(tokens);
 
-    tokens.expectSemicolon();
+    tokens.expect(";");
 }
 
 void ConfigParser::locationCgiPath(Location &loc)
@@ -81,7 +81,7 @@ void ConfigParser::locationCgiPath(Location &loc)
 
     loc.cgiPath = valuesParser::parseCgiPathValue(tokens);
 
-    tokens.expectSemicolon();
+    tokens.expect(";");
 }
 
 void ConfigParser::locationCgiExt(Location &loc)
@@ -91,7 +91,7 @@ void ConfigParser::locationCgiExt(Location &loc)
 
     loc.cgiExt = valuesParser::parseCgiExtValue(tokens);
 
-    tokens.expectSemicolon();
+    tokens.expect(";");
 }
 
 void ConfigParser::locationRedirect(Location &loc)
@@ -115,7 +115,7 @@ void ConfigParser::locationRedirect(Location &loc)
     loc.redirectTarget =
         valuesParser::parseRedirectTargetValue(tokens);
 
-    tokens.expectSemicolon();
+    tokens.expect(";");
 }
 
 void ConfigParser::locationUpload(Location &loc)
@@ -131,7 +131,7 @@ void ConfigParser::locationUpload(Location &loc)
     loc.uploadEnabled = valueToken.text;
     tokens.consume();
 
-    tokens.expectSemicolon();
+    tokens.expect(";");
 }
 
 void ConfigParser::locationUploadPath(Location &loc)
@@ -141,5 +141,5 @@ void ConfigParser::locationUploadPath(Location &loc)
 
     loc.uploadPath = valuesParser::parseFilesystemPath(tokens);
 
-    tokens.expectSemicolon();
+    tokens.expect(";");
 }

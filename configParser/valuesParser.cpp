@@ -173,11 +173,9 @@ namespace valuesParser
 
     std::string parseFilesystemPath(TokenStream &tokens)
     {
-        const Token &pathToken =
-            tokens.peekValue("filesystem path");
+        const Token &pathToken = tokens.peekValue("filesystem path");
 
         std::string path = mergeSlashes(pathToken.text);
-
         while (path.size() > 1 && path[path.size() - 1] == '/')
         {
             path.erase(path.size() - 1);
@@ -217,7 +215,7 @@ namespace valuesParser
     {
         std::vector<std::string> values;
 
-        while (!tokens.atEnd() && tokens.peek().text != ";")
+        while (!tokens.atEnd() && tokens.peekCurrent().text != ";")
         {
             const Token &valueToken =
                 tokens.peekValue(directiveName + " value");
@@ -239,7 +237,7 @@ namespace valuesParser
     {
         std::vector<std::string> indexes;
 
-        while (!tokens.atEnd() && tokens.peek().text != ";")
+        while (!tokens.atEnd() && tokens.peekCurrent().text != ";")
         {
             const Token &indexToken =
                 tokens.peekValue("index value");

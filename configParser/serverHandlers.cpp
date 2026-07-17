@@ -53,7 +53,7 @@ void ConfigParser::serverListen(ServerConfig &conf)
     conf.port = port;
 
     tokens.consume();
-    tokens.expectSemicolon();
+    tokens.expect(";");
 }
 
 void ConfigParser::serverRoot(ServerConfig &conf)
@@ -62,8 +62,8 @@ void ConfigParser::serverRoot(ServerConfig &conf)
     tokens.expect("root");
 
     conf.root = valuesParser::parseFilesystemPath(tokens);
-
-    tokens.expectSemicolon();
+    std::cout << conf.root << std::endl;
+    tokens.expect(";");
 }
 
 void ConfigParser::serverNames(ServerConfig &conf)
@@ -73,7 +73,7 @@ void ConfigParser::serverNames(ServerConfig &conf)
 
     conf.serverNames.clear();
 
-    while (!tokens.atEnd() && tokens.peek().text != ";")
+    while (!tokens.atEnd() && tokens.peekCurrent().text != ";")
     {
         const Token &nameToken = tokens.peekValue("server name");
 
@@ -90,7 +90,7 @@ void ConfigParser::serverNames(ServerConfig &conf)
     if (tokens.atEnd())
         throwConfigError(tokens, ERR_MISSING_SEMICOLON);
 
-    tokens.expectSemicolon();
+    tokens.expect(";");
 }
 
 void ConfigParser::serverIndex(ServerConfig &conf)
@@ -99,7 +99,7 @@ void ConfigParser::serverIndex(ServerConfig &conf)
     tokens.expect("index");
 
     conf.indexes = valuesParser::parseIndexesList(tokens);
-    tokens.expectSemicolon();
+    tokens.expect(";");
 }
 
 void ConfigParser::serverClientMaxBodySize(ServerConfig &conf)
@@ -110,7 +110,7 @@ void ConfigParser::serverClientMaxBodySize(ServerConfig &conf)
     conf.client_max_body_size =
         valuesParser::parseBodySizeValue(tokens);
 
-    tokens.expectSemicolon();
+    tokens.expect(";");
 }
 
 void ConfigParser::serverErrorPages(ServerConfig &conf)
@@ -118,10 +118,9 @@ void ConfigParser::serverErrorPages(ServerConfig &conf)
     tokens.expect("error_page");
 
     std::vector<int> codes;
-    while (!tokens.atEnd() && tokens.peek().text != ";" && isOnlyDigits(tokens.peek().text))
+    while (!tokens.atEnd() && tokens.peekCurrent().text != ";" && isOnlyDigits(tokens.peekCurrent().text))
     {
-        const Token &codeToken =
-            tokens.peekValue("error status code");
+        const Token &codeToken = tokens.peekValue("error status code");
 
         int errorCode = 0;
         std::istringstream stream(codeToken.text);
@@ -145,13 +144,13 @@ void ConfigParser::serverErrorPages(ServerConfig &conf)
     if (codes.empty())
         throwConfigError(tokens, ERR_MISSING_VALUE);
 
-    if (tokens.atEnd() || tokens.peek().text == ";")
+    if (tokens.atEnd() || tokens.peekCurrent().text == ";")
         throwConfigError(tokens, ERR_MISSING_VALUE);
 
     std::string path =
         valuesParser::parseErrorPagePathValue(tokens);
 
-    tokens.expectSemicolon();
+    tokens.expect(";");
 
     for (size_t i = 0; i < codes.size(); ++i)
         conf.errorPage[codes[i]] = path;
@@ -179,7 +178,7 @@ void ConfigParser::serverLocation(ServerConfig &conf)
 
     while (!tokens.atEnd())
     {
-        if (tokens.peek().text == "}")
+        if (tokens.peekCurrent().text == "}")
         {
             validateLocation(location);
             tokens.expect("}");
@@ -189,7 +188,7 @@ void ConfigParser::serverLocation(ServerConfig &conf)
         }
 
         const std::string &directive =
-            tokens.peek().text;
+            tokens.peekCurrent().text;
 
         std::map<std::string, LocationHandler>::iterator handler;
         handler = locationDispatch.find(directive);
@@ -200,6 +199,5 @@ void ConfigParser::serverLocation(ServerConfig &conf)
         }
         (this->*(handler->second))(location);
     }
-
     throwConfigError(tokens, ERR_UNCLOSED_LOCATION);
 }
