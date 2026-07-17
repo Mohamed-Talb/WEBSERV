@@ -23,6 +23,7 @@ class TokenStream
 
         const Token &peek() const;
         const Token &previous() const;
+         const Token &peekValue(const std::string &description) const;
 
         Token consume();
 

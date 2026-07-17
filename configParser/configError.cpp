@@ -68,57 +68,30 @@ std::string getErrorMessage(int errorCode)
     return "invalid configuration";
 }
 
-bool usesPreviousToken(int errorCode)
-{
-    switch (errorCode)
-    {
-        case ERR_INVALID_SERVER_NAME:
-        case ERR_INVALID_BODY_SIZE:
-        case ERR_INVALID_ERROR_CODE:
-        case ERR_DUPLICATE_ERROR_CODE:
-        case ERR_DUPLICATE_LOCATION:
-        case ERR_INVALID_LISTEN:
-        case ERR_INVALID_HOST:
-        case ERR_INVALID_PORT:
-        case ERR_INVALID_AUTOINDEX:
-        case ERR_INVALID_UPLOAD:
-        case ERR_INVALID_REDIRECT_CODE:
-        case ERR_INVALID_PATH:
-        case ERR_INVALID_METHOD:
-        case ERR_DUPLICATE_METHOD:
-        case ERR_INVALID_CGI_EXTENSION:
-        case ERR_INVALID_REDIRECT_TARGET:
-            return true;
-    }
-
-    return false;
-}
-
 
 void throwConfigError(const TokenStream &tokens, int errorCode)
 {
     std::ostringstream message;
-    const Token *token = NULL;
-
     message << "Config error";
 
-    if (usesPreviousToken(errorCode))
-        token = &tokens.previous();
-    else if (!tokens.atEnd())
-        token = &tokens.peek();
-
-    if (token != NULL)
-    {
-        message << " at line " << token->line  << ", column "
-                << token->column << ": " << getErrorMessage(errorCode);
-
-        if (!token->text.empty())
-            message << " near '" << token->text << "'";
-    }
-    else
+    if (tokens.atEnd())
     {
         message << " at end of file: "
                 << getErrorMessage(errorCode);
+    }
+    else
+    {
+        const Token &token = tokens.peek();
+
+        message << " at line "
+                << token.line
+                << ", column "
+                << token.column
+                << ": "
+                << getErrorMessage(errorCode);
+
+        if (!token.text.empty())
+            message << " near '" << token.text << "'";
     }
 
     throw std::runtime_error(message.str());

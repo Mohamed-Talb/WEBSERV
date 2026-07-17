@@ -37,7 +37,7 @@ $(NAME): $(WEBSERV_OBJ)
 	$(CXX) $(WEBSERV_OBJ) -o $(NAME)
 
 %.o: %.cpp
-	@$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
 	@rm -rf $(WEBSERV_OBJ)

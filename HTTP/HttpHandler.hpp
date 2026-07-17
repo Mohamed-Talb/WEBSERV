@@ -21,9 +21,6 @@
 #include <algorithm>
 #include <sys/stat.h>
 
-#ifndef HTTP_RESULT_HPP
-#define HTTP_RESULT_HPP
-
 #include "HttpResponse.hpp"
 #include "RouteMatch.hpp"
 #include "../configParser/configParser.hpp"
@@ -64,7 +61,6 @@ struct HttpResult
     }
 };
 
-#endif
 
 
 class HttpHandler 

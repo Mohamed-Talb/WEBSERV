@@ -20,6 +20,19 @@ const Token &TokenStream::peek() const
     return tokens[position];
 }
 
+const Token &TokenStream::peekValue(const std::string &description) const
+{
+    if (atEnd())
+        throwUnexpected(description);
+
+    const Token &token = peek();
+
+    if (isSpecialToken(token.text))
+        throwUnexpected(description);
+
+    return token;
+}
+
 const Token &TokenStream::previous() const
 {
     if (position == 0)

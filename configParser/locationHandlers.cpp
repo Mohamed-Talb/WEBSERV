@@ -13,16 +13,30 @@ void ConfigParser::locationMethods(Location &loc)
 
     while (!tokens.atEnd() && tokens.peek().text != ";")
     {
-        std::string currentMethod = toUpper(tokens.expectValue("HTTP method").text);
-        hasMethod = true;
+        const Token &methodToken = tokens.peekValue("HTTP method");
+        std::string method = toUpper(methodToken.text);
 
-        if (std::find(loc.allowedMethods.begin(), loc.allowedMethods.end(), currentMethod) == loc.allowedMethods.end())
+        if (std::find(
+                loc.allowedMethods.begin(),
+                loc.allowedMethods.end(),
+                method
+            ) == loc.allowedMethods.end())
+        {
             throwConfigError(tokens, ERR_INVALID_METHOD);
+        }
 
-        if (std::find(loc.methods.begin(), loc.methods.end(), currentMethod) != loc.methods.end())
+        if (std::find(
+                loc.methods.begin(),
+                loc.methods.end(),
+                method
+            ) != loc.methods.end())
+        {
             throwConfigError(tokens, ERR_DUPLICATE_METHOD);
+        }
 
-        loc.methods.push_back(currentMethod);
+        loc.methods.push_back(method);
+        tokens.consume();
+        hasMethod = true;
     }
 
     if (!hasMethod)
@@ -49,16 +63,13 @@ void ConfigParser::locationAutoindex(Location &loc)
     checkDuplicate(loc, "autoindex");
     tokens.expect("autoindex");
 
-    if (tokens.atEnd() || tokens.peek().text == ";"
-        || tokens.peek().text == "{" || tokens.peek().text == "}")
-    {
-        throwConfigError(tokens, ERR_MISSING_VALUE);
-    }
+    const Token &valueToken = tokens.peekValue("autoindex value");
 
-    loc.autoindex = tokens.expectValue("autoindex value").text;
-
-    if (loc.autoindex != "on" && loc.autoindex != "off")
+    if (valueToken.text != "on" && valueToken.text != "off")
         throwConfigError(tokens, ERR_INVALID_AUTOINDEX);
+
+    loc.autoindex = valueToken.text;
+    tokens.consume();
 
     tokens.expectSemicolon();
 }
@@ -98,29 +109,21 @@ void ConfigParser::locationRedirect(Location &loc)
     checkDuplicate(loc, "return");
     tokens.expect("return");
 
-    if (tokens.atEnd() || tokens.peek().text == ";"
-        || tokens.peek().text == "{" || tokens.peek().text == "}")
-    {
-        throwConfigError(tokens, ERR_MISSING_VALUE);
-    }
+    const Token &codeToken = tokens.peekValue("redirect status code");
 
-    std::string codeValue = tokens.expectValue("redirect status code").text;
-
-    if (!isOnlyDigits(codeValue))
+    if (!isOnlyDigits(codeToken.text))
         throwConfigError(tokens, ERR_INVALID_REDIRECT_CODE);
 
-    loc.redirectCode = std::atoi(codeValue.c_str());
+    int redirectCode = std::atoi(codeToken.text.c_str());
 
-    if (loc.redirectCode != 301 && loc.redirectCode != 302)
+    if (redirectCode != 301 && redirectCode != 302)
         throwConfigError(tokens, ERR_INVALID_REDIRECT_CODE);
 
-    if (tokens.atEnd() || tokens.peek().text == ";"
-        || tokens.peek().text == "{" || tokens.peek().text == "}")
-    {
-        throwConfigError(tokens, ERR_MISSING_VALUE);
-    }
+    loc.redirectCode = redirectCode;
+    tokens.consume();
 
-    loc.redirectTarget = valuesParser::parseRedirectTargetValue(tokens);
+    loc.redirectTarget =
+        valuesParser::parseRedirectTargetValue(tokens);
 
     tokens.expectSemicolon();
 }
@@ -130,14 +133,13 @@ void ConfigParser::locationUpload(Location &loc)
     checkDuplicate(loc, "upload");
     tokens.expect("upload");
 
-    if (tokens.atEnd() || tokens.peek().text == ";" || tokens.peek().text == "{" || tokens.peek().text == "}")
-    {
-        throwConfigError(tokens, ERR_MISSING_VALUE);
-    }
-    loc.uploadEnabled = tokens.expectValue("upload value").text;
+    const Token &valueToken = tokens.peekValue("upload value");
 
-    if (loc.uploadEnabled != "on" && loc.uploadEnabled != "off")
+    if (valueToken.text != "on" && valueToken.text != "off")
         throwConfigError(tokens, ERR_INVALID_UPLOAD);
+
+    loc.uploadEnabled = valueToken.text;
+    tokens.consume();
 
     tokens.expectSemicolon();
 }

@@ -39,20 +39,29 @@ SECURITY:
 ===============================================================================
 */
 
+#include "valuesParser.hpp"
+#include "../Helpers.hpp"
+#include "../Errors.hpp"
+
+#include <cctype>
+#include <limits>
+#include <sstream>
+
 namespace valuesParser
 {
 
     size_t parseBodySizeValue(TokenStream &tokens)
     {
-        std::string value;
-        size_t position;
-        size_t baseSize;
-        size_t multiplier;
+        const Token &valueToken =
+            tokens.peekValue("client_max_body_size value");
 
-        value = tokens.expectValue("client_max_body_size value").text;
-        position = 0;
+        const std::string &value = valueToken.text;
+        size_t position = 0;
 
-        while (position < value.size() && std::isdigit(static_cast<unsigned char>(value[position])))
+        while (position < value.size()
+            && std::isdigit(
+                static_cast<unsigned char>(value[position])
+            ))
         {
             ++position;
         }
@@ -66,15 +75,15 @@ namespace valuesParser
         std::string numericPart = value.substr(0, position);
         std::string unit = toUpper(trim(value.substr(position)));
 
-        baseSize = 0;
-
+        size_t baseSize = 0;
         std::istringstream stream(numericPart);
+
         stream >> baseSize;
 
         if (stream.fail() || !stream.eof())
             throwConfigError(tokens, ERR_INVALID_BODY_SIZE);
 
-        multiplier = 1;
+        size_t multiplier = 1;
 
         if (unit.empty() || unit == "B")
             multiplier = 1;
@@ -87,41 +96,55 @@ namespace valuesParser
         else
             throwConfigError(tokens, ERR_INVALID_BODY_SIZE);
 
-        if (baseSize > 0
-            && multiplier > std::numeric_limits<size_t>::max() / baseSize)
+        if (baseSize == 0)
+            throwConfigError(tokens, ERR_INVALID_BODY_SIZE);
+
+        if (multiplier
+            > std::numeric_limits<size_t>::max() / baseSize)
         {
             throwConfigError(tokens, ERR_INVALID_BODY_SIZE);
         }
 
-        return baseSize * multiplier;
+        size_t result = baseSize * multiplier;
+
+        tokens.consume();
+
+        return result;
     }
 
     std::string parseErrorPagePathValue(TokenStream &tokens)
     {
-        std::string path;
+        const Token &pathToken =
+            tokens.peekValue("error_page path");
 
-        path = tokens.expectValue("error_page path").text;
-        path = mergeSlashes(path);
+        std::string path = mergeSlashes(pathToken.text);
 
         if (path.find("..") != std::string::npos)
             throwConfigError(tokens, ERR_INVALID_PATH);
 
-        if (path[0] != '/')
+        if (path.empty() || path[0] != '/')
             path = "/" + path;
+
+        tokens.consume();
 
         return path;
     }
 
     std::string parseCgiExtValue(TokenStream &tokens)
     {
-        std::string extension;
+        const Token &extensionToken =
+            tokens.peekValue("cgi_ext value");
 
-        extension = tokens.expectValue("cgi_ext value").text;
+        std::string extension = extensionToken.text;
 
-        if (extension.find("..") != std::string::npos || extension.find('/') != std::string::npos)
+        if (extension.find("..") != std::string::npos
+            || extension.find('/') != std::string::npos)
         {
             throwConfigError(tokens, ERR_INVALID_CGI_EXTENSION);
         }
+
+        if (extension.empty())
+            throwConfigError(tokens, ERR_INVALID_CGI_EXTENSION);
 
         if (extension[0] != '.')
             extension = "." + extension;
@@ -129,56 +152,72 @@ namespace valuesParser
         if (extension.size() == 1)
             throwConfigError(tokens, ERR_INVALID_CGI_EXTENSION);
 
+        tokens.consume();
+
         return extension;
     }
 
     std::string parseRedirectTargetValue(TokenStream &tokens)
     {
-        std::string target;
+        const Token &targetToken =
+            tokens.peekValue("redirect target");
 
-        target = tokens.expectValue("redirect target").text;
+        const std::string &target = targetToken.text;
 
         if (target.find("..") != std::string::npos)
             throwConfigError(tokens, ERR_INVALID_REDIRECT_TARGET);
 
-        if (target[0] != '/'
-            && target.find("http://") != 0
-            && target.find("https://") != 0)
+        if (target.empty()
+            || (target[0] != '/'
+                && target.find("http://") != 0
+                && target.find("https://") != 0))
         {
             throwConfigError(tokens, ERR_INVALID_REDIRECT_TARGET);
         }
 
-        return target;
+        std::string result = target;
+
+        tokens.consume();
+
+        return result;
     }
 
     std::string parseFilesystemPath(TokenStream &tokens)
     {
-        std::string path;
+        const Token &pathToken =
+            tokens.peekValue("filesystem path");
 
-        path = tokens.expectValue("filesystem path").text;
-        path = mergeSlashes(path);
+        std::string path = mergeSlashes(pathToken.text);
 
-        while (path.size() > 1 && path[path.size() - 1] == '/')
+        while (path.size() > 1
+            && path[path.size() - 1] == '/')
+        {
             path.erase(path.size() - 1);
+        }
 
         if (path.find("..") != std::string::npos)
             throwConfigError(tokens, ERR_INVALID_PATH);
+
+        tokens.consume();
 
         return path;
     }
 
     std::string parseLocationPath(TokenStream &tokens)
     {
-        std::string path;
+        const Token &pathToken =
+            tokens.peekValue("location path");
 
-        path = tokens.expectValue("location path").text;
-        path = mergeSlashes(path);
+        std::string path = mergeSlashes(pathToken.text);
 
-        if (path[0] != '/')
+        if (path.empty() || path[0] != '/')
             throwConfigError(tokens, ERR_INVALID_PATH);
 
-        while (path.size() > 1 && path[path.size() - 1] == '/')
+        while (path.size() > 1
+            && path[path.size() - 1] == '/')
+        {
             path.erase(path.size() - 1);
+        }
 
         if (path.find("..") != std::string::npos)
             throwConfigError(tokens, ERR_INVALID_PATH);
@@ -195,9 +234,11 @@ namespace valuesParser
 
         while (!tokens.atEnd() && tokens.peek().text != ";")
         {
-            values.push_back(
-                tokens.expectValue(directiveName + " value").text
-            );
+            const Token &valueToken =
+                tokens.peekValue(directiveName + " value");
+
+            values.push_back(valueToken.text);
+            tokens.consume();
         }
 
         if (tokens.atEnd())
@@ -215,21 +256,22 @@ namespace valuesParser
 
         while (!tokens.atEnd() && tokens.peek().text != ";")
         {
-            std::string index;
+            const Token &indexToken =
+                tokens.peekValue("index value");
 
-            index = tokens.expectValue("index value").text;
-            index = mergeSlashes(index);
+            std::string index = mergeSlashes(indexToken.text);
 
             while (!index.empty() && index[0] == '/')
                 index.erase(0, 1);
 
-            if (index.empty())
+            if (index.empty()
+                || index.find("..") != std::string::npos)
+            {
                 throwConfigError(tokens, ERR_INVALID_PATH);
-
-            if (index.find("..") != std::string::npos)
-                throwConfigError(tokens, ERR_INVALID_PATH);
+            }
 
             indexes.push_back(index);
+            tokens.consume();
         }
 
         if (tokens.atEnd())
@@ -243,16 +285,21 @@ namespace valuesParser
 
     std::string parseCgiPathValue(TokenStream &tokens)
     {
-        std::string path;
+        const Token &pathToken =
+            tokens.peekValue("cgi_path value");
 
-        path = tokens.expectValue("cgi_path value").text;
-        path = mergeSlashes(path);
+        std::string path = mergeSlashes(pathToken.text);
 
-        while (path.size() > 1 && path[path.size() - 1] == '/')
+        while (path.size() > 1
+            && path[path.size() - 1] == '/')
+        {
             path.erase(path.size() - 1);
+        }
 
         if (path.find("..") != std::string::npos)
             throwConfigError(tokens, ERR_INVALID_PATH);
+
+        tokens.consume();
 
         return path;
     }
