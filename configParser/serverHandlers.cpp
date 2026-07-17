@@ -116,8 +116,8 @@ void ConfigParser::serverClientMaxBodySize(ServerConfig &conf)
 void ConfigParser::serverErrorPages(ServerConfig &conf)
 {
     tokens.expect("error_page");
-    std::vector<int> codes;
 
+    std::vector<int> codes;
     while (!tokens.atEnd() && tokens.peek().text != ";" && isOnlyDigits(tokens.peek().text))
     {
         const Token &codeToken =
@@ -125,22 +125,19 @@ void ConfigParser::serverErrorPages(ServerConfig &conf)
 
         int errorCode = 0;
         std::istringstream stream(codeToken.text);
-
         stream >> errorCode;
-
         if (stream.fail() || !stream.eof() || !isValidErrorCode(errorCode))
         {
             throwConfigError(tokens, ERR_INVALID_STATUS_CODE);
         }
-
         if (std::find(codes.begin(), codes.end(), errorCode) != codes.end())
         {
-            throwConfigError(tokens, ERR_DUPLICATE_VALUE);
+            throwConfigError(tokens,ERR_DUPLICATE_VALUE);
         }
-
         if (conf.errorPage.count(errorCode) != 0)
-            throwConfigError(tokens, ERR_DUPLICATE_VALUE);
-
+        {
+            throwConfigError(tokens,ERR_DUPLICATE_VALUE);
+        }
         codes.push_back(errorCode);
         tokens.consume();
     }
@@ -154,10 +151,10 @@ void ConfigParser::serverErrorPages(ServerConfig &conf)
     std::string path =
         valuesParser::parseErrorPagePathValue(tokens);
 
+    tokens.expectSemicolon();
+
     for (size_t i = 0; i < codes.size(); ++i)
         conf.errorPage[codes[i]] = path;
-
-    tokens.expectSemicolon();
 }
 
 

@@ -1,6 +1,5 @@
 #ifndef ERRORS_HPP
 #define ERRORS_HPP
-
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -13,5 +12,15 @@ class ServerException : public std::runtime_error
 };
 
 void logError(const std::string& context, const std::string& msg);
+
+enum ConfigErrorType 
+{
+    ERR_DUPLICATE_DIRECTIVE,
+    ERR_DUPLICATE_VALUE,
+    ERR_MISSING_VALUE,
+    ERR_INVALID_VALUE,
+    ERR_MISSING_SEMICOLON,
+    ERR_INVALID_SYNTAX
+};
 
 #endif

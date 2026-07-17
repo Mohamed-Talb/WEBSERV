@@ -4,18 +4,42 @@
 
 void ConfigParser::validateLocation(Location &loc)
 {
-    if ((loc.uploadEnabled == "on" && loc.uploadPath.empty()) || (loc.uploadEnabled == "off" && !loc.uploadPath.empty()))
+    if (loc.uploadEnabled == "on" && loc.uploadPath.empty())
     {
-        throwConfigError(tokens, ERR_INVALID_UPLOAD_CONFIG);
+        throw std::runtime_error(
+            "Config error in location '" + loc.path
+            + "': upload is enabled but upload_path is missing"
+        );
     }
 
-    if (loc.cgiExt.empty() != loc.cgiPath.empty())
-        throwConfigError(tokens, ERR_INVALID_CGI_CONFIG);
+    if (loc.uploadEnabled == "off" && !loc.uploadPath.empty())
+    {
+        throw std::runtime_error(
+            "Config error in location '" + loc.path
+            + "': upload_path is set but upload is disabled"
+        );
+    }
+
+    if (!loc.cgiExt.empty() && loc.cgiPath.empty())
+    {
+        throw std::runtime_error(
+            "Config error in location '" + loc.path
+            + "': cgi_ext requires cgi_path"
+        );
+    }
+
+    if (!loc.cgiPath.empty() && loc.cgiExt.empty())
+    {
+        throw std::runtime_error(
+            "Config error in location '" + loc.path
+            + "': cgi_path requires cgi_ext"
+        );
+    }
 }
 
 void ConfigParser::checkDuplicate(ServerConfig &conf, const std::string &directive) const
 {
-    if (conf.seenDirectives[directive])
+    if (conf.seenDirectives.find(directive) != conf.seenDirectives.end())
         throwConfigError(tokens, ERR_DUPLICATE_DIRECTIVE);
 
     conf.seenDirectives[directive] = true;
@@ -23,7 +47,7 @@ void ConfigParser::checkDuplicate(ServerConfig &conf, const std::string &directi
 
 void ConfigParser::checkDuplicate(Location &loc, const std::string &directive) const
 {
-    if (loc.seenDirectives[directive])
+    if (loc.seenDirectives.find(directive) != loc.seenDirectives.end())
         throwConfigError(tokens, ERR_DUPLICATE_DIRECTIVE);
 
     loc.seenDirectives[directive] = true;

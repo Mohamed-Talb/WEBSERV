@@ -64,19 +64,13 @@ void throwConfigError(const TokenStream &tokens, int errorCode)
 
     if (tokens.atEnd())
     {
-        message << " at end of file: "
-                << getErrorMessage(errorCode);
+        message << " at end of file: " << getErrorMessage(errorCode);
     }
     else
     {
         const Token &token = tokens.peek();
 
-        message << " at line "
-                << token.line
-                << ", column "
-                << token.column
-                << ": "
-                << getErrorMessage(errorCode);
+        message << " at line " << token.line  << ", column " << token.column << ": " << getErrorMessage(errorCode);
 
         if (!token.text.empty())
             message << " near '" << token.text << "'";

@@ -7,14 +7,14 @@
 #include <string>
 #include <stdint.h>
 
+#include "../Errors.hpp"
 #include "../Lib.hpp"
-#include "Server.ipp"
 #include "Client.hpp"
 #include "Listener.hpp"
-#include "../Errors.hpp"
 #include "../Helpers.hpp"
 #include "../HTTP/HttpHandler.hpp"
 #include "../configParser/configParser.hpp"
+#include "Server.ipp"
 
 #define TIMEOUT_DURATION 30
 
