@@ -1,12 +1,10 @@
 #include "configParser.hpp"
-#include "../Errors.hpp"
 
 #include <algorithm>
 
 void ConfigParser::validateLocation(Location &loc)
 {
-    if ((loc.uploadEnabled == "on" && loc.uploadPath.empty())
-        || (loc.uploadEnabled == "off" && !loc.uploadPath.empty()))
+    if ((loc.uploadEnabled == "on" && loc.uploadPath.empty()) || (loc.uploadEnabled == "off" && !loc.uploadPath.empty()))
     {
         throwConfigError(tokens, ERR_INVALID_UPLOAD_CONFIG);
     }
@@ -77,9 +75,6 @@ ConfigParser::ConfigParser()
 
 void ConfigParser::parseServerBlock(ServerConfig &conf)
 {
-    if (tokens.atEnd() || tokens.peek().text != "server")
-        throwConfigError(tokens, ERR_EXPECTED_SERVER);
-
     tokens.expect("server");
     tokens.expect("{");
 
@@ -93,14 +88,13 @@ void ConfigParser::parseServerBlock(ServerConfig &conf)
             tokens.expect("}");
             return;
         }
-
         const std::string &directive = tokens.peek().text;
 
         std::map<std::string, ServerHandler>::iterator handler;
         handler = serverDispatch.find(directive);
 
         if (handler == serverDispatch.end())
-            throwConfigError(tokens, ERR_UNKNOWN_SERVER_DIRECTIVE);
+            throwConfigError(tokens, ERR_UNKNOWN_DIRECTIVE);
 
         (this->*(handler->second))(conf);
     }

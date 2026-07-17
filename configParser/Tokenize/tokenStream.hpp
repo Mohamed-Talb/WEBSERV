@@ -17,20 +17,16 @@ class TokenStream
     public:
         TokenStream();
 
-        explicit TokenStream(const std::string &filePath);
+        TokenStream(const std::string &filePath);
 
         bool atEnd() const;
-
         const Token &peek() const;
         const Token &previous() const;
-         const Token &peekValue(const std::string &description) const;
-
         Token consume();
-
-        Token expect(const std::string &expected);
-
-        Token expectValue(const std::string &description);
         void expectSemicolon();
+        Token expect(const std::string &expected);
+        Token expectValue(const std::string &description);
+        const Token &peekValue(const std::string &description) const;
 };
 
 #endif

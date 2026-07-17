@@ -16,24 +16,14 @@ void ConfigParser::locationMethods(Location &loc)
         const Token &methodToken = tokens.peekValue("HTTP method");
         std::string method = toUpper(methodToken.text);
 
-        if (std::find(
-                loc.allowedMethods.begin(),
-                loc.allowedMethods.end(),
-                method
-            ) == loc.allowedMethods.end())
+        if (std::find(loc.allowedMethods.begin(),loc.allowedMethods.end(),method) == loc.allowedMethods.end())
         {
             throwConfigError(tokens, ERR_INVALID_METHOD);
         }
-
-        if (std::find(
-                loc.methods.begin(),
-                loc.methods.end(),
-                method
-            ) != loc.methods.end())
+        if (std::find( loc.methods.begin(),loc.methods.end(),method) != loc.methods.end())
         {
-            throwConfigError(tokens, ERR_DUPLICATE_METHOD);
+            throwConfigError(tokens, ERR_DUPLICATE_VALUE);
         }
-
         loc.methods.push_back(method);
         tokens.consume();
         hasMethod = true;
@@ -66,7 +56,7 @@ void ConfigParser::locationAutoindex(Location &loc)
     const Token &valueToken = tokens.peekValue("autoindex value");
 
     if (valueToken.text != "on" && valueToken.text != "off")
-        throwConfigError(tokens, ERR_INVALID_AUTOINDEX);
+        throwConfigError(tokens, ERR_EXPECTED_ON_OFF);
 
     loc.autoindex = valueToken.text;
     tokens.consume();
@@ -136,7 +126,7 @@ void ConfigParser::locationUpload(Location &loc)
     const Token &valueToken = tokens.peekValue("upload value");
 
     if (valueToken.text != "on" && valueToken.text != "off")
-        throwConfigError(tokens, ERR_INVALID_UPLOAD);
+        throwConfigError(tokens, ERR_EXPECTED_ON_OFF);
 
     loc.uploadEnabled = valueToken.text;
     tokens.consume();

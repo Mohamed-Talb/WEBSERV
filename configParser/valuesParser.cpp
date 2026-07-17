@@ -58,19 +58,16 @@ namespace valuesParser
         const std::string &value = valueToken.text;
         size_t position = 0;
 
-        while (position < value.size()
-            && std::isdigit(
-                static_cast<unsigned char>(value[position])
-            ))
+        while (position < value.size() && std::isdigit(static_cast<unsigned char>(value[position])))
         {
             ++position;
         }
 
         if (position == 0)
-            throwConfigError(tokens, ERR_INVALID_BODY_SIZE);
+            throwConfigError(tokens, ERR_INVALID_SIZE);
 
         if (position < value.size() && value[position] == '.')
-            throwConfigError(tokens, ERR_INVALID_BODY_SIZE);
+            throwConfigError(tokens, ERR_INVALID_SIZE);
 
         std::string numericPart = value.substr(0, position);
         std::string unit = toUpper(trim(value.substr(position)));
@@ -81,7 +78,7 @@ namespace valuesParser
         stream >> baseSize;
 
         if (stream.fail() || !stream.eof())
-            throwConfigError(tokens, ERR_INVALID_BODY_SIZE);
+            throwConfigError(tokens, ERR_INVALID_SIZE);
 
         size_t multiplier = 1;
 
@@ -94,21 +91,19 @@ namespace valuesParser
         else if (unit == "G" || unit == "GB")
             multiplier = 1024 * 1024 * 1024;
         else
-            throwConfigError(tokens, ERR_INVALID_BODY_SIZE);
+            throwConfigError(tokens, ERR_INVALID_SIZE);
 
         if (baseSize == 0)
-            throwConfigError(tokens, ERR_INVALID_BODY_SIZE);
+            throwConfigError(tokens, ERR_INVALID_SIZE);
 
         if (multiplier
             > std::numeric_limits<size_t>::max() / baseSize)
         {
-            throwConfigError(tokens, ERR_INVALID_BODY_SIZE);
+            throwConfigError(tokens, ERR_INVALID_SIZE);
         }
 
         size_t result = baseSize * multiplier;
-
         tokens.consume();
-
         return result;
     }
 
@@ -137,20 +132,19 @@ namespace valuesParser
 
         std::string extension = extensionToken.text;
 
-        if (extension.find("..") != std::string::npos
-            || extension.find('/') != std::string::npos)
+        if (extension.find("..") != std::string::npos || extension.find('/') != std::string::npos)
         {
-            throwConfigError(tokens, ERR_INVALID_CGI_EXTENSION);
+            throwConfigError(tokens, ERR_INVALID_EXTENSION);
         }
 
         if (extension.empty())
-            throwConfigError(tokens, ERR_INVALID_CGI_EXTENSION);
+            throwConfigError(tokens, ERR_INVALID_EXTENSION);
 
         if (extension[0] != '.')
             extension = "." + extension;
 
         if (extension.size() == 1)
-            throwConfigError(tokens, ERR_INVALID_CGI_EXTENSION);
+            throwConfigError(tokens, ERR_INVALID_EXTENSION);
 
         tokens.consume();
 
@@ -167,18 +161,13 @@ namespace valuesParser
         if (target.find("..") != std::string::npos)
             throwConfigError(tokens, ERR_INVALID_REDIRECT_TARGET);
 
-        if (target.empty()
-            || (target[0] != '/'
-                && target.find("http://") != 0
-                && target.find("https://") != 0))
+        if (target.empty() || (target[0] != '/' && target.find("http://") != 0 && target.find("https://") != 0))
         {
             throwConfigError(tokens, ERR_INVALID_REDIRECT_TARGET);
         }
 
         std::string result = target;
-
         tokens.consume();
-
         return result;
     }
 
@@ -189,8 +178,7 @@ namespace valuesParser
 
         std::string path = mergeSlashes(pathToken.text);
 
-        while (path.size() > 1
-            && path[path.size() - 1] == '/')
+        while (path.size() > 1 && path[path.size() - 1] == '/')
         {
             path.erase(path.size() - 1);
         }
@@ -225,10 +213,7 @@ namespace valuesParser
         return path;
     }
 
-    std::vector<std::string> parseWordListUntilSemicolon(
-        TokenStream &tokens,
-        const std::string &directiveName
-    )
+    std::vector<std::string> parseWordListUntilSemicolon(TokenStream &tokens,const std::string &directiveName)
     {
         std::vector<std::string> values;
 
@@ -290,8 +275,7 @@ namespace valuesParser
 
         std::string path = mergeSlashes(pathToken.text);
 
-        while (path.size() > 1
-            && path[path.size() - 1] == '/')
+        while (path.size() > 1 && path[path.size() - 1] == '/')
         {
             path.erase(path.size() - 1);
         }

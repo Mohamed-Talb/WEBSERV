@@ -13,7 +13,7 @@
 #include "../Helpers.hpp"
 #include "./Tokenize/tokenStream.hpp"
 #include "valuesParser.hpp"
-#include "../Errors.hpp"
+#include "./configError.hpp"
 
 
 void throwConfigError(const TokenStream &tokens, int errorCode);
@@ -58,6 +58,7 @@ struct ServerConfig
     int port;
     std::string host;
     std::string root;
+
     ssize_t client_max_body_size;
     std::vector<Location> locations;
     std::vector<std::string> indexes;
@@ -66,8 +67,8 @@ struct ServerConfig
     std::map<std::string, bool> seenDirectives;
     ServerConfig() : port(80), host("127.0.0.1"), root("./www"), client_max_body_size(1048576)
     {
-        indexes.push_back("index.html");
         serverNames.push_back(""); 
+        indexes.push_back("index.html");
     }
 };
 
@@ -102,22 +103,23 @@ class ConfigParser
     void parseServerBlock(ServerConfig &conf);
 
     //
-    void validateServer(ServerConfig &conf);
     void validateLocation(Location &loc);
+    void validateServer(ServerConfig &conf);
+
     // Server directive handlers
     void serverRoot(ServerConfig &conf);
     void serverIndex(ServerConfig &conf);
+    void serverNames(ServerConfig &conf);
     void serverListen(ServerConfig &conf);
     void serverLocation(ServerConfig &conf);
     void serverErrorPages(ServerConfig &conf);
-    void serverNames(ServerConfig &conf);
     void serverClientMaxBodySize(ServerConfig &conf);
 
     // Location directive handlers
     void locationRoot(Location &loc);
     void locationIndex(Location &loc);
-    void locationCgiExt(Location &loc);
     void locationUpload(Location &loc);
+    void locationCgiExt(Location &loc);
     void locationCgiPath(Location &loc);
     void locationMethods(Location &loc);
     void locationRedirect(Location &loc);
@@ -125,8 +127,8 @@ class ConfigParser
     void locationUploadPath(Location &loc);
 
     public:
-    ConfigParser();
-    std::vector<ServerConfig> loadeConfig(std::string configFile);
+        ConfigParser();
+        std::vector<ServerConfig> loadeConfig(std::string configFile);
 };
 
 #endif

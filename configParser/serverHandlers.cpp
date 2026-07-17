@@ -15,8 +15,7 @@ void ConfigParser::serverListen(ServerConfig &conf)
 
     if (value.find(':') == std::string::npos)
     {
-        if (value.find('.') != std::string::npos
-            || value == "localhost")
+        if (value.find('.') != std::string::npos || value == "localhost")
         {
             value += ":80";
         }
@@ -28,9 +27,7 @@ void ConfigParser::serverListen(ServerConfig &conf)
 
     size_t colonPosition = value.find(':');
 
-    if (colonPosition == 0
-        || colonPosition == value.size() - 1
-        || value.find(':', colonPosition + 1) != std::string::npos)
+    if (colonPosition == 0 || colonPosition == value.size() - 1 || value.find(':', colonPosition + 1) != std::string::npos)
     {
         throwConfigError(tokens, ERR_INVALID_LISTEN);
     }
@@ -102,7 +99,6 @@ void ConfigParser::serverIndex(ServerConfig &conf)
     tokens.expect("index");
 
     conf.indexes = valuesParser::parseIndexesList(tokens);
-
     tokens.expectSemicolon();
 }
 
@@ -120,12 +116,9 @@ void ConfigParser::serverClientMaxBodySize(ServerConfig &conf)
 void ConfigParser::serverErrorPages(ServerConfig &conf)
 {
     tokens.expect("error_page");
-
     std::vector<int> codes;
 
-    while (!tokens.atEnd()
-        && tokens.peek().text != ";"
-        && isOnlyDigits(tokens.peek().text))
+    while (!tokens.atEnd() && tokens.peek().text != ";" && isOnlyDigits(tokens.peek().text))
     {
         const Token &codeToken =
             tokens.peekValue("error status code");
@@ -135,24 +128,18 @@ void ConfigParser::serverErrorPages(ServerConfig &conf)
 
         stream >> errorCode;
 
-        if (stream.fail()
-            || !stream.eof()
-            || !isValidErrorCode(errorCode))
+        if (stream.fail() || !stream.eof() || !isValidErrorCode(errorCode))
         {
-            throwConfigError(tokens, ERR_INVALID_ERROR_CODE);
+            throwConfigError(tokens, ERR_INVALID_STATUS_CODE);
         }
 
-        if (std::find(
-                codes.begin(),
-                codes.end(),
-                errorCode
-            ) != codes.end())
+        if (std::find(codes.begin(), codes.end(), errorCode) != codes.end())
         {
-            throwConfigError(tokens, ERR_DUPLICATE_ERROR_CODE);
+            throwConfigError(tokens, ERR_DUPLICATE_VALUE);
         }
 
         if (conf.errorPage.count(errorCode) != 0)
-            throwConfigError(tokens, ERR_DUPLICATE_ERROR_CODE);
+            throwConfigError(tokens, ERR_DUPLICATE_VALUE);
 
         codes.push_back(errorCode);
         tokens.consume();
@@ -212,12 +199,8 @@ void ConfigParser::serverLocation(ServerConfig &conf)
 
         if (handler == locationDispatch.end())
         {
-            throwConfigError(
-                tokens,
-                ERR_UNKNOWN_LOCATION_DIRECTIVE
-            );
+            throwConfigError(tokens,ERR_UNKNOWN_DIRECTIVE);
         }
-
         (this->*(handler->second))(location);
     }
 
