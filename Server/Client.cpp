@@ -26,7 +26,7 @@ Client::~Client()
     }
     if (activeCgi)
     {
-        server->removeHandler(activeCgi->getFD(), false); 
+        server->removeHandler(activeCgi->getFD()); 
         delete activeCgi; // erase the handler for cgi too
         activeCgi = NULL;
     }
@@ -97,7 +97,7 @@ void Client::onCgiDone(HttpResponse response)
     
     if (activeCgi) 
     {
-        server->removeHandler(activeCgi->getFD(), false); 
+        server->removeHandler(activeCgi->getFD()); 
         delete activeCgi; // destroying the cgi object this function was called from??!?! 
         activeCgi = NULL;
     }
@@ -127,9 +127,7 @@ bool Client::readingFromSocket()
     {
         // if (readBuffer.size() > ABSOLUTE_MAX_BUFFER)
         //     break ;
-        std::cout << "ifhellooooooo\n";
         ssize_t bytes = recv(socketFD, buf, sizeof(buf), 0);
-        std::cout << "hellooooooo\n";
         if (bytes == 0)
         {
             server->removeHandler(socketFD);

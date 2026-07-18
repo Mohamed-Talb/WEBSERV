@@ -100,7 +100,7 @@ void CGI::handleWrite()
 
     if (writeOffset >= requestBody.size())
     {
-        server->removeHandler(pipeInFd, false);
+        server->removeHandler(pipeInFd);
         close(pipeInFd);
         state = READING_OUTPUT;
         server->addHandler(this, EPOLLIN); 
@@ -113,7 +113,7 @@ void CGI::handleWrite()
 
     if (writeOffset >= requestBody.size())
     {
-        server->removeHandler(pipeInFd, false);
+        server->removeHandler(pipeInFd);
         close(pipeInFd);
         // pipeInFd = -1;
         state = READING_OUTPUT;

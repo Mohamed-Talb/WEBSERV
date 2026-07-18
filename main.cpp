@@ -19,7 +19,7 @@ int main(int ac, char **av)
         std::vector<ServerConfig> configs = CP.loadeConfig(configPath);
         Server server;
         server.init(configs);
-        server.runEventLoop();
+        server.eventLoop();
     }
     catch (const std::runtime_error &e)
     {

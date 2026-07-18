@@ -23,7 +23,7 @@ Server::~Server()
 void Server::init(const std::vector<ServerConfig> &confs)
 {
     configs = confs;
-    epollFD = epoll_create(1024);
+    epollFD = epoll_create(1000);
     if (epollFD < 0)
         throw ServerException("Server", "epoll_create failed");
     
@@ -95,27 +95,36 @@ void Server::checkTimeout()
     }
 }
 
-void Server::removeHandler(int fd, bool deleteMemory)
+void Server::removeHandler(int fd)
 {
+    std::map<int, IEventHandler *>::iterator it = fdHandlers.find(fd);
+
+    if (it == fdHandlers.end())
+        return;
+
+    IEventHandler *handler = it->second;
     epoll_ctl(epollFD, EPOLL_CTL_DEL, fd, NULL);
-    std::map<int, IEventHandler*>::iterator it = fdHandlers.find(fd);
-    if (it != fdHandlers.end())
-    {
-        if (deleteMemory) 
-        {
-            delete it->second;
-        }
-        fdHandlers.erase(it);
-    }
+
+    fdHandlers.erase(it);
+    deletionQueue.push_back(handler);
 }
 
-void Server::runEventLoop()
+void Server::clearDeletionQueue()
+{
+    for (size_t i = 0; i < deletionQueue.size(); ++i)
+        delete deletionQueue[i];
+
+    deletionQueue.clear();
+}
+
+void Server::eventLoop()
 {
     const int MAX_EVENTS = 1024;
     epoll_event readyEvents[MAX_EVENTS];
 
     while (true)
     {
+        this->clearDeletionQueue();
         int ready = epoll_wait(epollFD, readyEvents, MAX_EVENTS, 1000);
         if (ready == -1)
         {

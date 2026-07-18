@@ -21,22 +21,25 @@
 class Server
 {
     private:
-    int epollFD;
-    std::vector<ServerConfig> configs;
-    std::map<int, IEventHandler*> fdHandlers;
+        int epollFD;
+        std::vector<ServerConfig>     configs;
+        std::map<int, IEventHandler*> fdHandlers;
+        std::vector<IEventHandler*>   deletionQueue;
 
     public:
-    Server();
-    ~Server();
+        Server();
+        ~Server();
 
-    void checkTimeout();
-    void runEventLoop();
-    void init(const std::vector<ServerConfig>& confs);
-    void removeHandler(int fd, bool deleteMemory = true);
-    void addHandler(IEventHandler* handler, uint32_t events);
-    void modifyHandler(IEventHandler* handler, uint32_t events);
+        void checkTimeout();
+        void eventLoop();
+        void init(const std::vector<ServerConfig> &confs);
 
-    const std::vector<ServerConfig>& getConfigs() const;
+        void removeHandler(int fd);
+        void clearDeletionQueue();
+        void addHandler(IEventHandler* handler, uint32_t events);
+        void modifyHandler(IEventHandler* handler, uint32_t events);
+
+        const std::vector<ServerConfig> &getConfigs() const;
 };
 
 
