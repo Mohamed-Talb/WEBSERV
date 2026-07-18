@@ -115,7 +115,6 @@ void CGI::handleWrite()
     {
         server->removeHandler(pipeInFd);
         close(pipeInFd);
-        // pipeInFd = -1;
         state = READING_OUTPUT;
         server->addHandler(this, EPOLLIN); 
     }

@@ -43,13 +43,28 @@ void Server::init(const std::vector<ServerConfig> &confs)
 
 void Server::addHandler(IEventHandler *handler, uint32_t events)
 {
+    if (handler == NULL)
+        throw ServerException("Server", "null event handler");
+
     int fd = handler->getFD();
+
+    if (fd < 0)
+        throw ServerException("Server", "invalid handler descriptor");
+
+    if (fdHandlers.count(fd) != 0)
+        throw ServerException("Server","handler descriptor already registered");
+
+    epoll_event event;
+    // std::memset(&event, 0, sizeof(event)); // add this is later
+
+    event.events = events;
+    event.data.fd = fd;
+
+    if (epoll_ctl(epollFD,EPOLL_CTL_ADD,fd,&event) < 0)
+    {
+        throw ServerException("Server", "epoll_ctl ADD failed");
+    }
     fdHandlers[fd] = handler;
-    
-    epoll_event ev;
-    ev.events = events;
-    ev.data.fd = fd;
-    epoll_ctl(epollFD, EPOLL_CTL_ADD, fd, &ev);
 }
 
 void Server::modifyHandler(IEventHandler *handler, uint32_t events)

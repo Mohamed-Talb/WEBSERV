@@ -1,63 +1,83 @@
 #ifndef HTTPREQUEST_HPP
 #define HTTPREQUEST_HPP
+
 #include <map>
 #include <string>
 #include <cstddef>
-#include <sstream>
 
-
-enum State 
+enum ParseStatus
 {
-	PARSE_REQUEST_LINE,
-	PARSE_HEADERS,
-	PARSE_BODY,
-	PARSE_COMPLETE,
-	PARSE_ERROR
+    PARSE_NEED_MORE_DATA,
+    PARSE_HEADERS_COMPLETE,
+    PARSE_REQUEST_COMPLETE
+};
+
+enum State
+{
+    PARSE_REQUEST_LINE,
+    PARSE_HEADERS,
+    PARSE_BODY,
+    PARSE_COMPLETE,
+    PARSE_ERROR
+};
+
+enum StepStatus
+{
+    STEP_ERROR = -1,
+    STEP_NEED_MORE_DATA = 0,
+    STEP_COMPLETE = 1
 };
 
 
-class HttpRequest 
+class HttpRequest
 {
-
-	private:
-    std::string body;
+    private:
     std::string method;
     std::string target;
-    std::string requestPath;
-    std::string querys;
     std::string version;
-    size_t maxBodySize;
-    std::map<std::string, std::string> headers;
-    
-    State   state;
-    size_t  parsedSize;
-    int     errorCode;
+    std::string requestPath;
+    std::string query;
+    std::string body;
 
-    bool spliteTarget();
+    std::map<std::string, std::string> headers;
+
+    size_t maxBodySize;
+    size_t parsedSize;
+
+    State state;
+    int errorCode;
+
+    private:
     void setError(int code);
-    int  parseBody(const std::string &raw);
-    int  parseHeaders(const std::string &raw);
-    int  parseRequestLine(const std::string &raw);
-	int parseChunkedBody(const std::string &raw);
+
+    bool splitTarget();
+
+    StepStatus parseRequestLine(const std::string &raw);
+    StepStatus parseHeaders(const std::string &raw);
+    StepStatus parseBody(const std::string &raw);
+    StepStatus parseChunkedBody(const std::string &raw);
+
     public:
     HttpRequest();
     ~HttpRequest();
 
+    ParseStatus parse(const std::string &rawRequestData);
     void reset();
-    int  parse(const std::string &rawBuffer);
 
     void setMaxBodySize(size_t value);
+
+    const std::string &getHeader(const std::string &key) const;
     const std::string &getBody() const;
-    State       getState() const;
+    const std::string &getMethod() const;
     const std::string &getTarget() const;
+    const std::string &getVersion() const;
     const std::string &getQuery() const;
     const std::string &getRequestPath() const;
-    const std::string &getMethod() const;
-    const std::string &getVersion() const;
-    int         getErrorCode() const;
-    size_t      getParsedSize() const;
-    void        setParsedSize(size_t size);
-    const std::string &getHeader(const std::string &key) const;
+
+    int getErrorCode() const;
+    size_t getParsedSize() const;
+
+    bool shouldCloseConnection() const;
 };
 
 #endif
