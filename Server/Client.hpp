@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 #include "Server.ipp"
-#include "../HTTP/HttpRequest.hpp"
+#include "../HTTP/HttpRequestParser.hpp"
 #include "../HTTP/HttpResponse.hpp"
 #include "../configParser/configParser.hpp"
 
@@ -33,7 +33,7 @@ class Client : public IEventHandler
     std::string readBuffer;
     std::string writeBuffer;
 
-    HttpRequest activeRequest;
+    HttpRequestParser requestParser;
 
     CGI *activeCgi;
     ClientState state;
@@ -66,6 +66,7 @@ class Client : public IEventHandler
 
     const std::string &getReadBuffer() const;
     const std::string &getWriteBuffer() const;
+    ClientState getState() const;
 
     void onCgiDone(HttpResponse response);
     void terminateCgi();

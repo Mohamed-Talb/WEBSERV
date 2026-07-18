@@ -91,7 +91,7 @@ void Server::checkTimeout()
         Client *client = dynamic_cast<Client *>(it->second);
         if (client != NULL && difftime(curr_time, client->timeout) > TIMEOUT_DURATION)
         {
-            if (client->state != PROCESSING_CGI)
+            if (client->getState() != PROCESSING_CGI)
                 expiredClients.push_back(client);
             else
                 cgiTimeoutClients.push_back(client);

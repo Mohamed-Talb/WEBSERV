@@ -2,6 +2,7 @@
 #include "../CGI/CGI.hpp"
 #include "../HTTP/HttpUtils/HttpUtils.hpp"
 #include "../HTTP/HttpHandler.hpp"
+#include "../HTTP/HttpRequestParser.hpp"
 
 #include <sys/socket.h>
 #include <unistd.h>
@@ -12,13 +13,12 @@ Client::Client(int fd, Server *srv, const std::vector<ServerConfig> &confs)
     : socketFD(fd),
       server(srv),
       configs(confs),
-      activeCgi(NULL),
       activeConfig(NULL),
+      requestParser(),
+      activeCgi(NULL),
       state(READING_REQUEST),
       closeAfterWrite(false),
-      timeout(time(NULL))
-{
-}
+      timeout(time(NULL)) {}
 
 Client::~Client()
 {
@@ -37,6 +37,11 @@ void Client::consumeReadBuffer(size_t bytes)
         readBuffer.clear();
     else
         readBuffer.erase(0, bytes);
+}
+
+ClientState Client::getState() const
+{
+    return state;
 }
 
 void Client::consumeWriteBuffer(size_t bytes)
@@ -64,7 +69,7 @@ void Client::appendToReadBuffer(const char *data, size_t size)
 
 HttpRequest &Client::getActiveRequest()
 {
-    return activeRequest;
+    return requestParser.getRequest();
 }
 
 bool Client::isConnected() const
@@ -153,17 +158,14 @@ void Client::terminateCgi()
     response.setHeader("Connection", "close");
     closeAfterWrite = true;
 
-    if (activeCgi)
-    {
-        int cgiFD = activeCgi->getFD();
+    int cgiFD = activeCgi->getFD();
 
-        activeCgi = NULL;
-        server->removeHandler(cgiFD);
-    }
+    activeCgi = NULL;
+    server->removeHandler(cgiFD);
 
     writeBuffer = response.toString();
 
-    activeRequest.reset();
+    requestParser.reset();
     readBuffer.clear();
 
     state = SENDING_RESPONSE;
@@ -172,7 +174,9 @@ void Client::terminateCgi()
 
 void Client::onCgiDone(HttpResponse response)
 {
-    closeAfterWrite = activeRequest.shouldCloseConnection();
+    HttpRequest &request = requestParser.getRequest();
+
+    closeAfterWrite = request.shouldCloseConnection();
 
     if (closeAfterWrite)
         response.setHeader("Connection", "close");
@@ -187,7 +191,7 @@ void Client::onCgiDone(HttpResponse response)
 
     writeBuffer = response.toString();
 
-    activeRequest.reset();
+    requestParser.reset();
 
     state = SENDING_RESPONSE;
     server->modifyHandler(this, EPOLLOUT);
@@ -213,7 +217,7 @@ void Client::errorsHandler(int errorCode)
 
     writeBuffer = response.toString();
 
-    activeRequest.reset();
+    requestParser.reset();
     readBuffer.clear();
 
     state = SENDING_RESPONSE;
@@ -258,11 +262,12 @@ void Client::handleRead()
 
     while (state == READING_REQUEST)
     {
-        ParseStatus parseStatus = activeRequest.parse(readBuffer);
+        ParseStatus parseStatus = requestParser.parse(readBuffer);
+        HttpRequest &request = requestParser.getRequest();
 
-        if (activeRequest.getErrorCode() != 0)
+        if (parseStatus == PARSE_REQUEST_ERROR)
         {
-            errorsHandler(activeRequest.getErrorCode());
+            errorsHandler(requestParser.getErrorCode());
             return;
         }
 
@@ -270,7 +275,7 @@ void Client::handleRead()
         {
             case PARSE_HEADERS_COMPLETE:
             {
-                activeConfig = matchConfig(activeRequest.getHeader("host"));
+                activeConfig = matchConfig(request.getHeader("host"));
 
                 if (!activeConfig)
                 {
@@ -278,9 +283,10 @@ void Client::handleRead()
                     return;
                 }
 
-                activeRequest.setMaxBodySize(activeConfig->client_max_body_size);
+                requestParser.setMaxBodySize(activeConfig->client_max_body_size);
 
-                std::string contentLength = activeRequest.getHeader("content-length");
+                std::string contentLength =
+                    request.getHeader("content-length");
 
                 if (!contentLength.empty()
                     && myStold(contentLength) > activeConfig->client_max_body_size)
@@ -293,16 +299,7 @@ void Client::handleRead()
             }
 
             case PARSE_NEED_MORE_DATA:
-            {
-                size_t consumedBytes = activeRequest.getParsedSize();
-
-                if (consumedBytes > 0)
-                {
-                    consumeReadBuffer(consumedBytes);
-                    activeRequest.setParsedSize(0);
-                }
                 return;
-            }
 
             case PARSE_REQUEST_COMPLETE:
             {
@@ -318,10 +315,10 @@ void Client::handleRead()
                 }
 
                 HttpHandler handler(*activeConfig);
-                HttpResult result = handler.process(activeRequest);
+                HttpResult result = handler.process(request);
 
-                size_t consumedBytes = activeRequest.getParsedSize();
-                closeAfterWrite = activeRequest.shouldCloseConnection();
+                size_t consumedBytes = requestParser.getParsedSize();
+                closeAfterWrite = request.shouldCloseConnection();
 
                 consumeReadBuffer(consumedBytes);
 
@@ -329,7 +326,7 @@ void Client::handleRead()
                 {
                     state = PROCESSING_CGI;
 
-                    activeCgi = new CGI(this, server, activeRequest,
+                    activeCgi = new CGI(this, server, request,
                         *result.cgiLocation, result.cgiRequestPath);
 
                     server->addHandler(activeCgi, EPOLLOUT);
@@ -343,12 +340,16 @@ void Client::handleRead()
 
                 writeBuffer = response.toString();
 
-                activeRequest.reset();
+                requestParser.reset();
 
                 state = SENDING_RESPONSE;
                 server->modifyHandler(this, EPOLLOUT);
                 return;
             }
+
+            case PARSE_REQUEST_ERROR:
+                errorsHandler(requestParser.getErrorCode());
+                return;
         }
     }
 }
