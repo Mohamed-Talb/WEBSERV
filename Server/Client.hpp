@@ -1,14 +1,20 @@
 #ifndef CLIENT_HPP
 #define CLIENT_HPP
 
-#include "../Errors.hpp"
-#include "../Helpers.hpp"
-#include "../HTTP/HttpHandler.hpp"
+#include <ctime>
+#include <string>
+#include <vector>
+
+#include <stdint.h>
+#include "Server.ipp"
+#include "../HTTP/HttpRequestParser.hpp"
+#include "../HTTP/HttpResponse.hpp"
 #include "../configParser/configParser.hpp"
 
 class Server;
+class CGI;
 
-enum ClientState 
+enum ClientState
 {
     READING_REQUEST,
     PROCESSING_CGI,
@@ -19,42 +25,51 @@ class Client : public IEventHandler
 {
     private:
     int socketFD;
-    Server* server;
-    HttpRequest activeRequest; 
+    Server *server;
+
+    std::vector<ServerConfig> configs;
+    const ServerConfig *activeConfig;
+
     std::string readBuffer;
     std::string writeBuffer;
-    std::vector<ServerConfig> configs;
+
+    HttpRequestParser requestParser;
+
     CGI *activeCgi;
-    const ServerConfig *activeConfig;
-    const ServerConfig* matchConfig(const std::string& host) const;
+    ClientState state;
+    bool closeAfterWrite;
+
+    private:
+    void closeConnection();
     void errorsHandler(int errorCode);
-    void processRequestHeaders();
-    void executeRequest();
-    bool readingFromSocket();
+    void consumeReadBuffer(size_t bytes);
+    void consumeWriteBuffer(size_t bytes);
+    
+    void appendToWriteBuffer(const std::string &data);
+    void appendToReadBuffer(const char *data, size_t size);
+    const ServerConfig *matchConfig(const std::string &host) const;
+
     public:
     time_t timeout;
-    ClientState state;
 
-    virtual ~Client();
-    Client(int fd, Server* srv, const std::vector<ServerConfig>& confs);
+    Client(int fd, Server *server, const std::vector<ServerConfig> &configs);
+    ~Client();
+
+    void handleRead();
+    void handleWrite();
+    int getFD() const;
 
     bool isConnected() const;
-    void onCgiDone(HttpResponse response);
-    void terminateCgi();
-
     bool hasPendingWrite() const;
-    void consumeWriteBuffer(size_t bytes);
-    void appendToWriteBuffer(const std::string& data);
-    void appendToReadBuffer(const char* data, size_t size);
-    
-    virtual void handleRead();
-    virtual void handleWrite();
 
     HttpRequest &getActiveRequest();
-    virtual int getFD() const;
+
     const std::string &getReadBuffer() const;
     const std::string &getWriteBuffer() const;
+    ClientState getState() const;
 
+    void onCgiDone(HttpResponse response);
+    void terminateCgi();
 };
 
 #endif

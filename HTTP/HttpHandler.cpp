@@ -1,227 +1,225 @@
 #include "HttpHandler.hpp"
 
+#include "../Helpers.hpp"
+#include "./Methods/Methods.hpp"
+#include "HttpUtils/HttpUtils.hpp"
 
-HttpHandler::HttpHandler(const ServerConfig &serverConfig) : serverConfig(&serverConfig) {}
+HttpHandler::HttpHandler(const ServerConfig &config): serverConfig(&config) {}
 
-HttpHandler::~HttpHandler() {}
-
-const Location* HttpHandler::matchLocation(const std::string &path)
+const Location *HttpHandler::matchLocation(const std::string &path) const
 {
-    const Location* bestMatch = NULL;
+    const Location *bestMatch = NULL;
     size_t bestLength = 0;
+
     for (size_t i = 0; i < serverConfig->locations.size(); ++i)
     {
-        const Location &loc = serverConfig->locations[i];
-        if (path.size() >= loc.path.size() && path.compare(0, loc.path.size(), loc.path) == 0)
+        const Location &location = serverConfig->locations[i];
+
+        if (path.size() < location.path.size())
+            continue;
+
+        if (path.compare(0, location.path.size(), location.path) != 0)
+            continue;
+
+        bool validBoundary = location.path == "/" || path.size() == location.path.size() || location.path[location.path.size() - 1] == '/'
+            || path[location.path.size()] == '/';
+
+        if (!validBoundary)
+            continue;
+
+        if (location.path.size() > bestLength)
         {
-            if (loc.path == "/" || 
-                path.size() == loc.path.size() || 
-                loc.path[loc.path.size() - 1] == '/' || 
-                path[loc.path.size()] == '/')
-            {
-                if (loc.path.size() > bestLength)
-                {
-                    bestMatch = &loc;
-                    bestLength = loc.path.size();
-                }
-            }
+            bestMatch = &location;
+            bestLength = location.path.size();
         }
     }
+
     return bestMatch;
 }
 
-bool HttpHandler::isMethodAllowed(const std::string &method, const Location &loc)
+bool HttpHandler::isMethodAllowed(const std::string &method, const Location *location) const
 {
-    if (loc.methods.empty())
+    if (!location)
+        return method == "GET";
+
+    if (location->methods.empty())
         return true;
-    for (size_t i = 0; i < loc.methods.size(); ++i)
+
+    for (size_t i = 0; i < location->methods.size(); ++i)
     {
-        if (toUpper(loc.methods[i]) == method)
+        if (toUpper(location->methods[i]) == method)
             return true;
     }
+
     return false;
 }
 
-const Location *HttpHandler::getCgiLocation(const HttpRequest &request)
+bool HttpHandler::isCgiRequest(const RouteMatch &match) const
 {
-    std::string requestPath = request.getRequestPath();
-    const Location *matchedLocation = matchLocation(requestPath);
-    
-    if (!matchedLocation || matchedLocation->cgiExt.empty()) 
-        return NULL;
-    if (requestPath.size() >= matchedLocation->cgiExt.size())
-    {
-        size_t extOffset = requestPath.size() - matchedLocation->cgiExt.size();
-        if (requestPath.compare(extOffset, matchedLocation->cgiExt.size(), matchedLocation->cgiExt) == 0)
-        {
-            return matchedLocation;
-        }
-    }
-    return NULL;
+    if (!match.location || match.location->cgiExt.empty())
+        return false;
+
+    const std::string &extension = match.location->cgiExt;
+
+    if (match.fullPath.size() < extension.size())
+        return false;
+
+    size_t offset = match.fullPath.size() - extension.size();
+    return match.fullPath.compare(offset, extension.size(), extension) == 0;
 }
 
-
-std::vector<std::string> HttpHandler::resolveIndexFiles(const Location *loc)
+void HttpHandler::resolveRoute(const HttpRequest &request, RouteMatch &match) const
 {
-    if (loc && !loc->indexes.empty())
-        return loc->indexes;
+    match.requestPath = request.getRequestPath();
+    match.location = matchLocation(match.requestPath);
+
+    if (!match.location)
+    {
+        match.root = serverConfig->root;
+        match.fullPath = joinPath(match.root, match.requestPath);
+        return;
+    }
+
+    match.root = match.location->root;
+
+    if (match.root.empty()) match.root = serverConfig->root;
+
+    std::string relativePath = match.requestPath;
+    if (match.location->path != "/")
+    {
+        relativePath = match.requestPath.substr(match.location->path.size());
+
+        if (relativePath.empty())
+            relativePath = "/";
+
+        else if (relativePath[0] != '/')
+            relativePath = "/" + relativePath;
+    }
+    match.fullPath = joinPath(match.root, relativePath);
+}
+
+std::vector<std::string> HttpHandler::resolveIndexFiles(const Location *location) const
+{
+    if (location && !location->indexes.empty())
+        return location->indexes;
+
     if (!serverConfig->indexes.empty())
         return serverConfig->indexes;
+
     std::vector<std::string> defaults;
     defaults.push_back("index.html");
     return defaults;
 }
 
-void HttpHandler::resolveRoute(const HttpRequest &request, RouteMatch& match)
+HttpResponse HttpHandler::resolveRedirection(const Location &location) const
 {
-    match.location = NULL;
-    match.requestPath = request.getRequestPath();
-    
-    const Location *location = matchLocation(match.requestPath);
-    if (location)
-    {
-        match.location = location;
-        match.root = location->root; 
-        
-        std::string relativePath = match.requestPath;
-        if (location->path != "/")
-        {
-            if (match.requestPath.size() >= location->path.size())
-            {
-                relativePath = match.requestPath.substr(location->path.size());
-            }
-            if (relativePath.empty() || relativePath[0] != '/')
-            {
-                relativePath = "/" + relativePath;
-            }
-        }
-        match.fullPath = joinPath(match.root, relativePath);
-    }
-    else
-    {
-        match.root = serverConfig->root;
-        match.fullPath = joinPath(match.root, match.requestPath);
-    }
-}
-
-HttpResponse resolveRedirection(const RouteMatch &match)
-{
-    int code = match.location->redirectCode;
-
     std::string reason;
-    switch (code)
+    switch (location.redirectCode)
     {
-        case 301: reason = "Moved Permanently"; break;
-        case 302: reason = "Found"; break;
-        case 303: reason = "See Other"; break;
-        case 307: reason = "Temporary Redirect"; break;
-        case 308: reason = "Permanent Redirect"; break;
+        case 301:
+            reason = "Moved Permanently";
+            break;
+        case 302:
+            reason = "Found";
+            break;
+        case 303:
+            reason = "See Other";
+            break;
+        case 307:
+            reason = "Temporary Redirect";
+            break;
+        case 308:
+            reason = "Permanent Redirect";
+            break;
         default:
-            HttpResponse error(500, "Internal Server Error");
-            error.setHeader("Content-Length", "0");
-            return error;
-    }
-    if (match.location->redirectTarget.empty())
-    {
-        HttpResponse error(500, "Internal Server Error");
-        error.setHeader("Content-Length", "0");
-        return error;
+            return ErrorPage(500, *serverConfig);
     }
 
-    HttpResponse response(code, reason);
-    response.setHeader("Location", match.location->redirectTarget);
+    if (location.redirectTarget.empty())
+        return ErrorPage(500, *serverConfig);
+
+    HttpResponse response(location.redirectCode, reason);
+    response.setHeader("Location", location.redirectTarget);
     response.setHeader("Content-Length", "0");
-
     return response;
 }
 
-
-HttpResult HttpHandler::process(const HttpRequest& request)
+bool HttpHandler::resolveDirectory(RouteMatch &match, const std::string &method, HttpResponse &response) const
 {
-    if (request.getErrorCode() != 0)
-    {
-        return HttpResult::makeResponse(ErrorPage(request.getErrorCode(), *serverConfig));
-    }
+    if (!isDirectory(match.fullPath))
+        return true;
+    std::vector<std::string> indexes = resolveIndexFiles(match.location);
 
+    for (size_t i = 0; i < indexes.size(); ++i)
+    {
+        std::string candidate =
+            joinPath(match.fullPath, indexes[i]);
+
+        if (!fileExists(candidate))
+            continue;
+
+        match.requestPath = joinPath(match.requestPath, indexes[i]);
+        match.fullPath = candidate;
+        return true;
+    }
+    bool autoIndexEnabled = match.location && match.location->autoindex == "on";
+
+    if (method == "GET" && autoIndexEnabled)
+    {
+        response = resolveAutoIndexing(match, *serverConfig);
+        return false;
+    }
+    response = ErrorPage(403, *serverConfig);
+    return false;
+}
+
+HttpResult HttpHandler::process(const HttpRequest &request) const
+{
     RouteMatch match;
     resolveRoute(request, match);
+
     if (match.location && match.location->redirectCode != 0)
     {
-        return HttpResult::makeResponse(resolveRedirection(match));
+        return HttpResult::makeResponse(resolveRedirection(*match.location));
     }
-    std::string method = request.getMethod();
-    bool allowed = match.location ? isMethodAllowed(method, *match.location) : (method == "GET");
-    
-    if (!allowed)
+    const std::string &method = request.getMethod();
+
+    if (!isMethodAllowed(method, match.location))
     {
         return HttpResult::makeResponse(ErrorPage(405, *serverConfig));
     }
-
     if (request.getBody().size() > static_cast<size_t>(serverConfig->client_max_body_size))
     {
         return HttpResult::makeResponse(ErrorPage(413, *serverConfig));
     }
+    HttpResponse directoryResponse;
 
-    if (isDirectory(match.fullPath))
+    if (!resolveDirectory(match, method, directoryResponse))
+        return HttpResult::makeResponse(directoryResponse);
+
+    if (isCgiRequest(match))
     {
-        std::vector<std::string> indexes = resolveIndexFiles(match.location);
-        bool foundIndex = false;
-        for (size_t i = 0; i < indexes.size(); ++i)
-        {
-            std::string candidatePath = joinPath(match.fullPath, indexes[i]);
-            if (fileExists(candidatePath))
-            {
-                match.requestPath = joinPath(match.requestPath, indexes[i]);
-                match.fullPath = candidatePath;
-                foundIndex = true;
-                break;
-            }
-        }
-
-        if (!foundIndex)
-        {
-            bool autoIndexOn = (match.location && match.location->autoindex == "on");
-            if (method == "GET" && autoIndexOn)
-            {
-                return HttpResult::makeResponse(resolveAutoIndexing(match, *serverConfig));
-            }
-            return HttpResult::makeResponse(ErrorPage(403,*serverConfig));
-        }
+        return HttpResult::makeCgi(match.location, match.fullPath);
     }
 
     if (!fileExists(match.fullPath) && method != "POST")
     {
         return HttpResult::makeResponse(ErrorPage(404, *serverConfig));
     }
-    if (match.location && !match.location->cgiExt.empty())
-    {
-        if (match.fullPath.size() >= match.location->cgiExt.size())
-        {
-            size_t extOffset = match.fullPath.size() - match.location->cgiExt.size();
-            if (match.fullPath.compare(extOffset, match.location->cgiExt.size(), match.location->cgiExt) == 0)
-            {
-                return HttpResult::makeCgi(match.location, match.fullPath);
-            }
-        }
-    }
-
-    HttpResponse response;
     if (method == "GET")
     {
-        response = HttpMethods::GET(match, *serverConfig);
+        return HttpResult::makeResponse(HttpMethods::GET(match, *serverConfig));
     }
-    else if (method == "DELETE")
+    if (method == "DELETE")
     {
-        response = HttpMethods::DELETE(match, *serverConfig);
+        return HttpResult::makeResponse(HttpMethods::DELETE(match, *serverConfig));
     }
-    else if (method == "POST")
+    if (method == "POST")
     {
-        response = HttpMethods::POST(request, match, *serverConfig);
-    }
-    else 
-    {
-        response = ErrorPage(501,*serverConfig);
+        return HttpResult::makeResponse(HttpMethods::POST(request, match, *serverConfig));
     }
 
-    return HttpResult::makeResponse(response);
+    return HttpResult::makeResponse(
+        ErrorPage(501, *serverConfig)
+    );
 }

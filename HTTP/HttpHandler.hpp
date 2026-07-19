@@ -63,21 +63,22 @@ struct HttpResult
 
 
 
-class HttpHandler 
+class HttpHandler
 {
-	private:
-    const ServerConfig 	*serverConfig;
-    const Location *matchLocation(const std::string &path);
-    void resolveRoute(const HttpRequest& request, RouteMatch &match); 
-    bool isMethodAllowed(const std::string& method, const Location &loc);
-    
-    public:
-    ~HttpHandler();
-    HttpResult process(const HttpRequest &req);
-    HttpHandler(const ServerConfig &serverConfig);
-	const Location *getCgiLocation(const HttpRequest &request);
-	std::vector<std::string> resolveIndexFiles(const Location *loc);
+    private:
+    const ServerConfig *serverConfig;
 
+    const Location *matchLocation(const std::string &path) const;
+    bool isMethodAllowed(const std::string &method,const Location *location) const;
+    bool isCgiRequest(const RouteMatch &match) const;
+    void resolveRoute(const HttpRequest &request,RouteMatch &match) const;
+    std::vector<std::string> resolveIndexFiles(const Location *location) const;
+    bool resolveDirectory(RouteMatch &match, const std::string &method,HttpResponse &response) const;
+    HttpResponse resolveRedirection(const Location &location) const;
+
+    public:
+    HttpHandler(const ServerConfig &config);
+    HttpResult process(const HttpRequest &request) const;
 };
 
 #endif

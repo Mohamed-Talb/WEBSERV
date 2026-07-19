@@ -9,6 +9,7 @@ WEBSERV_SRC = main.cpp Helpers.cpp Errors.cpp \
 	configParser/configError.cpp \
 	configParser/Tokenize/tokenStream.cpp \
 	configParser/Tokenize/tokenizer.cpp \
+	HTTP/HttpRequestParser.cpp \
 	HTTP/HttpHandler.cpp \
 	HTTP/HttpRequest.cpp \
 	HTTP/HttpResponse.cpp \
