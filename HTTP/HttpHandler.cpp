@@ -39,21 +39,12 @@ const Location *HttpHandler::matchLocation(const std::string &path) const
     return bestMatch;
 }
 
-bool HttpHandler::isMethodAllowed(const std::string &method, const Location *location) const
+bool HttpHandler::isMethodAllowed(const Location *location, const std::string &method) const
 {
     if (!location)
         return method == "GET";
 
-    if (location->methods.empty())
-        return true;
-
-    for (size_t i = 0; i < location->methods.size(); ++i)
-    {
-        if (toUpper(location->methods[i]) == method)
-            return true;
-    }
-
-    return false;
+    return std::find(location->methods.begin(), location->methods.end(), method) != location->methods.end();
 }
 
 bool HttpHandler::isCgiRequest(const RouteMatch &match) const
@@ -152,7 +143,7 @@ bool HttpHandler::resolveDirectory(RouteMatch &match, const HttpRequest request,
     for (size_t i = 0; i < indexes.size(); ++i)
     {
         std::string candidate = joinPath(match.fullPath, indexes[i]);
-        if (!fileExists(candidate))
+        if (!isRegularFile(candidate))
             continue;
         match.requestPath = joinPath(match.requestPath, indexes[i]);
         match.fullPath = candidate;
@@ -178,7 +169,7 @@ HttpResult HttpHandler::process(const HttpRequest &request) const
         return HttpResult::makeResponse(resolveRedirection(*match.location));
     }
     const std::string &method = request.getMethod();
-    if (!isMethodAllowed(method, match.location))
+    if (!isMethodAllowed(match.location, method))
     {
         return HttpResult::makeResponse(ErrorPage(405, *serverConfig));
     }

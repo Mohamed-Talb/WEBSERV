@@ -6,6 +6,17 @@ bool fileExists(const std::string &filePath)
     return (access(filePath.c_str(), F_OK) == 0);
 }
 
+
+bool isRegularFile(const std::string &path)
+{
+    struct stat info;
+
+    if (stat(path.c_str(), &info) != 0)
+        return false;
+
+    return S_ISREG(info.st_mode);
+}
+
 bool readFile(const std::string &filePath, std::string &content)
 {
     std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
