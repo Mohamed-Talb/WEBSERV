@@ -1,10 +1,10 @@
 #ifndef HTTP_REQUEST_PARSER_HPP
 #define HTTP_REQUEST_PARSER_HPP
 
-#include "HttpRequest.hpp"
 
 #include <cstddef>
 #include <string>
+#include "HttpRequest.hpp"
 
 enum ParseStatus
 {
@@ -14,25 +14,25 @@ enum ParseStatus
     PARSE_REQUEST_ERROR
 };
 
+enum State
+{
+    PARSE_REQUEST_LINE,
+    PARSE_HEADERS,
+    PARSE_BODY,
+    PARSE_COMPLETE,
+    PARSE_ERROR
+};
+
+enum StepStatus
+{
+    STEP_ERROR = -1,
+    STEP_NEED_MORE_DATA = 0,
+    STEP_COMPLETE = 1
+};
+
 class HttpRequestParser
 {
-private:
-    enum State
-    {
-        PARSE_REQUEST_LINE,
-        PARSE_HEADERS,
-        PARSE_BODY,
-        PARSE_COMPLETE,
-        PARSE_ERROR
-    };
-
-    enum StepStatus
-    {
-        STEP_ERROR = -1,
-        STEP_NEED_MORE_DATA = 0,
-        STEP_COMPLETE = 1
-    };
-
+    private:
     HttpRequest request;
 
     size_t maxBodySize;
@@ -41,7 +41,7 @@ private:
     State state;
     int errorCode;
 
-private:
+    private:
     void setError(int code);
 
     bool splitTarget();

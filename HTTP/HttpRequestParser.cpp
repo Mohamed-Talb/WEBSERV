@@ -3,10 +3,21 @@
 #include "../Helpers.hpp"
 #include "HttpUtils/HttpUtils.hpp"
 
-#include <algorithm>
 #include <cctype>
 #include <sstream>
+#include <algorithm>
 
+
+HttpRequestParser::HttpRequestParser() : maxBodySize(0), parsedSize(0), state(PARSE_REQUEST_LINE), errorCode(0) {}
+
+HttpRequestParser::~HttpRequestParser() {}
+
+
+HttpRequest &HttpRequestParser::getRequest() { return request; }
+int HttpRequestParser::getErrorCode() const { return errorCode; }
+size_t HttpRequestParser::getParsedSize() const { return parsedSize; }
+const HttpRequest &HttpRequestParser::getRequest() const { return request; }
+void HttpRequestParser::setMaxBodySize(size_t value) { maxBodySize = value; }
 
 bool urlDecode(const std::string &input, std::string &output)
 {
@@ -17,6 +28,13 @@ bool urlDecode(const std::string &input, std::string &output)
     {
         if (input[i] != '%')
         {
+            unsigned char current =
+                static_cast<unsigned char>(input[i]);
+
+            if (current == 0 || current < 0x20 || current == 0x7F)
+            {
+                return false;
+            }
             output += input[i];
             continue;
         }
@@ -24,28 +42,29 @@ bool urlDecode(const std::string &input, std::string &output)
         if (i + 2 >= input.size())
             return false;
 
-        unsigned char first =
-            static_cast<unsigned char>(input[i + 1]);
-
-        unsigned char second =
-            static_cast<unsigned char>(input[i + 2]);
+        unsigned char first =  static_cast<unsigned char>(input[i + 1]);
+        unsigned char second = static_cast<unsigned char>(input[i + 2]);
 
         if (!std::isxdigit(first) || !std::isxdigit(second))
+        {
             return false;
+        }
 
         std::string hexValue = input.substr(i + 1, 2);
+
         std::istringstream stream(hexValue);
 
         int decodedValue = 0;
         stream >> std::hex >> decodedValue;
-
         if (stream.fail() || !stream.eof())
             return false;
-
+        if (decodedValue == 0 || decodedValue < 0x20 || decodedValue == 0x7F)
+        {
+            return false;
+        }
         output += static_cast<char>(decodedValue);
         i += 2;
     }
-
     return true;
 }
 
@@ -101,44 +120,6 @@ bool parseHexSize(const std::string &value, size_t &result)
     return true;
 }
 
-
-HttpRequestParser::HttpRequestParser()
-    : maxBodySize(0),
-      parsedSize(0),
-      state(PARSE_REQUEST_LINE),
-      errorCode(0)
-{
-}
-
-HttpRequestParser::~HttpRequestParser()
-{
-}
-
-void HttpRequestParser::setMaxBodySize(size_t value)
-{
-    maxBodySize = value;
-}
-
-size_t HttpRequestParser::getParsedSize() const
-{
-    return parsedSize;
-}
-
-int HttpRequestParser::getErrorCode() const
-{
-    return errorCode;
-}
-
-HttpRequest &HttpRequestParser::getRequest()
-{
-    return request;
-}
-
-const HttpRequest &HttpRequestParser::getRequest() const
-{
-    return request;
-}
-
 void HttpRequestParser::setError(int code)
 {
     errorCode = code;
@@ -190,8 +171,7 @@ bool HttpRequestParser::splitTarget()
     return true;
 }
 
-HttpRequestParser::StepStatus
-HttpRequestParser::parseRequestLine(const std::string &raw)
+StepStatus HttpRequestParser::parseRequestLine(const std::string &raw)
 {
     size_t lineEnd = raw.find("\r\n", parsedSize);
 
@@ -219,7 +199,7 @@ HttpRequestParser::parseRequestLine(const std::string &raw)
         return STEP_ERROR;
     }
 
-    request.setMethod(toUpper(method));
+    request.setMethod(method);
     request.setTarget(target);
     request.setVersion(version);
 
@@ -232,8 +212,7 @@ HttpRequestParser::parseRequestLine(const std::string &raw)
     return STEP_COMPLETE;
 }
 
-HttpRequestParser::StepStatus
-HttpRequestParser::parseHeaders(const std::string &raw)
+StepStatus HttpRequestParser::parseHeaders(const std::string &raw)
 {
     size_t headersEnd = raw.find("\r\n\r\n", parsedSize);
 
@@ -262,11 +241,13 @@ HttpRequestParser::parseHeaders(const std::string &raw)
             return STEP_ERROR;
         }
 
-        std::string key =
-            toLower(trim(line.substr(0, delimiterPosition)));
-
-        std::string value =
-            trim(line.substr(delimiterPosition + 1));
+        std::string key =line.substr(0, delimiterPosition);
+        if (key.empty() || key != trim(key))
+        {
+            setError(400);
+            return STEP_ERROR;
+        }
+        std::string value = trim(line.substr(delimiterPosition + 1));
 
         if (key.empty())
         {
@@ -274,8 +255,7 @@ HttpRequestParser::parseHeaders(const std::string &raw)
             return STEP_ERROR;
         }
 
-        if ((key == "content-length" || key == "host")
-            && request.hasHeader(key))
+        if ((key == "content-length" || key == "host") && request.hasHeader(key))
         {
             setError(400);
             return STEP_ERROR;
@@ -294,21 +274,22 @@ HttpRequestParser::parseHeaders(const std::string &raw)
         setError(505);
         return STEP_ERROR;
     }
-
-    if (version == "HTTP/1.1" && !request.hasHeader("host"))
+    if (version == "HTTP/1.1")
     {
-        setError(400);
-        return STEP_ERROR;
+        if (!request.hasHeader("host")
+            || trim(request.getHeader("host")).empty())
+        {
+            setError(400);
+            return STEP_ERROR;
+        }
     }
-
     parsedSize = headersEnd + 4;
     state = PARSE_BODY;
 
     return STEP_COMPLETE;
 }
 
-HttpRequestParser::StepStatus
-HttpRequestParser::parseChunkedBody(const std::string &raw)
+StepStatus HttpRequestParser::parseChunkedBody(const std::string &raw)
 {
     const std::string crlf = "\r\n";
     const size_t crlfSize = crlf.size();
@@ -320,16 +301,13 @@ HttpRequestParser::parseChunkedBody(const std::string &raw)
         if (chunkHeaderEnd == std::string::npos)
             return STEP_NEED_MORE_DATA;
 
-        std::string chunkHeader =
-            raw.substr(parsedSize, chunkHeaderEnd - parsedSize);
+        std::string chunkHeader = raw.substr(parsedSize, chunkHeaderEnd - parsedSize);
 
         size_t extensionPosition = chunkHeader.find(';');
-
         if (extensionPosition != std::string::npos)
             chunkHeader = chunkHeader.substr(0, extensionPosition);
 
         chunkHeader = trim(chunkHeader);
-
         size_t chunkSize = 0;
 
         if (!parseHexSize(chunkHeader, chunkSize))
@@ -339,7 +317,6 @@ HttpRequestParser::parseChunkedBody(const std::string &raw)
         }
 
         size_t dataStart = chunkHeaderEnd + crlfSize;
-
         if (chunkSize == 0)
         {
             if (raw.size() < dataStart + crlfSize)
@@ -389,21 +366,29 @@ HttpRequestParser::parseChunkedBody(const std::string &raw)
     }
 }
 
-HttpRequestParser::StepStatus
-HttpRequestParser::parseBody(const std::string &raw)
+StepStatus HttpRequestParser::parseBody(const std::string &raw)
 {
-    std::string transferEncoding =
-        toLower(trim(request.getHeader("transfer-encoding")));
-
-    std::string contentLengthHeader =
-        trim(request.getHeader("content-length"));
-
-    if (!transferEncoding.empty() && !contentLengthHeader.empty())
+    bool hasContentLength = request.hasHeader("content-length");
+    bool hasTransferEncoding =request.hasHeader("transfer-encoding");
+    
+    std::string contentLengthHeader = trim(request.getHeader("content-length"));
+    std::string transferEncoding = toLower(trim(request.getHeader("transfer-encoding")));
+    
+    if (hasContentLength && contentLengthHeader.empty())
     {
         setError(400);
         return STEP_ERROR;
     }
-
+    if (hasTransferEncoding && transferEncoding.empty())
+    {
+        setError(400);
+        return STEP_ERROR;
+    }
+    if (hasContentLength && hasTransferEncoding)
+    {
+        setError(400);
+        return STEP_ERROR;
+    }
     if (!transferEncoding.empty())
     {
         if (transferEncoding != "chunked")

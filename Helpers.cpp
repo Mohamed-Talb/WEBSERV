@@ -58,7 +58,8 @@ std::string joinPath(std::string left, std::string right)
 
     if (right.empty())
         return left;
-
+    if (left == "/")
+        return "/" + right;
     return left + "/" + right;
 }
 

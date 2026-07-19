@@ -10,30 +10,32 @@ const Location *HttpHandler::matchLocation(const std::string &path) const
 {
     const Location *bestMatch = NULL;
     size_t bestLength = 0;
+    int numberOfLocations = serverConfig->locations.size();
 
-    for (size_t i = 0; i < serverConfig->locations.size(); ++i)
+    for (size_t i = 0; i < numberOfLocations; ++i)
     {
-        const Location &location = serverConfig->locations[i];
+        const Location &currlocation = serverConfig->locations[i];
 
-        if (path.size() < location.path.size())
+        if (path.size() < currlocation.path.size())
             continue;
 
-        if (path.compare(0, location.path.size(), location.path) != 0)
+        if (path.compare(0, currlocation.path.size(), currlocation.path) != 0)
             continue;
 
-        bool validBoundary = location.path == "/" || path.size() == location.path.size() || location.path[location.path.size() - 1] == '/'
-            || path[location.path.size()] == '/';
+        bool validBoundary = currlocation.path == "/" 
+            || path.size() == currlocation.path.size() 
+            || currlocation.path[currlocation.path.size() - 1] == '/'
+            || path[currlocation.path.size()] == '/';
 
         if (!validBoundary)
             continue;
 
-        if (location.path.size() > bestLength)
+        if (currlocation.path.size() > bestLength)
         {
-            bestMatch = &location;
-            bestLength = location.path.size();
+            bestMatch = &currlocation;
+            bestLength = currlocation.path.size();
         }
     }
-
     return bestMatch;
 }
 
@@ -73,29 +75,12 @@ void HttpHandler::resolveRoute(const HttpRequest &request, RouteMatch &match) co
     match.requestPath = request.getRequestPath();
     match.location = matchLocation(match.requestPath);
 
-    if (!match.location)
-    {
+    if (match.location && !match.location->root.empty())
+        match.root = match.location->root;
+    else
         match.root = serverConfig->root;
-        match.fullPath = joinPath(match.root, match.requestPath);
-        return;
-    }
 
-    match.root = match.location->root;
-
-    if (match.root.empty()) match.root = serverConfig->root;
-
-    std::string relativePath = match.requestPath;
-    if (match.location->path != "/")
-    {
-        relativePath = match.requestPath.substr(match.location->path.size());
-
-        if (relativePath.empty())
-            relativePath = "/";
-
-        else if (relativePath[0] != '/')
-            relativePath = "/" + relativePath;
-    }
-    match.fullPath = joinPath(match.root, relativePath);
+    match.fullPath = joinPath(match.root, match.requestPath);
 }
 
 std::vector<std::string> HttpHandler::resolveIndexFiles(const Location *location) const
@@ -183,7 +168,6 @@ HttpResult HttpHandler::process(const HttpRequest &request) const
         return HttpResult::makeResponse(resolveRedirection(*match.location));
     }
     const std::string &method = request.getMethod();
-
     if (!isMethodAllowed(method, match.location))
     {
         return HttpResult::makeResponse(ErrorPage(405, *serverConfig));

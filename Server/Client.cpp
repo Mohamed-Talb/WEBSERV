@@ -39,10 +39,7 @@ void Client::consumeReadBuffer(size_t bytes)
         readBuffer.erase(0, bytes);
 }
 
-ClientState Client::getState() const
-{
-    return state;
-}
+ClientState Client::getState() const { return state;}
 
 void Client::consumeWriteBuffer(size_t bytes)
 {
@@ -52,45 +49,15 @@ void Client::consumeWriteBuffer(size_t bytes)
         writeBuffer.erase(0, bytes);
 }
 
-int Client::getFD() const
-{
-    return socketFD;
-}
+int  Client::getFD() const { return socketFD;}
+bool Client::isConnected() const { return socketFD >= 0;}
+bool Client::hasPendingWrite() const { return !writeBuffer.empty();}
+const std::string &Client::getReadBuffer() const { return readBuffer;}
+const std::string &Client::getWriteBuffer() const { return writeBuffer;}
+HttpRequest &Client::getActiveRequest() { return requestParser.getRequest();}
 
-void Client::appendToWriteBuffer(const std::string &data)
-{
-    writeBuffer += data;
-}
-
-void Client::appendToReadBuffer(const char *data, size_t size)
-{
-    readBuffer.append(data, size);
-}
-
-HttpRequest &Client::getActiveRequest()
-{
-    return requestParser.getRequest();
-}
-
-bool Client::isConnected() const
-{
-    return socketFD >= 0;
-}
-
-bool Client::hasPendingWrite() const
-{
-    return !writeBuffer.empty();
-}
-
-const std::string &Client::getReadBuffer() const
-{
-    return readBuffer;
-}
-
-const std::string &Client::getWriteBuffer() const
-{
-    return writeBuffer;
-}
+void Client::appendToWriteBuffer(const std::string &data) { writeBuffer += data;}
+void Client::appendToReadBuffer(const char *data, size_t size) { readBuffer.append(data, size);}
 
 const ServerConfig *Client::matchConfig(const std::string &rawHost) const
 {
@@ -224,43 +191,35 @@ void Client::errorsHandler(int errorCode)
     server->modifyHandler(this, EPOLLOUT);
 }
 
-void Client::handleRead()
+bool Client::readFromSocket()
 {
-    if (state != READING_REQUEST)
-        return;
-
     char buffer[8192];
-    bool receivedData = false;
 
     while (true)
     {
-        ssize_t bytes = recv(socketFD, buffer, sizeof(buffer), 0);
-
+        ssize_t bytes = recv(socketFD,buffer,sizeof(buffer),0);
         if (bytes > 0)
         {
             appendToReadBuffer(buffer, static_cast<size_t>(bytes));
-            receivedData = true;
             timeout = time(NULL);
             continue;
         }
-
         if (bytes == 0)
         {
             closeConnection();
-            return;
+            return false;
         }
-
         if (errno == EAGAIN || errno == EWOULDBLOCK)
-            break;
+            return true;
 
         closeConnection();
-        return;
+        return false;
     }
+}
 
-    if (!receivedData)
-        return;
-
-    while (state == READING_REQUEST)
+void Client::processReadBuffer()
+{
+ while (state == READING_REQUEST)
     {
         ParseStatus parseStatus = requestParser.parse(readBuffer);
         HttpRequest &request = requestParser.getRequest();
@@ -270,37 +229,21 @@ void Client::handleRead()
             errorsHandler(requestParser.getErrorCode());
             return;
         }
-
         switch (parseStatus)
         {
             case PARSE_HEADERS_COMPLETE:
             {
                 activeConfig = matchConfig(request.getHeader("host"));
-
                 if (!activeConfig)
                 {
                     closeConnection();
                     return;
                 }
-
                 requestParser.setMaxBodySize(activeConfig->client_max_body_size);
-
-                std::string contentLength =
-                    request.getHeader("content-length");
-
-                if (!contentLength.empty()
-                    && myStold(contentLength) > activeConfig->client_max_body_size)
-                {
-                    errorsHandler(413);
-                    return;
-                }
-
                 continue;
             }
-
             case PARSE_NEED_MORE_DATA:
                 return;
-
             case PARSE_REQUEST_COMPLETE:
             {
                 if (!activeConfig)
@@ -310,7 +253,6 @@ void Client::handleRead()
                         closeConnection();
                         return;
                     }
-
                     activeConfig = &configs[0];
                 }
 
@@ -321,14 +263,10 @@ void Client::handleRead()
                 closeAfterWrite = request.shouldCloseConnection();
 
                 consumeReadBuffer(consumedBytes);
-
                 if (result.type == HTTP_RESULT_CGI)
                 {
                     state = PROCESSING_CGI;
-
-                    activeCgi = new CGI(this, server, request,
-                        *result.cgiLocation, result.cgiRequestPath);
-
+                    activeCgi = new CGI(this, server, request, *result.cgiLocation, result.cgiRequestPath);
                     server->addHandler(activeCgi, EPOLLOUT);
                     return;
                 }
@@ -339,14 +277,12 @@ void Client::handleRead()
                     response.setHeader("Connection", "close");
 
                 writeBuffer = response.toString();
-
                 requestParser.reset();
 
                 state = SENDING_RESPONSE;
                 server->modifyHandler(this, EPOLLOUT);
-                return;
+                return ;
             }
-
             case PARSE_REQUEST_ERROR:
                 errorsHandler(requestParser.getErrorCode());
                 return;
@@ -354,11 +290,21 @@ void Client::handleRead()
     }
 }
 
+void Client::handleRead()
+{
+    if (state != READING_REQUEST)
+        return;
+    if (!readFromSocket())
+        return;
+    processReadBuffer();
+}
+
+
 void Client::handleWrite()
 {
     while (hasPendingWrite())
     {
-        ssize_t bytes = send(socketFD, writeBuffer.c_str(), writeBuffer.size(), 0);
+        ssize_t bytes = send(socketFD, writeBuffer.c_str(), writeBuffer.size(),0);
 
         if (bytes > 0)
         {
@@ -366,26 +312,32 @@ void Client::handleWrite()
             timeout = time(NULL);
             continue;
         }
-
         if (bytes == 0)
             return;
-
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             return;
-
         closeConnection();
         return;
     }
-
     if (closeAfterWrite)
     {
         closeConnection();
         return;
     }
-
     closeAfterWrite = false;
     activeConfig = NULL;
     state = READING_REQUEST;
 
+    /*
+     * A pipelined request may already be waiting in
+     * the user-space read buffer.
+     */
+    if (!readBuffer.empty())
+    {
+        processReadBuffer();
+        if (state == READING_REQUEST)
+            server->modifyHandler(this, EPOLLIN);
+        return;
+    }
     server->modifyHandler(this, EPOLLIN);
 }

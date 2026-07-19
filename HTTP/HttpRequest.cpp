@@ -16,35 +16,26 @@ void HttpRequest::reset()
     headers.clear();
 }
 
-void HttpRequest::setMethod(const std::string &value)
-{
-    method = value;
-}
 
-void HttpRequest::setTarget(const std::string &value)
-{
-    target = value;
-}
+const std::string &HttpRequest::getBody() const { return body;}
+const std::string &HttpRequest::getQuery() const { return query;}
+const std::string &HttpRequest::getMethod() const { return method;}
+const std::string &HttpRequest::getTarget() const { return target;}
+const std::string &HttpRequest::getVersion() const { return version;}
 
-void HttpRequest::setVersion(const std::string &value)
-{
-    version = value;
-}
+void HttpRequest::setQuery(const std::string &value) { query = value;}
+void HttpRequest::setTarget(const std::string &value) {target = value;}
+void HttpRequest::setMethod(const std::string &value) {method = value;}
+void HttpRequest::appendBody(const std::string &value) { body += value;}
+void HttpRequest::setVersion(const std::string &value) { version = value;}
 
-void HttpRequest::setRequestPath(const std::string &value)
-{
-    requestPath = value;
-}
+const std::string &HttpRequest::getRequestPath() const { return requestPath;}
+void HttpRequest::setRequestPath(const std::string &value) { requestPath = value;}
+const std::map<std::string, std::string> &HttpRequest::getHeaders() const { return headers;}
+void HttpRequest::setHeader(const std::string &key, const std::string &value) { headers[toLower(key)] = value;}
 
-void HttpRequest::setQuery(const std::string &value)
-{
-    query = value;
-}
 
-void HttpRequest::setHeader(const std::string &key, const std::string &value)
-{
-    headers[toLower(key)] = value;
-}
+
 
 void HttpRequest::appendHeader(const std::string &key, const std::string &value)
 {
@@ -57,10 +48,6 @@ void HttpRequest::appendHeader(const std::string &key, const std::string &value)
         it->second += ", " + value;
 }
 
-void HttpRequest::appendBody(const std::string &value)
-{
-    body += value;
-}
 
 bool HttpRequest::hasHeader(const std::string &key) const
 {
@@ -80,30 +67,6 @@ bool HttpRequest::shouldCloseConnection() const
     return true;
 }
 
-const std::string &HttpRequest::getMethod() const
-{
-    return method;
-}
-
-const std::string &HttpRequest::getVersion() const
-{
-    return version;
-}
-
-const std::string &HttpRequest::getRequestPath() const
-{
-    return requestPath;
-}
-
-const std::string &HttpRequest::getQuery() const
-{
-    return query;
-}
-
-const std::string &HttpRequest::getBody() const
-{
-    return body;
-}
 
 const std::string &HttpRequest::getHeader(const std::string &key) const
 {
@@ -117,13 +80,4 @@ const std::string &HttpRequest::getHeader(const std::string &key) const
     return empty;
 }
 
-const std::map<std::string, std::string> &HttpRequest::getHeaders() const
-{
-    return headers;
-}
-
-const std::string &HttpRequest::getTarget() const
-{
-    return target;
-}
 

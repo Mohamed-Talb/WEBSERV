@@ -40,6 +40,8 @@ class Client : public IEventHandler
     bool closeAfterWrite;
 
     private:
+    bool readFromSocket();
+    void processReadBuffer();
     void closeConnection();
     void errorsHandler(int errorCode);
     void consumeReadBuffer(size_t bytes);

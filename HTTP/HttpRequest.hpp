@@ -6,7 +6,7 @@
 
 class HttpRequest
 {
-private:
+    private:
     std::string method;
     std::string target;
     std::string version;
@@ -16,7 +16,7 @@ private:
 
     std::map<std::string, std::string> headers;
 
-public:
+    public:
     HttpRequest();
 
     void reset();
