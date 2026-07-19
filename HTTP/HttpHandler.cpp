@@ -10,7 +10,7 @@ const Location *HttpHandler::matchLocation(const std::string &path) const
 {
     const Location *bestMatch = NULL;
     size_t bestLength = 0;
-    int numberOfLocations = serverConfig->locations.size();
+    size_t numberOfLocations = serverConfig->locations.size();
 
     for (size_t i = 0; i < numberOfLocations; ++i)
     {
@@ -128,28 +128,38 @@ HttpResponse HttpHandler::resolveRedirection(const Location &location) const
     response.setHeader("Content-Length", "0");
     return response;
 }
-
-bool HttpHandler::resolveDirectory(RouteMatch &match, const std::string &method, HttpResponse &response) const
+bool HttpHandler::resolveDirectory(RouteMatch &match, const HttpRequest request, HttpResponse &response) const
 {
+
     if (!isDirectory(match.fullPath))
         return true;
-    std::vector<std::string> indexes = resolveIndexFiles(match.location);
+    
+    if (match.requestPath.empty() || match.requestPath[match.requestPath.size() - 1] != '/')
+    {
+        std::string queryString = request.getQuery();
+        std::string redirectTarget = match.requestPath + "/";
 
+        if (!queryString.empty())
+            redirectTarget += "?" + queryString;
+
+        response = HttpResponse(301, "Moved Permanently");
+        response.setHeader("Location", redirectTarget);
+        response.setHeader("Content-Length", "0");
+        return false;
+    }
+
+    std::vector<std::string> indexes = resolveIndexFiles(match.location);
     for (size_t i = 0; i < indexes.size(); ++i)
     {
-        std::string candidate =
-            joinPath(match.fullPath, indexes[i]);
-
+        std::string candidate = joinPath(match.fullPath, indexes[i]);
         if (!fileExists(candidate))
             continue;
-
         match.requestPath = joinPath(match.requestPath, indexes[i]);
         match.fullPath = candidate;
         return true;
     }
     bool autoIndexEnabled = match.location && match.location->autoindex == "on";
-
-    if (method == "GET" && autoIndexEnabled)
+    if (request.getMethod() == "GET" && autoIndexEnabled)
     {
         response = resolveAutoIndexing(match, *serverConfig);
         return false;
@@ -178,7 +188,7 @@ HttpResult HttpHandler::process(const HttpRequest &request) const
     }
     HttpResponse directoryResponse;
 
-    if (!resolveDirectory(match, method, directoryResponse))
+    if (!resolveDirectory(match, request, directoryResponse))
         return HttpResult::makeResponse(directoryResponse);
 
     if (isCgiRequest(match))

@@ -154,16 +154,21 @@ bool HttpRequestParser::splitTarget()
         rawPath = target.substr(0, queryPosition);
         query = target.substr(queryPosition + 1);
     }
-
     std::string requestPath;
-
     if (!urlDecode(rawPath, requestPath))
     {
         setError(400);
         return false;
     }
+    bool hadTrailingSlash = requestPath.size() > 1 && requestPath[requestPath.size() - 1] == '/';
 
     requestPath = normalizePath(requestPath);
+    if (hadTrailingSlash && requestPath.size() > 1 && requestPath[requestPath.size() - 1] != '/')
+    {
+        requestPath += "/";
+    }
+    if (requestPath.empty())
+        requestPath = "/";
 
     request.setRequestPath(requestPath);
     request.setQuery(query);

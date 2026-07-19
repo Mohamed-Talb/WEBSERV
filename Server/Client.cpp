@@ -267,10 +267,18 @@ void Client::processReadBuffer()
                 {
                     state = PROCESSING_CGI;
                     activeCgi = new CGI(this, server, request, *result.cgiLocation, result.cgiRequestPath);
-                    server->addHandler(activeCgi, EPOLLOUT);
-                    return;
+                    try
+                    {
+                        server->addHandler(activeCgi, EPOLLOUT);
+                    }
+                    catch (...)
+                    {
+                        delete activeCgi;
+                        throw ;
+                    }
+                    activeCgi = activeCgi;
+                    state = PROCESSING_CGI;
                 }
-
                 HttpResponse response = result.response;
 
                 if (closeAfterWrite)
