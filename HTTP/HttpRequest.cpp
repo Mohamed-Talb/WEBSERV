@@ -101,6 +101,18 @@ void HttpRequest::reset()
     state = PARSE_REQUEST_LINE;
 }
 
+void HttpRequest::cleanup(std::string &buffer)
+{
+    if (parsedSize > 0)
+    {
+        if (parsedSize >= buffer.size())
+            buffer.clear();
+        else
+            buffer.erase(0, parsedSize);
+    }
+    reset();
+}
+
 // return: 1 (final chunk found), 0 (needs more data), -1 (error)
 int HttpRequest::parseChunkedBody(const std::string &raw) 
 {
@@ -301,7 +313,7 @@ int HttpRequest::parseBody(const std::string &raw)
 }
 
 // return: 1 (Fully Parsed), 0 (Needs More Data), -1 (Fatal Error), 2 (Headers Finished/Body Next)
-int HttpRequest::parse(const std::string &rawRequestData) 
+ParseResult HttpRequest::parse(const std::string &rawRequestData) 
 {
     while (state != PARSE_COMPLETE && state != PARSE_ERROR) 
     {
@@ -312,12 +324,14 @@ int HttpRequest::parse(const std::string &rawRequestData)
             case PARSE_REQUEST_LINE: status = parseRequestLine(rawRequestData); break;
             case PARSE_HEADERS:      status = parseHeaders(rawRequestData); break;
             case PARSE_BODY:         status = parseBody(rawRequestData); break;
-            default:                 setError(500); return -1;
+            default:                 setError(500); return RESULT_ERROR;
         }
+        if (status <= -1) 
+            return RESULT_ERROR;
         if (status <= 0) 
-            return status;
+            return RESULT_NEED_MORE;
         if (prevState == PARSE_HEADERS && state == PARSE_BODY) 
-            return 2;
+            return RESULT_HEADERS_DONE;
     }
-    return 1;
+    return RESULT_COMPLETE;
 }

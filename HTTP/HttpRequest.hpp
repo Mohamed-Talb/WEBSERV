@@ -15,6 +15,12 @@ enum State
 	PARSE_ERROR
 };
 
+enum ParseResult {
+    RESULT_NEED_MORE = 0,
+    RESULT_COMPLETE = 1,
+    RESULT_HEADERS_DONE = 2,
+    RESULT_ERROR = -1,
+};
 
 class HttpRequest 
 {
@@ -44,7 +50,8 @@ class HttpRequest
     ~HttpRequest();
 
     void reset();
-    int  parse(const std::string &rawBuffer);
+    void cleanup(std::string &);
+    ParseResult  parse(const std::string &rawBuffer);
 
     void setMaxBodySize(size_t value);
     const std::string &getBody() const;

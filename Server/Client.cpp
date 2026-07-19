@@ -32,14 +32,6 @@ Client::~Client()
     }
 }
 
-void Client::consumeReadBuffer(size_t bytes)
-{
-    if (bytes >= readBuffer.size())
-        readBuffer.clear();
-    else
-        readBuffer.erase(0, bytes);
-}
-
 void Client::consumeWriteBuffer(size_t bytes)
 {
     if (bytes >= writeBuffer.size())
@@ -116,7 +108,7 @@ void Client::errorsHandler(int errorCode)
     readBuffer.clear(); 
 }
 
-// const size_t ABSOLUTE_MAX_BUFFER = 10 * 1024 * 1024;
+const size_t ABSOLUTE_MAX_BUFFER = 10 * 1024 * 1024;
 
 bool Client::readingFromSocket()
 {
@@ -125,11 +117,7 @@ bool Client::readingFromSocket()
 
     while (true)
     {
-        // if (readBuffer.size() > ABSOLUTE_MAX_BUFFER)
-        //     break ;
-        std::cout << "ifhellooooooo\n";
         ssize_t bytes = recv(socketFD, buf, sizeof(buf), 0);
-        std::cout << "hellooooooo\n";
         if (bytes == 0)
         {
             server->removeHandler(socketFD);
@@ -145,6 +133,11 @@ bool Client::readingFromSocket()
         appendToReadBuffer(buf, static_cast<size_t>(bytes));
         dataRead = true;
         timeout = time(NULL);
+        if (readBuffer.size() > ABSOLUTE_MAX_BUFFER)
+        {
+            errorsHandler(413);
+            return false;
+        }
     }
     return dataRead;
 }
@@ -176,8 +169,7 @@ void Client::executeRequest()
         appendToWriteBuffer(result.response.toString());
         state = SENDING_RESPONSE;
     }
-    consumeReadBuffer(activeRequest.getParsedSize());
-    activeRequest.reset();
+    activeRequest.cleanup(readBuffer);
 }
 
 void Client::handleRead()
@@ -186,31 +178,24 @@ void Client::handleRead()
         return;
     while (true)
     {
-        int parseStatus = activeRequest.parse(readBuffer);
-        if (activeRequest.getErrorCode() != 0) 
+        ParseResult result = activeRequest.parse(readBuffer);
+        if (result == RESULT_ERROR) 
         {
             errorsHandler(activeRequest.getErrorCode());
             return;
         }
-        if (parseStatus == 2)
+        if (result == RESULT_NEED_MORE)
+            break;
+        if (result == RESULT_HEADERS_DONE)
         {
             processRequestHeaders();
-            if (state == SENDING_RESPONSE) 
+            if (state == SENDING_RESPONSE)
                 return;
             continue;
         }
-        if (parseStatus == 0) 
-        {
-            if (activeRequest.getParsedSize() > 0) 
-            {
-                consumeReadBuffer(activeRequest.getParsedSize());
-                activeRequest.setParsedSize(0);
-            }
-            break; 
-        }
         executeRequest();
-        if (state == PROCESSING_CGI) 
-            break;
+        if (state == PROCESSING_CGI)
+            return;
     }
     if (hasPendingWrite() && state != PROCESSING_CGI)
     {

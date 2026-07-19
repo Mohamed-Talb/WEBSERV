@@ -43,7 +43,6 @@ class Client : public IEventHandler
     void terminateCgi();
 
     bool hasPendingWrite() const;
-    void consumeReadBuffer(size_t bytes);
     void consumeWriteBuffer(size_t bytes);
     void appendToWriteBuffer(const std::string& data);
     void appendToReadBuffer(const char* data, size_t size);
