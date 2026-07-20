@@ -6,38 +6,6 @@
 
 HttpHandler::HttpHandler(const ServerConfig &config): serverConfig(&config) {}
 
-const Location *HttpHandler::matchLocation(const std::string &path) const
-{
-    const Location *bestMatch = NULL;
-    size_t bestLength = 0;
-    size_t numberOfLocations = serverConfig->locations.size();
-
-    for (size_t i = 0; i < numberOfLocations; ++i)
-    {
-        const Location &currlocation = serverConfig->locations[i];
-
-        if (path.size() < currlocation.path.size())
-            continue;
-
-        if (path.compare(0, currlocation.path.size(), currlocation.path) != 0)
-            continue;
-
-        bool validBoundary = currlocation.path == "/" 
-            || path.size() == currlocation.path.size() 
-            || currlocation.path[currlocation.path.size() - 1] == '/'
-            || path[currlocation.path.size()] == '/';
-
-        if (!validBoundary)
-            continue;
-
-        if (currlocation.path.size() > bestLength)
-        {
-            bestMatch = &currlocation;
-            bestLength = currlocation.path.size();
-        }
-    }
-    return bestMatch;
-}
 
 bool HttpHandler::isMethodAllowed(const Location *location, const std::string &method) const
 {
@@ -86,7 +54,7 @@ HttpResult HttpHandler::resolveCgi(const RouteMatch &match) const
 void HttpHandler::resolveRoute(const HttpRequest &request, RouteMatch &match) const
 {
     match.requestPath = request.getRequestPath();
-    match.location = matchLocation(match.requestPath);
+    match.location = matchLocation(*serverConfig, match.requestPath);
 
     if (match.location && !match.location->root.empty())
         match.root = match.location->root;

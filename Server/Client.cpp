@@ -18,6 +18,7 @@ Client::Client(int fd, Server *srv, const std::vector<ServerConfig *> confs)
       activeCgi(NULL),
       state(READING_REQUEST),
       closeAfterWrite(false),
+      writeOffset(0),
       timeout(time(NULL)) {}
 
 Client::~Client()
@@ -40,13 +41,13 @@ void Client::consumeReadBuffer(size_t bytes)
 
 ClientState Client::getState() const { return state;}
 
-void Client::consumeWriteBuffer(size_t bytes)
-{
-    if (bytes >= writeBuffer.size())
-        writeBuffer.clear();
-    else
-        writeBuffer.erase(0, bytes);
-}
+// void Client::consumeWriteBuffer(size_t bytes)
+// {
+//     if (bytes >= writeBuffer.size())
+//         writeBuffer.clear();
+//     else
+//         writeBuffer.erase(0, bytes);
+// }
 
 int  Client::getFD() const { return socketFD;}
 bool Client::isConnected() const { return socketFD >= 0;}
@@ -206,9 +207,10 @@ bool Client::readFromSocket()
             closeConnection();
             return false;
         }
+        if (errno == EINTR)
+            continue;
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             return true;
-
         closeConnection();
         return false;
     }
@@ -230,13 +232,18 @@ void Client::processReadBuffer()
         {
             case PARSE_HEADERS_COMPLETE:
             {
-                activeConfig = matchConfig(request.getHeader("host")[0]);
+                const std::vector<std::string> &hostValues = request.getHeader("host");
+                activeConfig = matchConfig(hostValues[0]);
+                if (!configs.empty())
+                    activeConfig = configs[0];
                 if (!activeConfig)
                 {
                     closeConnection();
                     return;
                 }
-                requestParser.setMaxBodySize(activeConfig->client_max_body_size);
+                const Location *location = matchLocation(*activeConfig,request.getRequestPath());
+                size_t maxBodySize = location->client_max_body_size;
+                requestParser.setMaxBodySize(maxBodySize);
                 continue;
             }
             case PARSE_NEED_MORE_DATA:
@@ -307,22 +314,27 @@ void Client::handleRead()
 
 void Client::handleWrite()
 {
-    while (hasPendingWrite())
+    while (writeOffset < writeBuffer.size())
     {
-        ssize_t bytes = send(socketFD, writeBuffer.c_str(), writeBuffer.size(),0);
-
-        if (bytes > 0)
+        ssize_t bytesSent = send(socketFD,  writeBuffer.data() + writeOffset, writeBuffer.size() - writeOffset,MSG_NOSIGNAL);
+        if (bytesSent > 0)
         {
-            consumeWriteBuffer(static_cast<size_t>(bytes));
-            timeout = time(NULL);
+            writeOffset += static_cast<size_t>(bytesSent);
             continue;
         }
-        if (bytes == 0)
+        if (bytesSent == 0)
             return;
+        if (errno == EINTR)
+            continue;
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             return;
         closeConnection();
         return;
+    }
+    if (writeOffset == writeBuffer.size())
+    {
+        writeBuffer.clear();
+        writeOffset = 0;
     }
     if (closeAfterWrite)
     {

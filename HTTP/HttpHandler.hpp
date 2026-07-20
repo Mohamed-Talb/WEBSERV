@@ -68,7 +68,6 @@ class HttpHandler
     private:
     const ServerConfig *serverConfig;
 
-    const Location *matchLocation(const std::string &path) const;
     bool isMethodAllowed(const Location *location, const std::string &method) const;
     bool isCgiRequest(const RouteMatch &match) const;
     void resolveRoute(const HttpRequest &request,RouteMatch &match) const;

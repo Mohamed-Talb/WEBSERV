@@ -38,6 +38,7 @@ class Client : public IEventHandler
     CGI *activeCgi;
     ClientState state;
     bool closeAfterWrite;
+    size_t writeOffset;
 
     private:
     bool readFromSocket();
@@ -45,7 +46,7 @@ class Client : public IEventHandler
     void closeConnection();
     void errorsHandler(int errorCode);
     void consumeReadBuffer(size_t bytes);
-    void consumeWriteBuffer(size_t bytes);
+    // void consumeWriteBuffer(size_t bytes);
     
     void appendToWriteBuffer(const std::string &data);
     void appendToReadBuffer(const char *data, size_t size);

@@ -84,6 +84,16 @@ void ConfigParser::locationCgiPath(Location &loc)
     tokens.expect(";");
 }
 
+void ConfigParser::locationClientMaxBodySize(Location &loc)
+{
+    checkDuplicate(loc, "client_max_body_size");
+    tokens.expect("client_max_body_size");
+
+    loc.client_max_body_size = valuesParser::parseBodySizeValue(tokens);
+
+    tokens.expect(";");
+}
+
 void ConfigParser::locationCgiExt(Location &loc)
 {
     checkDuplicate(loc, "cgi_ext");

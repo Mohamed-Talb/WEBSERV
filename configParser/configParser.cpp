@@ -64,6 +64,9 @@ void ConfigParser::validateServer(ServerConfig &conf)
 
         if (loc.indexes.empty())
             loc.indexes = conf.indexes;
+        
+        if (loc.client_max_body_size == -1)
+            loc.client_max_body_size = conf.client_max_body_size;
     }
 }
 
@@ -89,6 +92,7 @@ void ConfigParser::initLocationDispatch()
     locationDispatch["return"] = &ConfigParser::locationRedirect;
     locationDispatch["upload"] = &ConfigParser::locationUpload;
     locationDispatch["upload_path"] = &ConfigParser::locationUploadPath;
+    locationDispatch["client_max_body_size"] = &ConfigParser::locationClientMaxBodySize;
 }
 
 ConfigParser::ConfigParser()

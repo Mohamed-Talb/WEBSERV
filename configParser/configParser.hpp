@@ -39,13 +39,15 @@ struct Location
     
     int redirectCode;
     std::string redirectTarget;
+    
+    ssize_t client_max_body_size;
 
     std::vector<std::string> methods;
     std::vector<std::string> indexes;
     std::vector<std::string> allowedMethods;
     std::map<std::string, bool> seenDirectives;
     
-    Location() : autoindex("off"), uploadEnabled("off") ,redirectCode(0)
+    Location() : autoindex("off"), uploadEnabled("off") ,redirectCode(0), client_max_body_size(-1)
     {
         allowedMethods.push_back("GET");
         allowedMethods.push_back("DELETE");
@@ -125,6 +127,7 @@ class ConfigParser
     void locationRedirect(Location &loc);
     void locationAutoindex(Location &loc);
     void locationUploadPath(Location &loc);
+    void locationClientMaxBodySize(Location &loc);
 
     public:
         ConfigParser();

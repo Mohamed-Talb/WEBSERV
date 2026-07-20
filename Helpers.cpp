@@ -192,6 +192,8 @@ bool isValidErrorCode(int code)
         case 405: // Method Not Allowed
         case 408: // Request Timeout
         case 413: // Payload Too Large
+        case 414:
+        case 431:
         case 500: // Internal Server Error
         case 501: // Not Implemented
         case 502: // Bad Gateway
@@ -202,4 +204,19 @@ bool isValidErrorCode(int code)
         default:
             return false;
     }
+}
+
+
+int hexDigit(char c)
+{
+    if (c >= '0' && c <= '9')
+        return c - '0';
+
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+
+    return -1;
 }

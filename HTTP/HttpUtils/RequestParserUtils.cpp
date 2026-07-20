@@ -46,9 +46,7 @@ bool urlDecode(const std::string &input, std::string &output)
     {
         if (input[i] != '%')
         {
-            unsigned char current =
-                static_cast<unsigned char>(input[i]);
-
+            unsigned char current = static_cast<unsigned char>(input[i]);
             if (current == 0 || current < 0x20 || current == 0x7F)
             {
                 return false;
@@ -67,15 +65,11 @@ bool urlDecode(const std::string &input, std::string &output)
         {
             return false;
         }
-
-        std::string hexValue = input.substr(i + 1, 2);
-
-        std::istringstream stream(hexValue);
-
-        int decodedValue = 0;
-        stream >> std::hex >> decodedValue;
-        if (stream.fail() || !stream.eof())
+        int high = hexDigit(input[i + 1]);
+        int low = hexDigit(input[i + 2]);
+        if (high < 0 || low < 0)
             return false;
+        int decodedValue = high * 16 + low;
         if (decodedValue == 0 || decodedValue < 0x20 || decodedValue == 0x7F)
         {
             return false;

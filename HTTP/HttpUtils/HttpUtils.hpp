@@ -24,5 +24,6 @@ bool parseDecimalSize(const std::string &value, size_t &result);
 bool urlDecode(const std::string &input, std::string &output);
 bool isCommaSeparatedHeader(const std::string &name);
 std::vector<std::string> splitHeaderValues(const std::string &value);
+const Location *matchLocation(const ServerConfig &config, const std::string &path);
 
 #endif
