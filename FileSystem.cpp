@@ -1,11 +1,31 @@
 #include "FileSystem.hpp"
 
+bool isReadable(const std::string &path)
+{
+    return access(path.c_str(), R_OK) == 0;
+}
+
+bool isReadableFile(const std::string &path)
+{
+    return isRegularFile(path) && access(path.c_str(), R_OK) == 0;
+}
+
+bool hasAccessDenied(const std::string &path)
+{
+    struct stat info;
+
+    errno = 0;
+
+    if (stat(path.c_str(), &info) == 0)
+        return false;
+
+    return errno == EACCES;
+}
 
 bool fileExists(const std::string &filePath)
 {
     return (access(filePath.c_str(), F_OK) == 0);
 }
-
 
 bool isRegularFile(const std::string &path)
 {

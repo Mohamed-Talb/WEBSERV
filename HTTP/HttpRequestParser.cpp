@@ -179,10 +179,20 @@ bool HttpRequestParser::splitTarget()
 StepStatus HttpRequestParser::parseRequestLine(const std::string &raw)
 {
     size_t lineEnd = raw.find("\r\n", parsedSize);
-
     if (lineEnd == std::string::npos)
+    {
+        if (raw.size() - parsedSize > MAX_REQUEST_LINE_SIZE)
+        {
+            setError(414);
+            return STEP_ERROR;
+        }
         return STEP_NEED_MORE_DATA;
-
+    }
+    if (lineEnd - parsedSize > MAX_REQUEST_LINE_SIZE)
+    {
+        setError(414);
+        return STEP_ERROR;
+    }
     std::string line = raw.substr(parsedSize, lineEnd - parsedSize);
     std::istringstream lineStream(line);
 
@@ -222,10 +232,20 @@ StepStatus HttpRequestParser::parseHeaders(const std::string &raw)
     size_t headersEnd = raw.find("\r\n\r\n", parsedSize);
 
     if (headersEnd == std::string::npos)
+    {
+        if (raw.size() - parsedSize > MAX_HEADER_SIZE)
+        {
+            setError(431);
+            return STEP_ERROR;
+        }
         return STEP_NEED_MORE_DATA;
-
-    std::string headerSection =
-        raw.substr(parsedSize, headersEnd - parsedSize);
+    }
+    if (headersEnd - parsedSize > MAX_HEADER_SIZE)
+    {
+        setError(431);
+        return STEP_ERROR;
+    }
+    std::string headerSection = raw.substr(parsedSize, headersEnd - parsedSize);
 
     std::istringstream headerStream(headerSection);
     std::string line;
@@ -265,7 +285,6 @@ StepStatus HttpRequestParser::parseHeaders(const std::string &raw)
             setError(400);
             return STEP_ERROR;
         }
-
         if (request.hasHeader(key))
             request.appendHeader(key, value);
         else
@@ -281,8 +300,7 @@ StepStatus HttpRequestParser::parseHeaders(const std::string &raw)
     }
     if (version == "HTTP/1.1")
     {
-        if (!request.hasHeader("host")
-            || trim(request.getHeader("host")).empty())
+        if (!request.hasHeader("host") || trim(request.getHeader("host")).empty())
         {
             setError(400);
             return STEP_ERROR;

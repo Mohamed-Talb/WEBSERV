@@ -6,6 +6,9 @@
 #include <string>
 #include "HttpRequest.hpp"
 
+const size_t MAX_HEADER_SIZE = 16384;
+const size_t MAX_REQUEST_LINE_SIZE = 8192;
+
 enum ParseStatus
 {
     PARSE_NEED_MORE_DATA,

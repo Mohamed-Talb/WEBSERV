@@ -5,16 +5,16 @@ HttpResponse::HttpResponse() : statusCode(200), reasonPhrase("OK")
     headers["Connection"] = "keep-alive";
 }
 
-HttpResponse::HttpResponse(int code, const std::string& reason) : statusCode(code), reasonPhrase(reason)
+HttpResponse::HttpResponse(int code, const std::string &reason) : statusCode(code), reasonPhrase(reason)
 {
     headers["Connection"] = "keep-alive";
 }
 
 HttpResponse::~HttpResponse() {}
 
-void HttpResponse::setHeader(const std::string& name, const std::string& value)
+void HttpResponse::setHeader(const std::string &name, const std::string &value)
 {
-    headers[name] = value;
+    headers[toLower(name)] = value;
 }
 
 void HttpResponse::setBody(const std::string &content)
