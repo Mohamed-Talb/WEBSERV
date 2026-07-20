@@ -57,10 +57,19 @@ void HttpHandler::resolveRoute(const HttpRequest &request, RouteMatch &match) co
     match.location = matchLocation(*serverConfig, match.requestPath);
 
     if (match.location && !match.location->root.empty())
+    {
         match.root = match.location->root;
-    else
-        match.root = serverConfig->root;
 
+        std::string relativePath = match.requestPath.substr(match.location->path.size());
+
+        if (relativePath.empty())
+            relativePath = "/";
+
+        match.fullPath = joinPath(match.root, relativePath);
+        return;
+    }
+
+    match.root = serverConfig->root;
     match.fullPath = joinPath(match.root, match.requestPath);
 }
 
@@ -155,6 +164,7 @@ HttpResult HttpHandler::process(const HttpRequest &request) const
     RouteMatch match;
     resolveRoute(request, match);
 
+    std::cout << match.fullPath << std::endl;
     if (match.location && match.location->redirectCode != 0)
     {
         return HttpResult::makeResponse(resolveRedirection(*match.location));

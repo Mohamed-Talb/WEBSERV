@@ -1,5 +1,5 @@
-
 #include "configParser.hpp"
+
 void ConfigParser::serverListen(ServerConfig &conf)
 {
     checkDuplicate(conf, "listen");
