@@ -20,8 +20,8 @@ char **CGI::buildEnv(const HttpRequest &request)
     char** envp = new char*[5];
     envp[0] = strdup(("REQUEST_METHOD=" + request.getMethod()).c_str());
     envp[1] = strdup(("QUERY_STRING=" + request.getQuery()).c_str());
-    envp[2] = strdup(("CONTENT_TYPE=" + request.getHeader("content-type")).c_str());
-    envp[3] = strdup((std::string("CONTENT_LENGTH=") + request.getHeader("content-length")).c_str());
+    envp[2] = strdup(("CONTENT_TYPE=" + request.getHeader("content-type")[0]).c_str());
+    envp[3] = strdup((std::string("CONTENT_LENGTH=") + request.getHeader("content-length")[0]).c_str());
     envp[4] = NULL;
     return envp;
 }

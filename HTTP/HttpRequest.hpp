@@ -3,6 +3,7 @@
 
 #include <map>
 #include <string>
+#include <vector>
 
 class HttpRequest
 {
@@ -14,7 +15,7 @@ class HttpRequest
     std::string query;
     std::string body;
 
-    std::map<std::string, std::string> headers;
+    std::map<std::string, std::vector<std::string> > headers;
 
     public:
     HttpRequest();
@@ -32,6 +33,7 @@ class HttpRequest
     void appendBody(const std::string &value);
 
     bool hasHeader(const std::string &key) const;
+    bool headerContainsToken(const std::string &key, const std::string &expected) const;
     bool shouldCloseConnection() const;
 
     const std::string &getMethod() const;
@@ -40,9 +42,10 @@ class HttpRequest
     const std::string &getQuery() const;
     const std::string &getBody() const;
     const std::string &getTarget() const;
-    const std::string &getHeader(const std::string &key) const;
 
-    const std::map<std::string, std::string> &getHeaders() const;
+   const std::vector<std::string> &getHeader(const std::string &key) const;
+    const std::vector<std::string> &getHeaderValues(const std::string &key) const;
+    const std::map<std::string, std::vector<std::string> > &getHeaders() const;
 };
 
 #endif

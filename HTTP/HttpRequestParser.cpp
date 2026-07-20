@@ -1,7 +1,7 @@
 #include "HttpRequestParser.hpp"
 
 #include "../Helpers.hpp"
-#include "HttpUtils/HttpUtils.hpp"
+#include "./HttpUtils/HttpUtils.hpp"
 
 #include <cctype>
 #include <sstream>
@@ -18,107 +18,6 @@ int HttpRequestParser::getErrorCode() const { return errorCode; }
 size_t HttpRequestParser::getParsedSize() const { return parsedSize; }
 const HttpRequest &HttpRequestParser::getRequest() const { return request; }
 void HttpRequestParser::setMaxBodySize(size_t value) { maxBodySize = value; }
-
-bool urlDecode(const std::string &input, std::string &output)
-{
-    output.clear();
-    output.reserve(input.size());
-
-    for (size_t i = 0; i < input.size(); ++i)
-    {
-        if (input[i] != '%')
-        {
-            unsigned char current =
-                static_cast<unsigned char>(input[i]);
-
-            if (current == 0 || current < 0x20 || current == 0x7F)
-            {
-                return false;
-            }
-            output += input[i];
-            continue;
-        }
-
-        if (i + 2 >= input.size())
-            return false;
-
-        unsigned char first =  static_cast<unsigned char>(input[i + 1]);
-        unsigned char second = static_cast<unsigned char>(input[i + 2]);
-
-        if (!std::isxdigit(first) || !std::isxdigit(second))
-        {
-            return false;
-        }
-
-        std::string hexValue = input.substr(i + 1, 2);
-
-        std::istringstream stream(hexValue);
-
-        int decodedValue = 0;
-        stream >> std::hex >> decodedValue;
-        if (stream.fail() || !stream.eof())
-            return false;
-        if (decodedValue == 0 || decodedValue < 0x20 || decodedValue == 0x7F)
-        {
-            return false;
-        }
-        output += static_cast<char>(decodedValue);
-        i += 2;
-    }
-    return true;
-}
-
-bool parseDecimalSize(const std::string &value, size_t &result)
-{
-    if (value.empty())
-        return false;
-
-    for (size_t i = 0; i < value.size(); ++i)
-    {
-        unsigned char character =
-            static_cast<unsigned char>(value[i]);
-
-        if (!std::isdigit(character))
-            return false;
-    }
-
-    std::istringstream stream(value);
-    size_t parsedValue = 0;
-
-    stream >> parsedValue;
-
-    if (stream.fail() || !stream.eof())
-        return false;
-
-    result = parsedValue;
-    return true;
-}
-
-bool parseHexSize(const std::string &value, size_t &result)
-{
-    if (value.empty())
-        return false;
-
-    for (size_t i = 0; i < value.size(); ++i)
-    {
-        unsigned char character =
-            static_cast<unsigned char>(value[i]);
-
-        if (!std::isxdigit(character))
-            return false;
-    }
-
-    std::istringstream stream(value);
-    size_t parsedValue = 0;
-
-    stream >> std::hex >> parsedValue;
-
-    if (stream.fail() || !stream.eof())
-        return false;
-
-    result = parsedValue;
-    return true;
-}
 
 void HttpRequestParser::setError(int code)
 {
@@ -227,6 +126,39 @@ StepStatus HttpRequestParser::parseRequestLine(const std::string &raw)
     return STEP_COMPLETE;
 }
 
+
+bool HttpRequestParser::storeHeader(const std::string &key, const std::string &value)
+{
+    std::string normalizedKey = toLower(key);
+    std::string normalizedValue = trim(value);
+
+    if ((normalizedKey == "host" || normalizedKey == "content-length") && request.hasHeader(normalizedKey))
+    {
+        setError(400);
+        return false;
+    }
+
+    if (!isCommaSeparatedHeader(normalizedKey))
+    {
+        request.appendHeader(normalizedKey, normalizedValue);
+        return true;
+    }
+
+    std::vector<std::string> values = splitHeaderValues(normalizedValue);
+
+    if (values.empty())
+    {
+        request.appendHeader(normalizedKey, "");
+        return true;
+    }
+
+    for (size_t i = 0; i < values.size(); ++i)
+        request.appendHeader(normalizedKey, values[i]);
+
+    return true;
+}
+
+
 StepStatus HttpRequestParser::parseHeaders(const std::string &raw)
 {
     size_t headersEnd = raw.find("\r\n\r\n", parsedSize);
@@ -266,33 +198,18 @@ StepStatus HttpRequestParser::parseHeaders(const std::string &raw)
             return STEP_ERROR;
         }
 
-        std::string key =line.substr(0, delimiterPosition);
+        std::string key = line.substr(0, delimiterPosition);
         if (key.empty() || key != trim(key))
         {
             setError(400);
             return STEP_ERROR;
         }
+
         std::string value = trim(line.substr(delimiterPosition + 1));
-
-        if (key.empty())
-        {
-            setError(400);
+        if (!storeHeader(key, value))
             return STEP_ERROR;
-        }
-
-        if ((key == "content-length" || key == "host") && request.hasHeader(key))
-        {
-            setError(400);
-            return STEP_ERROR;
-        }
-        if (request.hasHeader(key))
-            request.appendHeader(key, value);
-        else
-            request.setHeader(key, value);
     }
-
     const std::string &version = request.getVersion();
-
     if (version != "HTTP/1.1" && version != "HTTP/1.0")
     {
         setError(505);
@@ -300,7 +217,9 @@ StepStatus HttpRequestParser::parseHeaders(const std::string &raw)
     }
     if (version == "HTTP/1.1")
     {
-        if (!request.hasHeader("host") || trim(request.getHeader("host")).empty())
+        const std::vector<std::string> &hostValues = request.getHeader("host");
+
+        if (hostValues.size() != 1 || trim(hostValues[0]).empty())
         {
             setError(400);
             return STEP_ERROR;
@@ -308,7 +227,6 @@ StepStatus HttpRequestParser::parseHeaders(const std::string &raw)
     }
     parsedSize = headersEnd + 4;
     state = PARSE_BODY;
-
     return STEP_COMPLETE;
 }
 
@@ -391,33 +309,61 @@ StepStatus HttpRequestParser::parseChunkedBody(const std::string &raw)
 
 StepStatus HttpRequestParser::parseBody(const std::string &raw)
 {
-    bool hasContentLength = request.hasHeader("content-length");
-    bool hasTransferEncoding =request.hasHeader("transfer-encoding");
-    
-    std::string contentLengthHeader = trim(request.getHeader("content-length"));
-    std::string transferEncoding = toLower(trim(request.getHeader("transfer-encoding")));
-    
-    if (hasContentLength && contentLengthHeader.empty())
+    const std::vector<std::string> &contentLengthValues = request.getHeader("content-length");
+    const std::vector<std::string> &transferEncodingValues = request.getHeader("transfer-encoding");
+
+    bool hasContentLength = !contentLengthValues.empty();
+    bool hasTransferEncoding = !transferEncodingValues.empty();
+
+    if (hasContentLength && contentLengthValues.size() != 1)
     {
         setError(400);
         return STEP_ERROR;
     }
-    if (hasTransferEncoding && transferEncoding.empty())
+
+    if (hasContentLength && trim(contentLengthValues[0]).empty())
     {
         setError(400);
         return STEP_ERROR;
     }
+
+    if (hasTransferEncoding && transferEncodingValues.size() == 1
+        && trim(transferEncodingValues[0]).empty())
+    {
+        setError(400);
+        return STEP_ERROR;
+    }
+
     if (hasContentLength && hasTransferEncoding)
     {
         setError(400);
         return STEP_ERROR;
     }
-    if (!transferEncoding.empty())
+
+    if (hasTransferEncoding)
     {
-        if (transferEncoding != "chunked")
+        for (size_t i = 0; i < transferEncodingValues.size(); ++i)
+        {
+            if (trim(transferEncodingValues[i]).empty())
+            {
+                setError(400);
+                return STEP_ERROR;
+            }
+        }
+
+        if (toLower(transferEncodingValues.back()) != "chunked")
         {
             setError(501);
             return STEP_ERROR;
+        }
+
+        for (size_t i = 0; i + 1 < transferEncodingValues.size(); ++i)
+        {
+            if (toLower(transferEncodingValues[i]) != "identity")
+            {
+                setError(501);
+                return STEP_ERROR;
+            }
         }
 
         StepStatus chunkStatus = parseChunkedBody(raw);
@@ -425,8 +371,9 @@ StepStatus HttpRequestParser::parseBody(const std::string &raw)
         if (chunkStatus != STEP_COMPLETE)
             return chunkStatus;
     }
-    else if (!contentLengthHeader.empty())
+    else if (hasContentLength)
     {
+        std::string contentLengthHeader = trim(contentLengthValues[0]);
         size_t contentLength = 0;
 
         if (!parseDecimalSize(contentLengthHeader, contentLength))

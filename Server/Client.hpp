@@ -27,7 +27,7 @@ class Client : public IEventHandler
     int socketFD;
     Server *server;
 
-    std::vector<ServerConfig> configs;
+    const std::vector<ServerConfig *> configs;
     const ServerConfig *activeConfig;
 
     std::string readBuffer;
@@ -54,7 +54,7 @@ class Client : public IEventHandler
     public:
     time_t timeout;
 
-    Client(int fd, Server *server, const std::vector<ServerConfig> &configs);
+    Client(int fd, Server *server, const std::vector<ServerConfig*> configs);
     ~Client();
 
     void handleRead();

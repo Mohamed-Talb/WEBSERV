@@ -9,7 +9,7 @@
 #include <errno.h>
 #include <ctime>
 
-Client::Client(int fd, Server *srv, const std::vector<ServerConfig> &confs)
+Client::Client(int fd, Server *srv, const std::vector<ServerConfig *> confs)
     : socketFD(fd),
       server(srv),
       configs(confs),
@@ -27,7 +27,6 @@ Client::~Client()
         ::close(socketFD);
         socketFD = -1;
     }
-
     activeCgi = NULL;
 }
 
@@ -75,17 +74,15 @@ const ServerConfig *Client::matchConfig(const std::string &rawHost) const
         host = host.substr(0, portSeparator);
 
     host = toLower(host);
-
     for (size_t i = 0; i < configs.size(); ++i)
     {
-        for (size_t j = 0; j < configs[i].serverNames.size(); ++j)
+        for (size_t j = 0; j < configs[i]->serverNames.size(); ++j)
         {
-            if (toLower(configs[i].serverNames[j]) == host)
-                return &configs[i];
+            if (toLower(configs[i]->serverNames[j]) == host)
+                return configs[i];
         }
     }
-
-    return &configs[0];
+    return configs[0];
 }
 
 void Client::closeConnection()
@@ -112,7 +109,7 @@ void Client::terminateCgi()
     const ServerConfig *config = activeConfig;
 
     if (!config && !configs.empty())
-        config = &configs[0];
+        config = configs[0];
 
     if (!config)
     {
@@ -169,7 +166,7 @@ void Client::errorsHandler(int errorCode)
     const ServerConfig *config = activeConfig;
 
     if (!config && !configs.empty())
-        config = &configs[0];
+        config = configs[0];
 
     if (!config)
     {
@@ -233,7 +230,7 @@ void Client::processReadBuffer()
         {
             case PARSE_HEADERS_COMPLETE:
             {
-                activeConfig = matchConfig(request.getHeader("host"));
+                activeConfig = matchConfig(request.getHeader("host")[0]);
                 if (!activeConfig)
                 {
                     closeConnection();
@@ -253,7 +250,7 @@ void Client::processReadBuffer()
                         closeConnection();
                         return;
                     }
-                    activeConfig = &configs[0];
+                    activeConfig = configs[0];
                 }
 
                 HttpHandler handler(*activeConfig);
@@ -336,10 +333,6 @@ void Client::handleWrite()
     activeConfig = NULL;
     state = READING_REQUEST;
 
-    /*
-     * A pipelined request may already be waiting in
-     * the user-space read buffer.
-     */
     if (!readBuffer.empty())
     {
         processReadBuffer();

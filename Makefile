@@ -13,7 +13,8 @@ WEBSERV_SRC = main.cpp Helpers.cpp Errors.cpp \
 	HTTP/HttpHandler.cpp \
 	HTTP/HttpRequest.cpp \
 	HTTP/HttpResponse.cpp \
-	HTTP/HttpUtils/HttpUtils.cpp \
+	HTTP/HttpUtils/ContentType.cpp \
+	HTTP/HttpUtils/RequestParserUtils.cpp \
 	HTTP/HttpUtils/ErrorPagesBuilder.cpp \
 	HTTP/HttpUtils/AutoIndexing.cpp \
 	HTTP/HttpUtils/normalizePath.cpp \

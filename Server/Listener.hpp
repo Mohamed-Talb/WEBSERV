@@ -9,14 +9,14 @@ class Listener : public IEventHandler
         private:
         int socketFD;
         Server* server; 
-        std::vector<ServerConfig> configs;
+        const std::vector<ServerConfig *> configs;
         
         Listener();
         Listener(const Listener &);
 
         public:
         virtual ~Listener();
-        Listener(const std::vector<ServerConfig> &confs, Server *srv);
+        Listener(const std::vector<ServerConfig *> confs, Server *srv);
         
         virtual void handleRead();
         virtual void handleWrite();

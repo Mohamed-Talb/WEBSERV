@@ -135,7 +135,7 @@ HttpResponse HttpMethods::POST(const HttpRequest &request, const RouteMatch &mat
     if (match.location->uploadPath.empty() || !isDirectory(match.location->uploadPath))
         return ErrorPage(500, config);
 
-    std::string contentType = request.getHeader("content-type");
+    std::string contentType = request.getHeader("content-type")[0];
     std::string outputPath;
     const char* dataStart = NULL;
     size_t dataLength = 0;
