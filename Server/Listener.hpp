@@ -2,7 +2,8 @@
 #define LISTENER_HPP
 
 #include "Server.hpp"
-
+#include <cctype>
+#include <fstream>
 
 class Listener : public IEventHandler 
 {

@@ -1,7 +1,11 @@
 #ifndef HELPERS_HPP
 #define HELPERS_HPP
 
-#include "Lib.hpp"
+#include <string>
+#include <sstream>
+#include <vector>
+#include <sys/types.h>
+#include <cstdlib>
 
 std::string intToString(int value);
 std::string toUpper(std::string value);

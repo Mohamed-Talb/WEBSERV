@@ -1,12 +1,3 @@
-#include "valuesParser.hpp"
-#include "../Helpers.hpp"
-#include "../Errors.hpp"
-
-#include <cctype>
-#include <cstdlib>
-#include <limits>
-#include <sstream>
-
 /*
 ===============================================================================
  PATH HANDLING RULES
@@ -41,11 +32,7 @@ SECURITY:
 
 #include "valuesParser.hpp"
 #include "../Helpers.hpp"
-#include "../Errors.hpp"
-
-#include <cctype>
-#include <limits>
-#include <sstream>
+#include "configError.hpp"
 
 namespace valuesParser
 {

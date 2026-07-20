@@ -25,7 +25,7 @@ void Server::init(const std::vector<ServerConfig> &confs)
     configs = confs;
     epollFD = epoll_create(1000);
     if (epollFD < 0)
-        throw ServerException("Server", "epoll_create failed");
+        throw std::runtime_error("SERVER: epoll_create failed");
     
     std::map<std::string, std::vector<ServerConfig *> > groupedConfigs;
     for (size_t i = 0; i < configs.size(); ++i) 
@@ -44,15 +44,15 @@ void Server::init(const std::vector<ServerConfig> &confs)
 void Server::addHandler(IEventHandler *handler, uint32_t events)
 {
     if (handler == NULL)
-        throw ServerException("Server", "null event handler");
+        throw std::runtime_error("SERVER: null event handler");
 
     int fd = handler->getFD();
 
     if (fd < 0)
-        throw ServerException("Server", "invalid handler descriptor");
+        throw std::runtime_error("SERVER: invalid handler descriptor");
 
     if (fdHandlers.count(fd) != 0)
-        throw ServerException("Server","handler descriptor already registered");
+        throw std::runtime_error("SERVER: handler descriptor already registered");
 
     epoll_event event;
     // std::memset(&event, 0, sizeof(event)); // add this is later
@@ -62,7 +62,7 @@ void Server::addHandler(IEventHandler *handler, uint32_t events)
 
     if (epoll_ctl(epollFD,EPOLL_CTL_ADD,fd,&event) < 0)
     {
-        throw ServerException("Server", "epoll_ctl ADD failed");
+        throw std::runtime_error("SERVER: epoll_ctl ADD failed");
     }
     fdHandlers[fd] = handler;
 }

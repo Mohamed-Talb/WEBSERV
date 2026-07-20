@@ -6,9 +6,9 @@
 #include <vector>
 #include <string>
 #include <stdint.h>
+#include <csignal>
+#include <iostream>
 
-#include "../Errors.hpp"
-#include "../Lib.hpp"
 #include "Client.hpp"
 #include "Listener.hpp"
 #include "../Helpers.hpp"

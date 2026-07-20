@@ -1,10 +1,11 @@
 #ifndef VALUESPARSER_HPP
 #define VALUESPARSER_HPP
-
 #include <map>
 #include <string>
 #include <vector>
 #include <limits>  
+#include <cctype>
+#include <sstream>
 #include <sstream>
 #include <cstdlib>
 #include <algorithm>

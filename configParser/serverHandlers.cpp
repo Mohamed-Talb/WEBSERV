@@ -1,10 +1,5 @@
+
 #include "configParser.hpp"
-#include "../Errors.hpp"
-
-#include <algorithm>
-#include <cstdlib>
-#include <sstream>
-
 void ConfigParser::serverListen(ServerConfig &conf)
 {
     checkDuplicate(conf, "listen");

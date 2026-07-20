@@ -1,8 +1,6 @@
-#include "configParser.hpp"
-#include "../Errors.hpp"
 
-#include <algorithm>
-#include <cstdlib>
+#include "configParser.hpp"
+
 
 void ConfigParser::locationMethods(Location &loc)
 {

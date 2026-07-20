@@ -1,12 +1,14 @@
 #ifndef CONFIG_ENTITIES_HPP
 #define CONFIG_ENTITIES_HPP
 
+
 #include <map>
 #include <string>
 #include <vector>
 #include <limits>  
 #include <sstream>
 #include <cstdlib>
+#include <iostream>
 #include <stdexcept>
 #include <algorithm>
 #include <sys/types.h>
