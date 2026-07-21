@@ -38,6 +38,9 @@ void CGI::freeEnv(char **envp)
 CGI::CGI(Client* client, Server *srv, const HttpRequest &request,
          const Location &location, std::string fullResolvedPath)
     : writeOffset(0),
+      headersParsed(false),
+      statusCode(200),
+      statusReason("OK"),
       state(WRITING_INPUT),
       server(srv),
       parentClient(client)
@@ -91,6 +94,56 @@ void CGI::killCgi()
         kill(cgiPid, SIGKILL);
         cgiPid = -1;
     }
+}
+
+struct ParsedHeaders {
+    int statusCode;
+    std::string reasonPhrase;
+    std::map<std::string, std::string> headers;
+};
+
+static ParsedHeaders parseHeadersOnly(const std::string& rawHeaders)
+{
+    ParsedHeaders result;
+    result.statusCode = 200;
+    result.reasonPhrase = "OK";
+
+    std::istringstream stream(rawHeaders);
+    std::string line;
+
+    while (std::getline(stream, line)) {
+        if (!line.empty() && line[line.size() - 1] == '\r')
+            line.erase(line.size() - 1);
+
+        if (line.empty())
+            break;
+
+        if (line.find("Status:") == 0) {
+            std::string statusLine = line.substr(7);
+            std::istringstream statusStream(statusLine);
+            statusStream >> result.statusCode;
+            std::getline(statusStream >> std::ws, result.reasonPhrase);
+            if (result.reasonPhrase.empty())
+                result.reasonPhrase = "OK";
+        } else if (line.find("Content-Type:") == 0) {
+            std::string ct = line.substr(13);
+            if (!ct.empty() && ct[0] == ' ')
+                ct.erase(0, 1);
+            result.headers["Content-Type"] = ct;
+        } else {
+            size_t colon = line.find(':');
+            if (colon != std::string::npos) {
+                std::string key = trim(line.substr(0, colon));
+                std::string value = trim(line.substr(colon + 1));
+                result.headers[key] = value;
+            }
+        }
+    }
+
+    if (result.headers.find("Content-Type") == result.headers.end())
+        result.headers["Content-Type"] = "text/html";
+
+    return result;
 }
 
 void CGI::handleWrite()
@@ -192,31 +245,58 @@ void CGI::handleRead()
 {
     if (state == WRITING_INPUT)
         return;
-    char buffer[4096];
-    while (true)
-    {
-        ssize_t bytesRead = read(pipeOutFd, buffer, sizeof(buffer));
-        if (bytesRead > 0)
-        {
-            rawOutputBuffer.append(buffer, bytesRead);
-        }
-        else if (bytesRead == 0)
-        {
-            waitpid(cgiPid, NULL, 0);
-            HttpResponse finalResponse = parseCgiOutput(rawOutputBuffer);
-            
-            state = DONE;
-            parentClient->onCgiDone(finalResponse);
-            return; 
-        }
-        else
-        {
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                return; // Nothing more to read right now
 
+    if (parentClient->getWriteBuffer().size() > cgi::MAX_BUFFER) {
+        server->modifyHandler(this, 0);
+        return;
+    }
+
+    char buffer[16384];
+    while (true) {
+        ssize_t bytesRead = read(pipeOutFd, buffer, sizeof(buffer));
+
+        if (bytesRead > 0) {
+            if (!headersParsed) {
+                headerBuffer.append(buffer, bytesRead);
+                size_t pos = headerBuffer.find("\r\n\r\n");
+                if (pos != std::string::npos) {
+                    ParsedHeaders parsed = parseHeadersOnly(headerBuffer.substr(0, pos));
+
+                    std::ostringstream response;
+                    response << "HTTP/1.1 " << parsed.statusCode << " " << parsed.reasonPhrase << "\r\n";
+                    for (std::map<std::string, std::string>::const_iterator it = parsed.headers.begin();
+                         it != parsed.headers.end(); ++it) {
+                        response << it->first << ": " << it->second << "\r\n";
+                    }
+                    response << "\r\n";
+
+                    parentClient->appendToWriteBuffer(response.str());
+                    parentClient->setBodyAlreadyStreamed(true);
+
+                    headersParsed = true;
+
+                    std::string remaining = headerBuffer.substr(pos + 4);
+                    if (!remaining.empty()) {
+                        parentClient->appendToWriteBuffer(remaining);
+                    }
+                    headerBuffer.clear();
+                }
+            } else {
+                parentClient->appendToWriteBuffer(std::string(buffer, bytesRead));
+            }
+        }
+        else if (bytesRead == 0) {
+            waitpid(cgiPid, NULL, WNOHANG);
+            state = DONE;
+            parentClient->onCgiDone(HttpResponse(200, "OK"));
+            return;
+        }
+        else {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                return;
             HttpResponse err(500, "Internal Server Error");
             state = DONE;
-            parentClient->onCgiDone(err);
+            parentClient->errorsHandler(500);
             return;
         }
     }

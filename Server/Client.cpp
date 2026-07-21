@@ -18,6 +18,7 @@ Client::Client(int fd, Server *srv, const std::vector<ServerConfig *> confs)
       activeCgi(NULL),
       state(READING_REQUEST),
       closeAfterWrite(false),
+      bodyAlreadyStreamed(false),
       writeOffset(0),
       timeout(time(NULL)) {}
 
@@ -137,29 +138,42 @@ void Client::terminateCgi()
     server->modifyHandler(this, EPOLLOUT);
 }
 
+void Client::setBodyAlreadyStreamed(bool value) { bodyAlreadyStreamed = value; }
+
 void Client::onCgiDone(HttpResponse response)
 {
     HttpRequest &request = requestParser.getRequest();
 
-    closeAfterWrite = request.shouldCloseConnection();
-
-    if (closeAfterWrite)
-        response.setHeader("Connection", "close");
-
-    if (activeCgi)
-    {
+    if (activeCgi) {
         int cgiFD = activeCgi->getFD();
-
         activeCgi = NULL;
         server->removeHandler(cgiFD);
     }
 
-    writeBuffer = response.toString();
+    if (!bodyAlreadyStreamed) {
+        closeAfterWrite = request.shouldCloseConnection();
+        if (closeAfterWrite)
+            response.setHeader("Connection", "close");
+        writeBuffer = response.toString();
+    } else {
+        closeAfterWrite = request.shouldCloseConnection();
+    }
 
     requestParser.reset();
 
-    state = SENDING_RESPONSE;
-    server->modifyHandler(this, EPOLLOUT);
+    if (!hasPendingWrite()) {
+        if (closeAfterWrite) {
+            closeConnection();
+        } else {
+            state = READING_REQUEST;
+            server->modifyHandler(this, EPOLLIN);
+        }
+    } else {
+        state = SENDING_RESPONSE;
+        server->modifyHandler(this, EPOLLOUT);
+    }
+
+    bodyAlreadyStreamed = false;
 }
 
 void Client::errorsHandler(int errorCode)
@@ -330,6 +344,9 @@ void Client::handleWrite()
             return;
         closeConnection();
         return;
+    }
+    if (activeCgi && writeBuffer.size() < cgi::RESUME_THRESHOLD) {
+        server->modifyHandler(activeCgi, EPOLLIN);
     }
     if (writeOffset == writeBuffer.size())
     {

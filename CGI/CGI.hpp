@@ -29,7 +29,11 @@ class CGI : public IEventHandler
 
     size_t writeOffset;
     std::string requestBody;
-    std::string rawOutputBuffer;
+    std::string headerBuffer;
+    bool headersParsed;
+    int statusCode;
+    std::string statusReason;
+    std::map<std::string, std::string> headers;
 
     CgiState state;
 
