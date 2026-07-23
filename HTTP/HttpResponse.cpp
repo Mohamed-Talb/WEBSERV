@@ -61,7 +61,7 @@ std::string HttpResponse::toString() const
 {
     std::ostringstream responseStream;
     responseStream << "HTTP/1.1 " << statusCode << " " << reasonPhrase << "\r\n";
-
+    std::cout << "[RESPONSE]: HTTP/1.1 " << statusCode << " " << reasonPhrase << std::endl;
     std::map<std::string, std::string>::const_iterator headerIterator;
     for (headerIterator = headers.begin(); headerIterator != headers.end(); ++headerIterator)
     {

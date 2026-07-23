@@ -129,15 +129,22 @@ HttpResponse HttpMethods::POST(const HttpRequest &request, const RouteMatch &mat
     if (!match.location)
         return ErrorPage(500, config);
 
-    if (!match.location || match.location->uploadEnabled != "on")
-        return ErrorPage(403, config);
+    if (match.location->uploadEnabled != "on")
+        return ErrorPage(405, config);
 
     if (match.location->uploadPath.empty() || !isDirectory(match.location->uploadPath))
+    {
         return ErrorPage(500, config);
+    }
 
-    std::string contentType = request.getHeader("content-type")[0];
+    std::string contentType;
+    const std::vector<std::string> &contentTypes = request.getHeader("content-type");
+
+    if (!contentTypes.empty())
+        contentType = contentTypes[0];
+
     std::string outputPath;
-    const char* dataStart = NULL;
+    const char *dataStart = NULL;
     size_t dataLength = 0;
 
     if (contentType.find("multipart/form-data") != std::string::npos)
@@ -147,23 +154,30 @@ HttpResponse HttpMethods::POST(const HttpRequest &request, const RouteMatch &mat
             return ErrorPage(400, config);
 
         MultipartFileInfo fileInfo;
-        if (!parseMultipartFileInfo(request.getBody(), boundary, fileInfo))
+        if (!parseMultipartFileInfo( request.getBody(), boundary, fileInfo))
+        {
             return ErrorPage(400, config);
-
+        }
         outputPath = joinPath(match.location->uploadPath, fileInfo.filename);
+
         dataStart = request.getBody().data() + fileInfo.contentStart;
         dataLength = fileInfo.contentLength;
     }
-    else 
+    else
     {
         outputPath = joinPath(match.location->uploadPath, "upload.bin");
+
         dataStart = request.getBody().data();
         dataLength = request.getBody().size();
     }
+    const char *bodyStart = request.getBody().data();
+    const char *bodyEnd = bodyStart + request.getBody().size();
 
-    if (!dataStart || (dataStart + dataLength > request.getBody().data() + request.getBody().size()))
+    if (dataLength > 0
+        && (!dataStart || dataStart > bodyEnd || dataLength > static_cast<size_t>(bodyEnd - dataStart)))
+    {
         return ErrorPage(400, config);
-
+    }
     if (!writeBufferToFile(outputPath, dataStart, dataLength))
         return ErrorPage(500, config);
 

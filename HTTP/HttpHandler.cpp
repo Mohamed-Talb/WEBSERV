@@ -14,7 +14,6 @@ bool HttpHandler::isMethodAllowed(const Location *location, const std::string &m
 
     return std::find(location->methods.begin(), location->methods.end(), method) != location->methods.end();
 }
-
 bool HttpHandler::isCgiRequest(const RouteMatch &match) const
 {
     if (!match.location || match.location->cgiExt.empty())
@@ -161,10 +160,10 @@ bool HttpHandler::resolveDirectory(RouteMatch &match, const HttpRequest request,
 
 HttpResult HttpHandler::process(const HttpRequest &request) const
 {
+    std::cout << "[REQUEST]: HTTP/1.1 " << request.getMethod() << request.getRequestPath() << std::endl;
     RouteMatch match;
     resolveRoute(request, match);
-
-    std::cout << match.fullPath << std::endl;
+    std::cout << "[MAP TO]: " << match.fullPath << std::endl;
     if (match.location && match.location->redirectCode != 0)
     {
         return HttpResult::makeResponse(resolveRedirection(*match.location));
@@ -174,12 +173,7 @@ HttpResult HttpHandler::process(const HttpRequest &request) const
     {
         return HttpResult::makeResponse(ErrorPage(405, *serverConfig));
     }
-    if (request.getBody().size() > static_cast<size_t>(serverConfig->client_max_body_size))
-    {
-        return HttpResult::makeResponse(ErrorPage(413, *serverConfig));
-    }
     HttpResponse directoryResponse;
-
     if (!resolveDirectory(match, request, directoryResponse))
         return HttpResult::makeResponse(directoryResponse);
 
@@ -202,7 +196,5 @@ HttpResult HttpHandler::process(const HttpRequest &request) const
     {
         return HttpResult::makeResponse(HttpMethods::POST(request, match, *serverConfig));
     }
-    return HttpResult::makeResponse(
-        ErrorPage(501, *serverConfig)
-    );
+    return HttpResult::makeResponse(ErrorPage(501, *serverConfig));
 }
