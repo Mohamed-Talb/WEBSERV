@@ -160,7 +160,7 @@ bool HttpHandler::resolveDirectory(RouteMatch &match, const HttpRequest request,
 
 HttpResult HttpHandler::process(const HttpRequest &request) const
 {
-    std::cout << "[REQUEST]: HTTP/1.1 " << request.getMethod() << request.getRequestPath() << std::endl;
+    std::cout << "[REQUEST]: HTTP/1.1 " << request.getMethod() << " " << request.getRequestPath() << std::endl;
     RouteMatch match;
     resolveRoute(request, match);
     std::cout << "[MAP TO]: " << match.fullPath << std::endl;
