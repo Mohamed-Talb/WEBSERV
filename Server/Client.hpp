@@ -10,7 +10,6 @@
 #include "../HTTP/HttpRequestParser.hpp"
 #include "../HTTP/HttpResponse.hpp"
 #include "../configParser/configParser.hpp"
-#include "../Constants.hpp"
 
 class Server;
 class CGI;
@@ -39,16 +38,17 @@ class Client : public IEventHandler
     CGI *activeCgi;
     ClientState state;
     bool closeAfterWrite;
-    bool bodyAlreadyStreamed;
     size_t writeOffset;
 
     private:
     bool readFromSocket();
     void processReadBuffer();
     void closeConnection();
+    void errorsHandler(int errorCode);
     void consumeReadBuffer(size_t bytes);
     // void consumeWriteBuffer(size_t bytes);
     
+    void appendToWriteBuffer(const std::string &data);
     void appendToReadBuffer(const char *data, size_t size);
     const ServerConfig *matchConfig(const std::string &host) const;
 
@@ -58,8 +58,6 @@ class Client : public IEventHandler
     Client(int fd, Server *server, const std::vector<ServerConfig*> configs);
     ~Client();
 
-    void appendToWriteBuffer(const std::string &data);
-    void errorsHandler(int errorCode);
     void handleRead();
     void handleWrite();
     int getFD() const;
@@ -74,7 +72,6 @@ class Client : public IEventHandler
     ClientState getState() const;
 
     void onCgiDone(HttpResponse response);
-    void setBodyAlreadyStreamed(bool value);
     void terminateCgi();
 };
 
