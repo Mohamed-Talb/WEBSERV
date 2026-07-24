@@ -17,12 +17,36 @@ int CGI::getFD() const
 
 char **CGI::buildEnv(const HttpRequest &request)
 {
-    char** envp = new char*[5];
+    std::string contentType;
+    std::string contentLength;
+    char **envp = new char*[5];
+    
+    if (request.hasHeader("content-type"))
+    {
+        const std::vector<std::string> &values = request.getHeader("content-type");
+        if (!values.empty())
+            contentType = values[0];
+    }
+
+    if (request.hasHeader("content-length"))
+    {
+        const std::vector<std::string> &values = request.getHeader("content-length");
+        if (!values.empty())
+            contentLength = values[0];
+    }
+    else
+    {
+        std::ostringstream oss;
+        oss << request.getBody().size();
+        contentLength = oss.str();
+    }
+
     envp[0] = strdup(("REQUEST_METHOD=" + request.getMethod()).c_str());
     envp[1] = strdup(("QUERY_STRING=" + request.getQuery()).c_str());
-    envp[2] = strdup(("CONTENT_TYPE=" + request.getHeader("content-type")[0]).c_str());
-    envp[3] = strdup((std::string("CONTENT_LENGTH=") + request.getHeader("content-length")[0]).c_str());
+    envp[2] = strdup(("CONTENT_TYPE=" + contentType).c_str());
+    envp[3] = strdup(("CONTENT_LENGTH=" + contentLength).c_str());
     envp[4] = NULL;
+
     return envp;
 }
 
@@ -40,9 +64,9 @@ CGI::CGI(Client* client, Server *srv, const HttpRequest &request,
     : writeOffset(0),
       state(WRITING_INPUT),
       server(srv),
-      parentClient(client)
+      parentClient(client),
+      execBin(location.cgiPath)
 {
-    (void)location;
     client->timeout = time(NULL);
     requestBody = request.getBody();
     char **envp = buildEnv(request);
@@ -51,6 +75,7 @@ CGI::CGI(Client* client, Server *srv, const HttpRequest &request,
     pipe(pipeIn);
     pipe(pipeOut);
 
+    std::cout << "hhhhhh" << std::endl;
     fcntl(pipeOut[0], F_SETFL, O_NONBLOCK);
     fcntl(pipeIn[1], F_SETFL, O_NONBLOCK);
     cgiPid = fork();
@@ -62,14 +87,13 @@ CGI::CGI(Client* client, Server *srv, const HttpRequest &request,
         close(pipeOut[0]);
         close(pipeIn[0]);
         close(pipeOut[1]);
-        char *args[] = { (char*)"/usr/bin/python3", (char*)fullResolvedPath.c_str(), NULL };
+        char *args[] = {(char *)execBin.c_str(), (char*)fullResolvedPath.c_str(), NULL };
         execve(args[0], args, envp);
-        
         exit(1);
     }
     close(pipeIn[0]);
     close(pipeOut[1]);
-
+    std::cout << "hhhhhh" << std::endl;
     pipeOutFd = pipeOut[0];
     pipeInFd = pipeIn[1];
     freeEnv(envp);

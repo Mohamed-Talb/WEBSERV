@@ -35,6 +35,7 @@ class CGI : public IEventHandler
 
     Server* server;
     Client* parentClient;
+    std::string execBin;
 
     HttpResponse parseCgiOutput(const std::string &rawOutput);
 
