@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>webserv // session</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <nav class="nav">
+        <a href="index.html">Home</a>
+        <a href="about.html">About</a>
+        <a href="upload.html">Upload</a>
+        <a href="uploads.html">Uploads</a>
+        <a href="session.html">Session</a>
+        <a href="cgi-test.html">CGI Test</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <p class="eyebrow">04 — Session</p>
+    <h1 style="text-transform:none;">Cookies &amp; sessions</h1>
+    <p class="lead">Round-trips requests to your session endpoints with <code>credentials: "include"</code> so
+      Set-Cookie / Cookie headers behave like a real browser session.</p>
+
+    <div class="panel" style="margin-top:24px;">
+      <div class="field-row">
+        <div>
+          <label for="createPath">Create endpoint</label>
+          <input type="text" id="createPath" value="/session/create">
+        </div>
+        <div>
+          <label for="readPath">Read endpoint</label>
+          <input type="text" id="readPath" value="/session">
+        </div>
+      </div>
+      <label for="destroyPath">Destroy endpoint</label>
+      <input type="text" id="destroyPath" value="/session/destroy">
+
+      <div class="btn-row">
+        <button class="btn accent" id="createBtn">Create session</button>
+        <button class="btn" id="readBtn">Read session</button>
+        <button class="btn ghost" id="destroyBtn">Destroy session</button>
+        <button class="btn ghost" id="clearLog">Clear log</button>
+      </div>
+
+      <div class="meta-row">
+        <span class="meta">document.cookie: <b id="cookieView">(none)</b></span>
+      </div>
+
+      <div class="console" id="log">// session responses will appear here</div>
+    </div>
+  </main>
+
+  <script src="Common.js"></script>
+  <script>
+    const log = document.querySelector("#log");
+    const cookieView = document.querySelector("#cookieView");
+
+    const clearBtn = document.querySelector("#clearLog");
+
+    clearBtn.addEventListener("click", () => { log.textContent = ""; });
+    
+
+
+    function refreshCookieView() {
+      cookieView.textContent = document.cookie || "(none)";
+    }
+    refreshCookieView();
+
+    async function hit(pathInputId, method) {
+      const path = document.querySelector(pathInputId).value;
+      const url = wsUrl(path);
+      wsLog(log, `${method} ${url}`, "k");
+      try {
+        const res = await fetch(url, { method, credentials: "include", cache: "no-store" });
+        const text = await res.text();
+        wsLog(log, `${res.status} ${res.statusText}`, res.ok ? "ok" : "err");
+        const setCookie = res.headers.get("set-cookie");
+        if (setCookie) wsLog(log, "set-cookie: " + setCookie);
+        if (text) wsLog(log, text);
+      } catch (e) {
+        wsLog(log, "request failed: " + e.message, "err");
+      } finally {
+        refreshCookieView();
+      }
+    }
+
+    document.querySelector("#createBtn").addEventListener("click", () => hit("#createPath", "GET"));
+    document.querySelector("#readBtn").addEventListener("click", () => hit("#readPath", "GET"));
+    document.querySelector("#destroyBtn").addEventListener("click", () => hit("#destroyPath", "GET"));
+  </script>
+</body>
+
+</html>
