@@ -25,5 +25,6 @@ bool urlDecode(const std::string &input, std::string &output);
 bool isCommaSeparatedHeader(const std::string &name);
 std::vector<std::string> splitHeaderValues(const std::string &value);
 const Location *matchLocation(const ServerConfig &config, const std::string &path);
+const ServerConfig *matchConfig(const std::vector<ServerConfig *> &configs, const std::string &rawHost);
 
 #endif

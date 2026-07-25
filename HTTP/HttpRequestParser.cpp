@@ -8,7 +8,7 @@
 #include <algorithm>
 
 
-HttpRequestParser::HttpRequestParser() : maxBodySize(0), parsedSize(0), state(PARSE_REQUEST_LINE), errorCode(0) {}
+HttpRequestParser::HttpRequestParser(const std::vector<ServerConfig *> &conf) : maxBodySize(0), parsedSize(0), state(PARSE_REQUEST_LINE), errorCode(0), configs(conf) {}
 
 HttpRequestParser::~HttpRequestParser() {}
 
@@ -27,8 +27,8 @@ void HttpRequestParser::setError(int code)
 
 void HttpRequestParser::reset()
 {
+    activeConfig = NULL;
     request.reset();
-
     maxBodySize = 0;
     parsedSize = 0;
     errorCode = 0;
@@ -420,6 +420,53 @@ StepStatus HttpRequestParser::parseBody(const std::string &raw)
     return STEP_COMPLETE;
 }
 
+// ParseStatus HttpRequestParser::parse(const std::string &rawRequestData)
+// {
+//     while (state != PARSE_COMPLETE && state != PARSE_ERROR)
+//     {
+//         State previousState = state;
+//         StepStatus stepStatus = STEP_ERROR;
+
+//         switch (state)
+//         {
+//             case PARSE_REQUEST_LINE:
+//                 stepStatus = parseRequestLine(rawRequestData);
+//                 break;
+
+//             case PARSE_HEADERS:
+//                 stepStatus = parseHeaders(rawRequestData);
+//                 break;
+
+//             case PARSE_BODY:
+//                 stepStatus = parseBody(rawRequestData);
+//                 break;
+
+//             default:
+//                 setError(500);
+//                 return PARSE_REQUEST_ERROR;
+//         }
+
+//         if (stepStatus == STEP_NEED_MORE_DATA)
+//             return PARSE_NEED_MORE_DATA;
+
+//         if (stepStatus == STEP_ERROR)
+//             return PARSE_REQUEST_ERROR;
+
+//         if (previousState == PARSE_HEADERS && state == PARSE_BODY)
+//             return PARSE_HEADERS_COMPLETE;
+//     }
+
+//     if (state == PARSE_ERROR)
+//         return PARSE_REQUEST_ERROR;
+
+//     return PARSE_REQUEST_COMPLETE;
+// }
+
+const ServerConfig *HttpRequestParser::getActiveConfig()
+{
+    return activeConfig;
+}
+
 ParseStatus HttpRequestParser::parse(const std::string &rawRequestData)
 {
     while (state != PARSE_COMPLETE && state != PARSE_ERROR)
@@ -432,32 +479,81 @@ ParseStatus HttpRequestParser::parse(const std::string &rawRequestData)
             case PARSE_REQUEST_LINE:
                 stepStatus = parseRequestLine(rawRequestData);
                 break;
-
             case PARSE_HEADERS:
                 stepStatus = parseHeaders(rawRequestData);
                 break;
-
             case PARSE_BODY:
                 stepStatus = parseBody(rawRequestData);
                 break;
-
             default:
                 setError(500);
                 return PARSE_REQUEST_ERROR;
         }
-
         if (stepStatus == STEP_NEED_MORE_DATA)
             return PARSE_NEED_MORE_DATA;
-
         if (stepStatus == STEP_ERROR)
             return PARSE_REQUEST_ERROR;
 
         if (previousState == PARSE_HEADERS && state == PARSE_BODY)
-            return PARSE_HEADERS_COMPLETE;
-    }
+        {
+            if (configs.empty())
+            {
+                setError(500);
+                return PARSE_REQUEST_ERROR;
+            }
+            if (!request.hasHeader("host"))
+            {
+                setError(400);
+                return PARSE_REQUEST_ERROR;
+            }
+            const std::vector<std::string> &hostValues = request.getHeader("host");
+            if (hostValues.empty() || hostValues[0].empty())
+            {
+                setError(400);
+                return PARSE_REQUEST_ERROR;
+            }
+            activeConfig = matchConfig(configs, hostValues[0]);
+            if (!activeConfig)
+            {
+                setError(500);
+                return PARSE_REQUEST_ERROR;
+            }
 
+            const Location *location = matchLocation(*activeConfig, request.getRequestPath());
+
+            maxBodySize = activeConfig->client_max_body_size;
+
+            if (location)
+                maxBodySize = location->client_max_body_size;
+
+            if (request.hasHeader("content-length"))
+            {
+                const std::vector<std::string> &lengthValues = request.getHeader("content-length");
+
+                if (!lengthValues.empty())
+                {
+                    size_t contentLength = 0;
+
+                    if (!parseDecimalSize(lengthValues[0], contentLength))
+                    {
+                        setError(400);
+                        return PARSE_REQUEST_ERROR;
+                    }
+
+                    if (contentLength > maxBodySize)
+                    {
+                        setError(413);
+                        return PARSE_REQUEST_ERROR;
+                    }
+                }
+            }
+        }
+    }
     if (state == PARSE_ERROR)
         return PARSE_REQUEST_ERROR;
 
-    return PARSE_REQUEST_COMPLETE;
+    if (state == PARSE_COMPLETE)
+        return PARSE_REQUEST_COMPLETE;
+
+    return PARSE_NEED_MORE_DATA;
 }

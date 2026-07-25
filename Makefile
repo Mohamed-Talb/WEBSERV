@@ -16,6 +16,7 @@ WEBSERV_SRC = main.cpp Helpers.cpp\
 	HTTP/HttpUtils/ContentType.cpp \
 	HTTP/HttpUtils/RequestParserUtils.cpp \
 	HTTP/HttpUtils/matchLocation.cpp \
+	HTTP/HttpUtils/matchConfig.cpp \
 	HTTP/HttpUtils/ErrorPagesBuilder.cpp \
 	HTTP/HttpUtils/AutoIndexing.cpp \
 	HTTP/HttpUtils/normalizePath.cpp \

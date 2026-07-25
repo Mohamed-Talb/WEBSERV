@@ -145,7 +145,7 @@ void Server::eventLoop()
         {
             if (errno == EINTR) // os just wanted us to check a signal
                 continue;
-            break; // To-Do: unrecoverable error, clean up resources and inform the user using perror
+            break; // To Do: unrecoverable error, clean up resources and inform the user using perror
         }
         for (int i = 0; i < ready; ++i)
         {

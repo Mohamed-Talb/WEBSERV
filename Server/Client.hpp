@@ -58,9 +58,9 @@ class Client : public IEventHandler
     Client(int fd, Server *server, const std::vector<ServerConfig*> configs);
     ~Client();
 
+    int getFD() const;
     void handleRead();
     void handleWrite();
-    int getFD() const;
     void handleEvent(int, uint32_t);
 
     bool isConnected() const;
@@ -68,9 +68,9 @@ class Client : public IEventHandler
 
     HttpRequest &getActiveRequest();
 
+    ClientState getState() const;
     const std::string &getReadBuffer() const;
     const std::string &getWriteBuffer() const;
-    ClientState getState() const;
 
     void onCgiDone(HttpResponse response);
     void terminateCgi();

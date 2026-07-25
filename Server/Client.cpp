@@ -14,7 +14,7 @@ Client::Client(int fd, Server *srv, const std::vector<ServerConfig *> confs)
       server(srv),
       configs(confs),
       activeConfig(NULL),
-      requestParser(),
+      requestParser(confs),
       activeCgi(NULL),
       state(READING_REQUEST),
       closeAfterWrite(false),
@@ -58,33 +58,6 @@ HttpRequest &Client::getActiveRequest() { return requestParser.getRequest();}
 
 void Client::appendToWriteBuffer(const std::string &data) { writeBuffer += data;}
 void Client::appendToReadBuffer(const char *data, size_t size) { readBuffer.append(data, size);}
-
-const ServerConfig *Client::matchConfig(const std::string &rawHost) const
-{
-    if (configs.empty())
-        return NULL;
-
-    std::string host = rawHost;
-
-    if (!host.empty() && host[host.size() - 1] == '\r')
-        host.erase(host.size() - 1);
-
-    size_t portSeparator = host.find(':');
-
-    if (portSeparator != std::string::npos)
-        host = host.substr(0, portSeparator);
-
-    host = toLower(host);
-    for (size_t i = 0; i < configs.size(); ++i)
-    {
-        for (size_t j = 0; j < configs[i]->serverNames.size(); ++j)
-        {
-            if (toLower(configs[i]->serverNames[j]) == host)
-                return configs[i];
-        }
-    }
-    return configs[0];
-}
 
 void Client::closeConnection()
 {
@@ -196,86 +169,69 @@ bool Client::readFromSocket()
 
 void Client::processReadBuffer()
 {
- while (state == READING_REQUEST)
+    while (state == READING_REQUEST)
     {
         ParseStatus parseStatus = requestParser.parse(readBuffer);
-        HttpRequest &request = requestParser.getRequest();
 
+        if (parseStatus == PARSE_NEED_MORE_DATA)
+            return;
         if (parseStatus == PARSE_REQUEST_ERROR)
         {
+            activeConfig = requestParser.getActiveConfig();
             errorsHandler(requestParser.getErrorCode());
             return;
         }
-        switch (parseStatus)
+        if (parseStatus == PARSE_REQUEST_COMPLETE)
         {
-            case PARSE_HEADERS_COMPLETE:
+            HttpRequest &request = requestParser.getRequest();
+            activeConfig = requestParser.getActiveConfig();
+
+            if (!activeConfig)
             {
-                const std::vector<std::string> &hostValues = request.getHeader("host");
-                activeConfig = matchConfig(hostValues[0]);
-                if (!configs.empty())
-                    activeConfig = configs[0];
-                if (!activeConfig)
+                errorsHandler(500);
+                return;
+            }
+            size_t consumedBytes = requestParser.getParsedSize();
+            closeAfterWrite = request.shouldCloseConnection();
+
+            HttpHandler handler(*activeConfig);
+            HttpResult result = handler.process(request);
+
+            consumeReadBuffer(consumedBytes);
+            if (result.type == HTTP_RESULT_CGI)
+            {
+                if (!result.cgiLocation)
                 {
-                    closeConnection();
+                    errorsHandler(500);
                     return;
                 }
-                const Location *location = matchLocation(*activeConfig,request.getRequestPath());
-                size_t maxBodySize = location->client_max_body_size;
-                requestParser.setMaxBodySize(maxBodySize);
-                continue;
-            }
-            case PARSE_NEED_MORE_DATA:
-                return;
-            case PARSE_REQUEST_COMPLETE:
-            {
-                if (!activeConfig)
+                state = PROCESSING_CGI;
+                try
                 {
-                    if (configs.empty())
-                    {
-                        closeConnection();
-                        return;
-                    }
-                    activeConfig = configs[0];
-                }
-
-                HttpHandler handler(*activeConfig);
-                HttpResult result = handler.process(request);
-
-                size_t consumedBytes = requestParser.getParsedSize();
-                closeAfterWrite = request.shouldCloseConnection();
-
-                consumeReadBuffer(consumedBytes);
-                if (result.type == HTTP_RESULT_CGI)
-                {
-                    state = PROCESSING_CGI;
                     activeCgi = new CGI(this, server, request, *result.cgiLocation, result.cgiRequestPath);
-                    try
-                    {
-                        activeCgi->registerHandlers();
-                    }
-                    catch (...)
+                    activeCgi->registerHandlers();
+                }
+                catch (...)
+                {
+                    if (activeCgi)
                     {
                         delete activeCgi;
-                        throw ;
+                        activeCgi = NULL;
                     }
-                    activeCgi = activeCgi;
-                    state = PROCESSING_CGI;
+                    errorsHandler(500);
+                    return;
                 }
-                HttpResponse response = result.response;
-
-                if (closeAfterWrite)
-                    response.setHeader("Connection", "close");
-
-                writeBuffer = response.toString();
-                requestParser.reset();
-
-                state = SENDING_RESPONSE;
-                server->modifyHandler(this, EPOLLOUT);
-                return ;
-            }
-            case PARSE_REQUEST_ERROR:
-                errorsHandler(requestParser.getErrorCode());
                 return;
+            }
+            HttpResponse response = result.response;
+            if (closeAfterWrite)
+                response.setHeader("Connection", "close");
+            writeBuffer = response.toString();
+            writeOffset = 0;
+            requestParser.reset();
+            state = SENDING_RESPONSE;
+            server->modifyHandler(this, EPOLLOUT);
+            return;
         }
     }
 }
