@@ -50,25 +50,27 @@ Listener::~Listener()
     }
 }
 
-void Listener::handleRead()
+void Listener::handleEvent(int fd, uint32_t events)
 {
-    while (true)
+    if (fd == socketFD && (events & EPOLLIN))
     {
-        int clientFD = accept(socketFD, NULL, NULL);
-        if (clientFD < 0)
+        while (true)
         {
-            break; 
+            int clientFD = accept(socketFD, NULL, NULL);
+            if (clientFD < 0)
+            {
+                break; 
+            }
+            if (fcntl(clientFD, F_SETFL, O_NONBLOCK) < 0)
+            {
+                ::close(clientFD);
+                continue;
+            }
+            Client* newClient = new Client(clientFD, server, configs);
+            server->addHandlerFD(newClient, clientFD, EPOLLIN); 
         }
-        if (fcntl(clientFD, F_SETFL, O_NONBLOCK) < 0)
-        {
-            ::close(clientFD);
-            continue;
-        }
-        Client* newClient = new Client(clientFD, server, configs);
-        server->addHandler(newClient, EPOLLIN); 
     }
 }
 
-void Listener::handleWrite() {}
 int Listener::getFD() const {return socketFD;}
 int Listener::getPort() const {return configs[0]->port;}

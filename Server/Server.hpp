@@ -1,6 +1,7 @@
 #ifndef SERVER_HPP
 #define SERVER_HPP
 
+#include <set>
 #include <map>
 #include <ctime>
 #include <vector>
@@ -24,7 +25,7 @@ class Server
         int epollFD;
         std::vector<ServerConfig>     configs;
         std::map<int, IEventHandler*> fdHandlers;
-        std::vector<IEventHandler*>   deletionQueue;
+        std::set<IEventHandler*>   deletionQueue;
 
     public:
         Server();
@@ -36,7 +37,7 @@ class Server
 
         void removeHandler(int fd);
         void clearDeletionQueue();
-        void addHandler(IEventHandler* handler, uint32_t events);
+        void addHandlerFD(IEventHandler* handler, int fd, uint32_t events);
         void modifyHandler(IEventHandler* handler, uint32_t events);
 
         const std::vector<ServerConfig> &getConfigs() const;

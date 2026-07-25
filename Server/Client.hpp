@@ -61,6 +61,7 @@ class Client : public IEventHandler
     void handleRead();
     void handleWrite();
     int getFD() const;
+    void handleEvent(int, uint32_t);
 
     bool isConnected() const;
     bool hasPendingWrite() const;

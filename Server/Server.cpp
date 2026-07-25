@@ -37,16 +37,14 @@ void Server::init(const std::vector<ServerConfig> &confs)
     for (it = groupedConfigs.begin(); it != groupedConfigs.end(); ++it)
     {
         Listener* listener = new Listener(it->second, this); 
-        addHandler(listener, EPOLLIN);
+        addHandlerFD(listener, listener->getFD(), EPOLLIN);
     }
 }
 
-void Server::addHandler(IEventHandler *handler, uint32_t events)
+void Server::addHandlerFD(IEventHandler *handler, int fd, uint32_t events)
 {
     if (handler == NULL)
         throw std::runtime_error("SERVER: null event handler");
-
-    int fd = handler->getFD();
 
     if (fd < 0)
         throw std::runtime_error("SERVER: invalid handler descriptor");
@@ -121,15 +119,17 @@ void Server::removeHandler(int fd)
     epoll_ctl(epollFD, EPOLL_CTL_DEL, fd, NULL);
 
     fdHandlers.erase(it);
-    deletionQueue.push_back(handler);
+    deletionQueue.insert(handler);
 }
 
 void Server::clearDeletionQueue()
 {
-    for (size_t i = 0; i < deletionQueue.size(); ++i)
-        delete deletionQueue[i];
-
-    deletionQueue.clear();
+    while (!deletionQueue.empty())
+    {
+        IEventHandler* handler = *deletionQueue.begin();
+        deletionQueue.erase(deletionQueue.begin());
+        delete handler;
+    }
 }
 
 void Server::eventLoop()
@@ -159,16 +159,7 @@ void Server::eventLoop()
             {
                 currEvent |= EPOLLIN | EPOLLOUT;
             }
-            if (currEvent & EPOLLIN)
-            {
-                handler->handleRead();
-                if (fdHandlers.find(fd) == fdHandlers.end())
-                    continue;
-            }
-            else if (currEvent & EPOLLOUT)
-            {
-                handler->handleWrite();
-            }
+            handler->handleEvent(fd, currEvent);
         }
         checkTimeout();
     }

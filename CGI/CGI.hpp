@@ -44,9 +44,9 @@ class CGI : public IEventHandler
     CGI(Client* client, Server *srv, const HttpRequest &request, const Location &location, std::string path);
 
     void killCgi();
-    virtual void handleRead();
-    virtual int getFD() const;
-    virtual void handleWrite();
+    int getFD() const;
+    void registerHandlers();
+    void handleEvent(int, uint32_t);
     void freeEnv(char **envp);
     char **buildEnv(const HttpRequest &request);
 };

@@ -8,13 +8,6 @@
 #include <sstream>
 #include <errno.h>
 
-int CGI::getFD() const
-{
-    if (state == WRITING_INPUT)
-        return pipeInFd;
-    return pipeOutFd;
-}
-
 char **CGI::buildEnv(const HttpRequest &request)
 {
     std::string contentType;
@@ -59,6 +52,14 @@ void CGI::freeEnv(char **envp)
     delete[] envp;
 }
 
+int CGI::getFD() const { return -1; }
+
+void CGI::registerHandlers()
+{
+    server->addHandlerFD(this, pipeInFd, EPOLLOUT);
+    server->addHandlerFD(this, pipeOutFd, EPOLLIN);
+}
+
 CGI::CGI(Client* client, Server *srv, const HttpRequest &request,
          const Location &location, std::string fullResolvedPath)
     : writeOffset(0),
@@ -101,11 +102,24 @@ CGI::CGI(Client* client, Server *srv, const HttpRequest &request,
 
 CGI::~CGI()
 {
-    if (pipeOutFd >= 0)
+    if (cgiPid > 0)
+        kill(cgiPid, SIGKILL);
+
+    if (pipeInFd >= 0) {
+        server->removeHandler(pipeInFd);
+        close(pipeInFd);
+        pipeInFd = -1;
+    }
+    if (pipeOutFd >= 0) {
+        server->removeHandler(pipeOutFd);
         close(pipeOutFd);
-    if (pipeInFd >= 0)
-        close(pipeInFd);    
-    waitpid(cgiPid, NULL, WNOHANG);
+        pipeOutFd = -1;
+    }
+
+    if (cgiPid > 0)
+        waitpid(cgiPid, NULL, WNOHANG);
+
+    cgiPid = -1;
 }
 
 void CGI::killCgi()
@@ -114,33 +128,6 @@ void CGI::killCgi()
     {
         kill(cgiPid, SIGKILL);
         cgiPid = -1;
-    }
-}
-
-void CGI::handleWrite()
-{
-    if (state != WRITING_INPUT)
-        return;
-
-    if (writeOffset >= requestBody.size())
-    {
-        server->removeHandler(pipeInFd);
-        close(pipeInFd);
-        state = READING_OUTPUT;
-        server->addHandler(this, EPOLLIN); 
-        return;
-    }
-    
-    ssize_t written = write(pipeInFd, requestBody.c_str() + writeOffset, requestBody.size() - writeOffset);
-    if (written > 0)
-        writeOffset += written;
-
-    if (writeOffset >= requestBody.size())
-    {
-        server->removeHandler(pipeInFd);
-        close(pipeInFd);
-        state = READING_OUTPUT;
-        server->addHandler(this, EPOLLIN); 
     }
 }
 
@@ -212,36 +199,38 @@ HttpResponse CGI::parseCgiOutput(const std::string& rawOutput)
     return response;
 }
 
-void CGI::handleRead()
+void CGI::handleEvent(int fd, uint32_t events)
 {
-    if (state == WRITING_INPUT)
-        return;
-    char buffer[4096];
-    while (true)
-    {
+    // Handle input pipe (writable)
+    if (fd == pipeInFd && (events & EPOLLOUT)) {
+        if (writeOffset < requestBody.size()) {
+            ssize_t written = write(pipeInFd, requestBody.c_str() + writeOffset,
+                                   requestBody.size() - writeOffset);
+            if (written > 0) writeOffset += written;
+        }
+        if (writeOffset >= requestBody.size()) {
+            server->removeHandler(pipeInFd);
+            close(pipeInFd);
+            pipeInFd = -1;
+        }
+    }
+    
+    // Handle output pipe (readable)
+    if (fd == pipeOutFd && (events & EPOLLIN)) {
+        char buffer[4096];
         ssize_t bytesRead = read(pipeOutFd, buffer, sizeof(buffer));
-        if (bytesRead > 0)
-        {
+        if (bytesRead > 0) {
             rawOutputBuffer.append(buffer, bytesRead);
+        } else if (bytesRead == 0) {
+            server->removeHandler(pipeOutFd);
+            close(pipeOutFd);
+            pipeOutFd = -1;
         }
-        else if (bytesRead == 0)
-        {
-            waitpid(cgiPid, NULL, 0);
-            HttpResponse finalResponse = parseCgiOutput(rawOutputBuffer);
-            
-            state = DONE;
-            parentClient->onCgiDone(finalResponse);
-            return; 
-        }
-        else
-        {
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                return; // Nothing more to read right now
-
-            HttpResponse err(500, "Internal Server Error");
-            state = DONE;
-            parentClient->onCgiDone(err);
-            return;
-        }
+    }
+    
+    // Both pipes closed? Finish.
+    if (pipeInFd == -1 && pipeOutFd == -1) {
+        state = DONE;
+        parentClient->onCgiDone(parseCgiOutput(rawOutputBuffer));
     }
 }

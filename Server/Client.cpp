@@ -90,11 +90,8 @@ void Client::closeConnection()
 {
     if (activeCgi)
     {
-        CGI *cgi = activeCgi;
+        delete activeCgi;
         activeCgi = NULL;
-
-        cgi->killCgi();
-        server->removeHandler(cgi->getFD());
     }
 
     server->removeHandler(socketFD);
@@ -102,37 +99,24 @@ void Client::closeConnection()
 
 void Client::terminateCgi()
 {
-    if (!activeCgi)
-        return;
+    if (!activeCgi) return;
 
-    activeCgi->killCgi();
-
-    const ServerConfig *config = activeConfig;
-
-    if (!config && !configs.empty())
-        config = configs[0];
-
-    if (!config)
-    {
+    const ServerConfig *config = activeConfig ? activeConfig : configs[0];
+    if (!config) {
         closeConnection();
         return;
     }
 
     HttpResponse response = ErrorPage(504, *config);
-
     response.setHeader("Connection", "close");
     closeAfterWrite = true;
 
-    int cgiFD = activeCgi->getFD();
-
+    delete activeCgi;
     activeCgi = NULL;
-    server->removeHandler(cgiFD);
 
     writeBuffer = response.toString();
-
     requestParser.reset();
     readBuffer.clear();
-
     state = SENDING_RESPONSE;
     server->modifyHandler(this, EPOLLOUT);
 }
@@ -142,22 +126,16 @@ void Client::onCgiDone(HttpResponse response)
     HttpRequest &request = requestParser.getRequest();
 
     closeAfterWrite = request.shouldCloseConnection();
-
     if (closeAfterWrite)
         response.setHeader("Connection", "close");
 
-    if (activeCgi)
-    {
-        int cgiFD = activeCgi->getFD();
-
+    if (activeCgi) {
+        delete activeCgi;  // Destructor cleans up
         activeCgi = NULL;
-        server->removeHandler(cgiFD);
     }
 
     writeBuffer = response.toString();
-
     requestParser.reset();
-
     state = SENDING_RESPONSE;
     server->modifyHandler(this, EPOLLOUT);
 }
@@ -273,7 +251,7 @@ void Client::processReadBuffer()
                     activeCgi = new CGI(this, server, request, *result.cgiLocation, result.cgiRequestPath);
                     try
                     {
-                        server->addHandler(activeCgi, EPOLLOUT);
+                        activeCgi->registerHandlers();
                     }
                     catch (...)
                     {
@@ -310,7 +288,6 @@ void Client::handleRead()
         return;
     processReadBuffer();
 }
-
 
 void Client::handleWrite()
 {
@@ -353,4 +330,15 @@ void Client::handleWrite()
         return;
     }
     server->modifyHandler(this, EPOLLIN);
+}
+
+void Client::handleEvent(int fd, uint32_t events)
+{
+    if (fd == socketFD)
+    {
+        if (events & EPOLLIN)
+            handleRead();
+        if (events & EPOLLOUT)
+            handleWrite();
+    }
 }

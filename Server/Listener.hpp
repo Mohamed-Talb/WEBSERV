@@ -19,11 +19,10 @@ class Listener : public IEventHandler
         virtual ~Listener();
         Listener(const std::vector<ServerConfig *> confs, Server *srv);
         
-        virtual void handleRead();
-        virtual void handleWrite();
+        void handleEvent(int, uint32_t);
 
+        int getFD() const;
         int getPort() const;
-        virtual int  getFD() const;
 };
 
 
