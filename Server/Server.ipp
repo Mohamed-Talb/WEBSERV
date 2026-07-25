@@ -18,7 +18,6 @@ class IEventHandler
     // virtual void handleRead() = 0;
     // virtual void handleWrite() = 0;
     virtual int  getFD() const = 0;
-    
     virtual void handleEvent(int, uint32_t) = 0;
 };
 

@@ -46,8 +46,8 @@ class CGI : public IEventHandler
     void killCgi();
     int getFD() const;
     void registerHandlers();
-    void handleEvent(int, uint32_t);
     void freeEnv(char **envp);
+    void handleEvent(int, uint32_t);
     char **buildEnv(const HttpRequest &request);
 };
 

@@ -93,16 +93,16 @@ void Client::closeConnection()
         delete activeCgi;
         activeCgi = NULL;
     }
-
     server->removeHandler(socketFD);
 }
 
 void Client::terminateCgi()
 {
-    if (!activeCgi) return;
-
+    if (!activeCgi) 
+        return;
     const ServerConfig *config = activeConfig ? activeConfig : configs[0];
-    if (!config) {
+    if (!config) 
+    {
         closeConnection();
         return;
     }
@@ -129,11 +129,11 @@ void Client::onCgiDone(HttpResponse response)
     if (closeAfterWrite)
         response.setHeader("Connection", "close");
 
-    if (activeCgi) {
-        delete activeCgi;  // Destructor cleans up
+    if (activeCgi) 
+    {
+        delete activeCgi;
         activeCgi = NULL;
     }
-
     writeBuffer = response.toString();
     requestParser.reset();
     state = SENDING_RESPONSE;

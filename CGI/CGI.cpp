@@ -60,8 +60,7 @@ void CGI::registerHandlers()
     server->addHandlerFD(this, pipeOutFd, EPOLLIN);
 }
 
-CGI::CGI(Client* client, Server *srv, const HttpRequest &request,
-         const Location &location, std::string fullResolvedPath)
+CGI::CGI(Client* client, Server *srv, const HttpRequest &request, const Location &location, std::string fullResolvedPath)
     : writeOffset(0),
       state(WRITING_INPUT),
       server(srv),
@@ -94,7 +93,6 @@ CGI::CGI(Client* client, Server *srv, const HttpRequest &request,
     }
     close(pipeIn[0]);
     close(pipeOut[1]);
-    std::cout << "hhhhhh" << std::endl;
     pipeOutFd = pipeOut[0];
     pipeInFd = pipeIn[1];
     freeEnv(envp);
@@ -105,12 +103,14 @@ CGI::~CGI()
     if (cgiPid > 0)
         kill(cgiPid, SIGKILL);
 
-    if (pipeInFd >= 0) {
+    if (pipeInFd >= 0) 
+    {
         server->removeHandler(pipeInFd);
         close(pipeInFd);
         pipeInFd = -1;
     }
-    if (pipeOutFd >= 0) {
+    if (pipeOutFd >= 0) 
+    {
         server->removeHandler(pipeOutFd);
         close(pipeOutFd);
         pipeOutFd = -1;
@@ -128,6 +128,47 @@ void CGI::killCgi()
     {
         kill(cgiPid, SIGKILL);
         cgiPid = -1;
+    }
+}
+
+void CGI::handleEvent(int fd, uint32_t events)
+{
+    // Handle input pipe (writable)
+    if (fd == pipeInFd && (events & EPOLLOUT))
+    {
+        if (writeOffset < requestBody.size())
+        {
+            ssize_t written = write(pipeInFd, requestBody.c_str() + writeOffset, requestBody.size() - writeOffset);
+            if (written > 0) 
+                writeOffset += written;
+        }
+        if (writeOffset >= requestBody.size())
+        {
+            server->removeHandler(pipeInFd);
+            close(pipeInFd);
+            pipeInFd = -1;
+        }
+    }
+    // Handle output pipe (readable)
+    if (fd == pipeOutFd && (events & EPOLLIN)) 
+    {
+        char buffer[4096];
+        ssize_t bytesRead = read(pipeOutFd, buffer, sizeof(buffer));
+        if (bytesRead > 0) 
+        {
+            rawOutputBuffer.append(buffer, bytesRead);
+        } 
+        else if (bytesRead == 0) 
+        {
+            server->removeHandler(pipeOutFd);
+            close(pipeOutFd);
+            pipeOutFd = -1;
+        }
+    }
+    if (pipeInFd == -1 && pipeOutFd == -1) 
+    {
+        state = DONE;
+        parentClient->onCgiDone(parseCgiOutput(rawOutputBuffer));
     }
 }
 
@@ -199,38 +240,3 @@ HttpResponse CGI::parseCgiOutput(const std::string& rawOutput)
     return response;
 }
 
-void CGI::handleEvent(int fd, uint32_t events)
-{
-    // Handle input pipe (writable)
-    if (fd == pipeInFd && (events & EPOLLOUT)) {
-        if (writeOffset < requestBody.size()) {
-            ssize_t written = write(pipeInFd, requestBody.c_str() + writeOffset,
-                                   requestBody.size() - writeOffset);
-            if (written > 0) writeOffset += written;
-        }
-        if (writeOffset >= requestBody.size()) {
-            server->removeHandler(pipeInFd);
-            close(pipeInFd);
-            pipeInFd = -1;
-        }
-    }
-    
-    // Handle output pipe (readable)
-    if (fd == pipeOutFd && (events & EPOLLIN)) {
-        char buffer[4096];
-        ssize_t bytesRead = read(pipeOutFd, buffer, sizeof(buffer));
-        if (bytesRead > 0) {
-            rawOutputBuffer.append(buffer, bytesRead);
-        } else if (bytesRead == 0) {
-            server->removeHandler(pipeOutFd);
-            close(pipeOutFd);
-            pipeOutFd = -1;
-        }
-    }
-    
-    // Both pipes closed? Finish.
-    if (pipeInFd == -1 && pipeOutFd == -1) {
-        state = DONE;
-        parentClient->onCgiDone(parseCgiOutput(rawOutputBuffer));
-    }
-}

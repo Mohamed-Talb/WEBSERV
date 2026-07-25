@@ -53,7 +53,7 @@ void Server::addHandlerFD(IEventHandler *handler, int fd, uint32_t events)
         throw std::runtime_error("SERVER: handler descriptor already registered");
 
     epoll_event event;
-    // std::memset(&event, 0, sizeof(event)); // add this is later
+    std::memset(&event, 0, sizeof(event));
 
     event.events = events;
     event.data.fd = fd;
