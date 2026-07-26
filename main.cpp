@@ -1,8 +1,15 @@
 #include "Server/Server.hpp"
 
+#include <ctime>
+#include "Session.hpp"
+
 int main(int ac, char **av)
 {
     signal(SIGPIPE, SIG_IGN);
+    srand(time(NULL));
+
+    Session session;
+    std::cout << "Session ID: " << session.getSessionId() << std::endl;
     std::string configPath;
     if (ac > 2)
     {
