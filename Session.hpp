@@ -3,6 +3,7 @@
 
 #include <sstream>
 #include <cstdlib>
+#include <ctime>
 
 class Session
 {

@@ -1,6 +1,4 @@
 #include "Server/Server.hpp"
-
-#include <ctime>
 #include "Session.hpp"
 
 int main(int ac, char **av)
