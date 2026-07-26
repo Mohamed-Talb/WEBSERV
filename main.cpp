@@ -1,5 +1,5 @@
 #include "Server/Server.hpp"
-#include "Session.hpp"
+#include "HTTP/Session.hpp"
 
 int main(int ac, char **av)
 {

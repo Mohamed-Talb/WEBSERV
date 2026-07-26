@@ -25,7 +25,7 @@ WEBSERV_SRC = main.cpp Helpers.cpp\
 	HTTP/Methods/DELETE.cpp \
 	FileSystem.cpp \
 	CGI/CGI.cpp \
-	Session.cpp
+	HTTP/Session.cpp
 			
 WEBSERV_OBJ = $(WEBSERV_SRC:.cpp=.o)
 
