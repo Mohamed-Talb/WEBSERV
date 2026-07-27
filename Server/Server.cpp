@@ -3,7 +3,12 @@
 #include <unistd.h>
 #include <stdexcept>
 
-Server::Server() : epollFD(-1) {}
+Server::Server() : epollFD(-1), sessionManager(), lastSessionCleanup(time(NULL)) {}
+
+SessionManager &Server::getSessionManager()
+{
+    return sessionManager;
+}
 
 Server::~Server()
 {
@@ -140,17 +145,27 @@ void Server::checkTimeout()
 
         if (!client)
             continue;
+
         if (difftime(currentTime, client->timeout) <= TIMEOUT_DURATION)
             continue;
+
         if (client->getState() == PROCESSING_CGI)
             cgiTimeoutClients.push_back(client);
         else
             expiredClients.push_back(client);
     }
+
     for (size_t i = 0; i < expiredClients.size(); ++i)
         removeHandler(expiredClients[i]);
+
     for (size_t i = 0; i < cgiTimeoutClients.size(); ++i)
         cgiTimeoutClients[i]->terminateCgi();
+
+    if (difftime(currentTime, lastSessionCleanup) >= SESSION_CLEANUP_INTERVAL)
+    {
+        sessionManager.removeExpiredSessions(currentTime, SESSION_TIMEOUT);
+        lastSessionCleanup = currentTime;
+    }
 }
 
 void Server::clearDeletionQueue()

@@ -36,6 +36,9 @@ class CGI : public IEventHandler
     Server* server;
     Client* parentClient;
     std::string execBin;
+    std::string sessionId;
+    bool shouldSetCookie;
+
 
     HttpResponse parseCgiOutput(const std::string &rawOutput);
     void closeInput();
@@ -45,8 +48,7 @@ class CGI : public IEventHandler
     void handleOutput();
     public:
     virtual ~CGI();
-    CGI(Client* client, Server *srv, const HttpRequest &request, const Location &location, std::string path);
-
+    CGI(Client *client, Server *srv, const HttpRequest &request, const Location &location, const std::string &fullResolvedPath, const std::string &sessionIdValue, bool shouldSetCookie);
     void killCgi();
     int getFD() const;
     void registerHandlers();

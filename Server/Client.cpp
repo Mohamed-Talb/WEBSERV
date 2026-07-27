@@ -10,16 +10,7 @@
 #include <ctime>
 
 Client::Client(int fd, Server *srv, const std::vector<ServerConfig *> &confs)
-    : socketFD(fd),
-      server(srv),
-      configs(confs),
-      activeConfig(NULL),
-      requestParser(confs),
-      activeCgi(NULL),
-      state(READING_REQUEST),
-      closeAfterWrite(false),
-      writeOffset(0),
-      timeout(time(NULL)) {}
+    : socketFD(fd), server(srv), configs(confs), activeConfig(NULL), requestParser(confs), activeCgi(NULL), state(READING_REQUEST), closeAfterWrite(false), writeOffset(0), timeout(time(NULL)) {}
 
 Client::~Client()
 {
@@ -40,14 +31,6 @@ void Client::consumeReadBuffer(size_t bytes)
 }
 
 ClientState Client::getState() const { return state;}
-
-// void Client::consumeWriteBuffer(size_t bytes)
-// {
-//     if (bytes >= writeBuffer.size())
-//         writeBuffer.clear();
-//     else
-//         writeBuffer.erase(0, bytes);
-// }
 
 int  Client::getFD() const { return socketFD;}
 bool Client::isConnected() const { return socketFD >= 0;}
@@ -212,10 +195,28 @@ void Client::processReadBuffer()
                     errorsHandler(500);
                     return;
                 }
+
+                Session *session = NULL;
+                bool isNewSession = false;
+                std::string sessionId;
+                if (request.getCookie("session_id", sessionId))
+                {
+                    session = server->getSessionManager().findSession(sessionId);
+                }
+                if (!session)
+                {
+                    session = server->getSessionManager().createSession();
+                    if (!session)
+                    {
+                        errorsHandler(500);
+                        return;
+                    }
+                    isNewSession = true;
+                }
                 state = PROCESSING_CGI;
                 try
                 {
-                    activeCgi = new CGI(this, server, request, *result.cgiLocation, result.cgiRequestPath);
+                    activeCgi = new CGI(this, server, request, *result.cgiLocation, result.cgiRequestPath, session->getId(), isNewSession);
                     activeCgi->registerHandlers();
                 }
                 catch (...)
@@ -226,6 +227,8 @@ void Client::processReadBuffer()
                         activeCgi = NULL;
                         cgi->killCgi();
                     }
+                    if (isNewSession)
+                        server->getSessionManager().removeSession(session->getId());
                     errorsHandler(500);
                     return;
                 }

@@ -2,6 +2,7 @@ WEBSERV_SRC = main.cpp Helpers.cpp\
 	Server/Server.cpp \
 	Server/Listener.cpp \
 	Server/Client.cpp \
+	Server/Session.cpp \
 	configParser/configParser.cpp \
 	configParser/valuesParser.cpp \
 	configParser/locationHandlers.cpp \

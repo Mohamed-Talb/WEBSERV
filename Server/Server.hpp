@@ -15,12 +15,15 @@
 #include "../Helpers.hpp"
 #include "../HTTP/HttpHandler.hpp"
 #include "../configParser/configParser.hpp"
+#include "Session.hpp"
 #include "Server.ipp"
 #include <map>
 #include <set>
 #include <vector>
 
 #define TIMEOUT_DURATION 30
+#define SESSION_TIMEOUT 1800
+#define SESSION_CLEANUP_INTERVAL 60
 
 class Server
 {
@@ -30,7 +33,8 @@ class Server
         std::map<int, IEventHandler*> fdHandlers;
         std::set<IEventHandler*>   deletionQueue;
         std::map<IEventHandler *, std::set<int> > registeredFds;
-
+        SessionManager sessionManager;
+        time_t lastSessionCleanup;
     public:
         Server();
         ~Server();
@@ -44,7 +48,7 @@ class Server
         void removeHandler(IEventHandler *handler);
         void modifyHandler(int fd, uint32_t events);
         void addHandler(IEventHandler *handler, int fd, uint32_t events);
-
+        SessionManager &getSessionManager();
         const std::vector<ServerConfig> &getConfigs() const;
 };
 

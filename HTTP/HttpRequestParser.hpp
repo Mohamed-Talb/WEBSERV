@@ -58,7 +58,7 @@ class HttpRequestParser
     StepStatus parseRequestLine(const std::string &raw);
     StepStatus parseChunkedBody(const std::string &raw);
     bool       storeHeader(const std::string &key, const std::string &value);
-    
+    bool parseCookies();
     public:
     HttpRequestParser(const std::vector<ServerConfig *> &conf);
     ~HttpRequestParser();

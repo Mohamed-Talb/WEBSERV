@@ -8,6 +8,88 @@
 #include <sstream>
 #include <errno.h>
 
+/*
+I added CGI session handling in the Client.
+
+The CGI constructor now receives two new arguments:
+
+```cpp
+const std::string &sessionId
+bool shouldSetSessionCookie
+```
+
+Example call:
+
+```cpp
+activeCgi = new CGI(
+    this,
+    server,
+    request,
+    *result.cgiLocation,
+    result.cgiRequestPath,
+    session->getId(),
+    shouldSetSessionCookie
+);
+```
+
+Please add these members to `CGI`:
+
+```cpp
+std::string sessionId;
+bool shouldSetSessionCookie;
+```
+
+The CGI should use `sessionId` in the child environment. Add an environment variable such as:
+
+```text
+SESSION_ID=<sessionId>
+```
+
+Example:
+
+```cpp
+envp[index++] = duplicateString(
+    "SESSION_ID=" + sessionId
+);
+```
+
+Do not store a pointer returned by `.c_str()` from a temporary string. Allocate an independent C string using the same helper used for the other CGI environment variables.
+
+You should also pass cookies through the standard CGI variable:
+
+```text
+HTTP_COOKIE=<request cookies>
+```
+
+The `session_id` sent to CGI must be the valid session ID provided by Client. If the browser sent an invalid old `session_id`, do not pass the old value. Replace it with the new valid `sessionId`, while preserving unrelated cookies.
+
+When CGI output is parsed into `HttpResponse`, check:
+
+```cpp
+if (shouldSetSessionCookie)
+```
+
+If it is true, add:
+
+```cpp
+response.setHeader(
+    "Set-Cookie",
+    "session_id=" + sessionId + "; Path=/; HttpOnly"
+);
+```
+
+Add this before calling:
+
+```cpp
+parentClient->onCgiDone(response);
+```
+
+The flag does not mean the Session data changed. It only means the browser does not yet know this session ID and needs a `Set-Cookie` response.
+
+CGI does not own the Session and should not create, delete, or modify `SessionManager`. It only receives the valid session ID, passes it to the child process, and sends `Set-Cookie` when requested.
+ */
+
+
 char **CGI::buildEnv(const HttpRequest &request)
 {
     const std::map<std::string, std::vector<std::string> > &headers = request.getHeaders();
@@ -127,15 +209,26 @@ void CGI::freeEnv(char **envp)
 int CGI::getFD() const { return -1; }
 
 
-CGI::CGI(Client* client, Server *srv, const HttpRequest &request, const Location &location, std::string fullResolvedPath)
+CGI::CGI(
+    Client *client,
+    Server *srv,
+    const HttpRequest &request,
+    const Location &location,
+    const std::string &fullResolvedPath,
+    const std::string &sessionIdValue,
+    bool shouldSetCookie
+)
     : pipeInFd(-1),
-    pipeOutFd(-1),
-    cgiPid(-1),
-    writeOffset(0),
-    state(WRITING_INPUT),
-    server(srv),
-    parentClient(client),
-    execBin(location.cgiPath)
+      pipeOutFd(-1),
+      cgiPid(-1),
+      writeOffset(0),
+      state(WRITING_INPUT),
+      server(srv),
+      parentClient(client),
+      execBin(location.cgiPath),
+      sessionId(sessionIdValue),
+      shouldSetCookie(shouldSetCookie)
+
 {
     if (!server || !parentClient)
         throw std::runtime_error("CGI: invalid server or client");

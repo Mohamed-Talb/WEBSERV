@@ -16,7 +16,7 @@ class HttpRequest
     std::string body;
 
     std::map<std::string, std::vector<std::string> > headers;
-
+    std::map<std::string, std::string> cookies;
     public:
     HttpRequest();
 
@@ -44,7 +44,13 @@ class HttpRequest
     const std::string &getBody() const;
     const std::string &getTarget() const;
 
-   const std::vector<std::string> &getHeader(const std::string &key) const;
+    bool hasCookie(const std::string &name) const;
+    void setCookie(const std::string &name, const std::string &value);
+    bool getCookie(const std::string &name, std::string &value) const;
+
+    const std::map<std::string, std::string> &getCookies() const;
+    
+    const std::vector<std::string> &getHeader(const std::string &key) const;
     const std::vector<std::string> &getHeaderValues(const std::string &key) const;
     const std::map<std::string, std::vector<std::string> > &getHeaders() const;
 };

@@ -13,6 +13,7 @@ void HttpRequest::reset()
     requestPath.clear();
     query.clear();
     body.clear();
+    cookies.clear();
     headers.clear();
 }
 
@@ -102,4 +103,31 @@ bool HttpRequest::shouldCloseConnection() const
         return headerContainsToken("connection", "close");
 
     return true;
+}
+
+
+void HttpRequest::setCookie(const std::string &name, const std::string &value)
+{
+    cookies[name] = value;
+}
+
+bool HttpRequest::hasCookie(const std::string &name) const
+{
+    return cookies.find(name) != cookies.end();
+}
+
+bool HttpRequest::getCookie(const std::string &name, std::string &value) const
+{
+    std::map<std::string, std::string>::const_iterator it = cookies.find(name);
+
+    if (it == cookies.end())
+        return false;
+
+    value = it->second;
+    return true;
+}
+
+const std::map<std::string, std::string> &HttpRequest::getCookies() const
+{
+    return cookies;
 }

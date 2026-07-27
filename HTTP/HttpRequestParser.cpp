@@ -147,7 +147,11 @@ bool HttpRequestParser::storeHeader(const std::string &key, const std::string &v
         setError(400);
         return false;
     }
-
+    if (normalizedKey == "cookie")
+    {
+        request.appendHeader(normalizedKey, normalizedValue);
+        return true;
+    }
     if (!isCommaSeparatedHeader(normalizedKey))
     {
         request.appendHeader(normalizedKey, normalizedValue);
@@ -164,10 +168,64 @@ bool HttpRequestParser::storeHeader(const std::string &key, const std::string &v
 
     for (size_t i = 0; i < values.size(); ++i)
         request.appendHeader(normalizedKey, values[i]);
-
     return true;
 }
 
+bool HttpRequestParser::parseCookies()
+{
+    if (!request.hasHeader("cookie"))
+        return true;
+
+    const std::vector<std::string> &cookieHeaders =
+        request.getHeader("cookie");
+
+    for (size_t i = 0; i < cookieHeaders.size(); ++i)
+    {
+        const std::string &header = cookieHeaders[i];
+        size_t start = 0;
+
+        while (start <= header.size())
+        {
+            size_t end = header.find(';', start);
+            std::string pair;
+
+            if (end == std::string::npos)
+                pair = header.substr(start);
+            else
+                pair = header.substr(start, end - start);
+
+            pair = trim(pair);
+
+            if (!pair.empty())
+            {
+                size_t equalPosition = pair.find('=');
+
+                if (equalPosition == std::string::npos)
+                {
+                    setError(400);
+                    return false;
+                }
+
+                std::string name = trim(pair.substr(0, equalPosition));
+                std::string value = trim(pair.substr(equalPosition + 1));
+
+                if (name.empty())
+                {
+                    setError(400);
+                    return false;
+                }
+
+                request.setCookie(name, value);
+            }
+
+            if (end == std::string::npos)
+                break;
+
+            start = end + 1;
+        }
+    }
+    return true;
+}
 
 StepStatus HttpRequestParser::parseHeaders(const std::string &raw)
 {
@@ -235,6 +293,8 @@ StepStatus HttpRequestParser::parseHeaders(const std::string &raw)
             return STEP_ERROR;
         }
     }
+    if (!parseCookies())
+        return STEP_ERROR;
     parsedSize = headersEnd + 4;
     state = PARSE_BODY;
     return STEP_COMPLETE;
