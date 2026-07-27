@@ -9,7 +9,7 @@
 #include <errno.h>
 #include <ctime>
 
-Client::Client(int fd, Server *srv, const std::vector<ServerConfig *> confs)
+Client::Client(int fd, Server *srv, const std::vector<ServerConfig *> &confs)
     : socketFD(fd),
       server(srv),
       configs(confs),
@@ -63,10 +63,13 @@ void Client::closeConnection()
 {
     if (activeCgi)
     {
-        delete activeCgi;
+        CGI *cgi = activeCgi;
         activeCgi = NULL;
+        cgi->killCgi();
     }
-    server->removeHandler(socketFD);
+    writeOffset = 0;
+    timeout = time(NULL);
+    server->removeHandler(this);
 }
 
 void Client::terminateCgi()
@@ -79,7 +82,6 @@ void Client::terminateCgi()
         closeConnection();
         return;
     }
-
     HttpResponse response = ErrorPage(504, *config);
     response.setHeader("Connection", "close");
     closeAfterWrite = true;
@@ -91,7 +93,7 @@ void Client::terminateCgi()
     requestParser.reset();
     readBuffer.clear();
     state = SENDING_RESPONSE;
-    server->modifyHandler(this, EPOLLOUT);
+    server->modifyHandler(socketFD, EPOLLOUT);
 }
 
 void Client::onCgiDone(HttpResponse response)
@@ -102,15 +104,13 @@ void Client::onCgiDone(HttpResponse response)
     if (closeAfterWrite)
         response.setHeader("Connection", "close");
 
-    if (activeCgi) 
-    {
-        delete activeCgi;
-        activeCgi = NULL;
-    }
+    activeCgi = NULL;
     writeBuffer = response.toString();
+    writeOffset = 0;
+    timeout = time(NULL);
     requestParser.reset();
     state = SENDING_RESPONSE;
-    server->modifyHandler(this, EPOLLOUT);
+    server->modifyHandler(socketFD, EPOLLOUT);
 }
 
 void Client::errorsHandler(int errorCode)
@@ -132,12 +132,13 @@ void Client::errorsHandler(int errorCode)
     closeAfterWrite = true;
 
     writeBuffer = response.toString();
-
+    writeOffset = 0;
+    timeout = time(NULL);
     requestParser.reset();
     readBuffer.clear();
 
     state = SENDING_RESPONSE;
-    server->modifyHandler(this, EPOLLOUT);
+    server->modifyHandler(socketFD, EPOLLOUT);
 }
 
 bool Client::readFromSocket()
@@ -215,8 +216,9 @@ void Client::processReadBuffer()
                 {
                     if (activeCgi)
                     {
-                        delete activeCgi;
+                        CGI *cgi = activeCgi;
                         activeCgi = NULL;
+                        cgi->killCgi();
                     }
                     errorsHandler(500);
                     return;
@@ -230,7 +232,7 @@ void Client::processReadBuffer()
             writeOffset = 0;
             requestParser.reset();
             state = SENDING_RESPONSE;
-            server->modifyHandler(this, EPOLLOUT);
+            server->modifyHandler(socketFD, EPOLLOUT);
             return;
         }
     }
@@ -282,10 +284,10 @@ void Client::handleWrite()
     {
         processReadBuffer();
         if (state == READING_REQUEST)
-            server->modifyHandler(this, EPOLLIN);
+            server->modifyHandler(socketFD, EPOLLIN);
         return;
     }
-    server->modifyHandler(this, EPOLLIN);
+    server->modifyHandler(socketFD, EPOLLIN);
 }
 
 void Client::handleEvent(int fd, uint32_t events)

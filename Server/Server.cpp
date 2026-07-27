@@ -37,20 +37,20 @@ void Server::init(const std::vector<ServerConfig> &confs)
     for (it = groupedConfigs.begin(); it != groupedConfigs.end(); ++it)
     {
         Listener* listener = new Listener(it->second, this); 
-        addHandlerFD(listener, listener->getFD(), EPOLLIN);
+        addHandler(listener, listener->getFD(), EPOLLIN);
     }
 }
 
-void Server::addHandlerFD(IEventHandler *handler, int fd, uint32_t events)
+void Server::addHandler(IEventHandler *handler, int fd, uint32_t events)
 {
-    if (handler == NULL)
-        throw std::runtime_error("SERVER: null event handler");
+    if (!handler)
+        throw std::runtime_error("SERVER: null handler");
 
     if (fd < 0)
-        throw std::runtime_error("SERVER: invalid handler descriptor");
+        throw std::runtime_error("SERVER: invalid file descriptor");
 
-    if (fdHandlers.count(fd) != 0)
-        throw std::runtime_error("SERVER: handler descriptor already registered");
+    if (fdHandlers.find(fd) != fdHandlers.end())
+        throw std::runtime_error("SERVER: file descriptor already registered");
 
     epoll_event event;
     std::memset(&event, 0, sizeof(event));
@@ -58,19 +58,69 @@ void Server::addHandlerFD(IEventHandler *handler, int fd, uint32_t events)
     event.events = events;
     event.data.fd = fd;
 
-    if (epoll_ctl(epollFD,EPOLL_CTL_ADD,fd,&event) < 0)
-    {
+    if (epoll_ctl(epollFD, EPOLL_CTL_ADD, fd, &event) < 0)
         throw std::runtime_error("SERVER: epoll_ctl ADD failed");
-    }
+
     fdHandlers[fd] = handler;
+    registeredFds[handler].insert(fd);
 }
 
-void Server::modifyHandler(IEventHandler *handler, uint32_t events)
+void Server::modifyHandler(int fd, uint32_t events)
 {
-    epoll_event ev;
-    ev.events = events;
-    ev.data.fd = handler->getFD();
-    epoll_ctl(epollFD, EPOLL_CTL_MOD, handler->getFD(), &ev);
+    if (fdHandlers.find(fd) == fdHandlers.end())
+        return;
+
+    epoll_event event;
+    std::memset(&event, 0, sizeof(event));
+
+    event.events = events;
+    event.data.fd = fd;
+
+    if (epoll_ctl(epollFD, EPOLL_CTL_MOD, fd, &event) < 0)
+        throw std::runtime_error("SERVER: epoll_ctl MOD failed");
+}
+
+void Server::unregisterFD(int fd)
+{
+    std::map<int, IEventHandler *>::iterator fdIt = fdHandlers.find(fd);
+
+    if (fdIt == fdHandlers.end())
+        return;
+
+    IEventHandler *handler = fdIt->second;
+
+    epoll_ctl(epollFD, EPOLL_CTL_DEL, fd, NULL);
+    fdHandlers.erase(fdIt);
+
+    std::map<IEventHandler *, std::set<int> >::iterator handlerIt = registeredFds.find(handler);
+
+    if (handlerIt == registeredFds.end())
+        return;
+
+    handlerIt->second.erase(fd);
+
+    if (handlerIt->second.empty())
+        registeredFds.erase(handlerIt);
+}
+
+void Server::removeHandler(IEventHandler *handler)
+{
+    if (!handler)
+        return;
+
+    std::map<IEventHandler *, std::set<int> >::iterator handlerIt = registeredFds.find(handler);
+    if (handlerIt != registeredFds.end())
+    {
+        std::set<int> fds = handlerIt->second;
+        for (std::set<int>::iterator it = fds.begin(); it != fds.end(); ++it)
+        {
+            int fd = *it;
+            epoll_ctl(epollFD, EPOLL_CTL_DEL, fd, NULL);
+            fdHandlers.erase(fd);
+        }
+        registeredFds.erase(handlerIt);
+    }
+    deletionQueue.insert(handler);
 }
 
 const std::vector<ServerConfig>& Server::getConfigs() const
@@ -80,56 +130,36 @@ const std::vector<ServerConfig>& Server::getConfigs() const
 
 void Server::checkTimeout()
 {
-    time_t curr_time = time(NULL);
+    time_t currentTime = time(NULL);
     std::vector<Client *> expiredClients;
     std::vector<Client *> cgiTimeoutClients;
 
-    for (std::map<int, IEventHandler *>::iterator it = fdHandlers.begin(); it != fdHandlers.end(); it++)
+    for (std::map<IEventHandler *, std::set<int> >::iterator it = registeredFds.begin(); it != registeredFds.end(); ++it)
     {
-        Client *client = dynamic_cast<Client *>(it->second);
-        if (client != NULL && difftime(curr_time, client->timeout) > TIMEOUT_DURATION)
-        {
-            if (client->getState() != PROCESSING_CGI)
-                expiredClients.push_back(client);
-            else
-                cgiTimeoutClients.push_back(client);
-        }
+        Client *client = dynamic_cast<Client *>(it->first);
+
+        if (!client)
+            continue;
+        if (difftime(currentTime, client->timeout) <= TIMEOUT_DURATION)
+            continue;
+        if (client->getState() == PROCESSING_CGI)
+            cgiTimeoutClients.push_back(client);
+        else
+            expiredClients.push_back(client);
     }
-
-    // client timeout
-    for (size_t i = 0; i < expiredClients.size(); i++)
-        removeHandler(expiredClients[i]->getFD());
-
-    // cgi timeout
-    for (size_t i = 0; i < cgiTimeoutClients.size(); i++)
-    {
-        Client *client = cgiTimeoutClients[i];
-        client->terminateCgi();
-    }
-}
-
-void Server::removeHandler(int fd)
-{
-    std::map<int, IEventHandler *>::iterator it = fdHandlers.find(fd);
-
-    if (it == fdHandlers.end())
-        return;
-
-    IEventHandler *handler = it->second;
-    epoll_ctl(epollFD, EPOLL_CTL_DEL, fd, NULL);
-
-    fdHandlers.erase(it);
-    deletionQueue.insert(handler);
+    for (size_t i = 0; i < expiredClients.size(); ++i)
+        removeHandler(expiredClients[i]);
+    for (size_t i = 0; i < cgiTimeoutClients.size(); ++i)
+        cgiTimeoutClients[i]->terminateCgi();
 }
 
 void Server::clearDeletionQueue()
 {
-    while (!deletionQueue.empty())
-    {
-        IEventHandler* handler = *deletionQueue.begin();
-        deletionQueue.erase(deletionQueue.begin());
-        delete handler;
-    }
+    std::set<IEventHandler *> pending = deletionQueue;
+    deletionQueue.clear();
+
+    for (std::set<IEventHandler *>::iterator it = pending.begin(); it != pending.end(); ++it)
+        delete *it;
 }
 
 void Server::eventLoop()

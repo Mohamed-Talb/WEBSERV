@@ -44,7 +44,7 @@ class HttpRequestParser
     State state;
     int errorCode;
 
-    const std::vector<ServerConfig *> &configs;
+    const std::vector<ServerConfig *> configs;
     const ServerConfig *activeConfig;
     private:
     void setError(int code);

@@ -17,7 +17,7 @@ class Listener : public IEventHandler
 
         public:
         virtual ~Listener();
-        Listener(const std::vector<ServerConfig *> confs, Server *srv);
+        Listener(const std::vector<ServerConfig *> &confs, Server *srv);
         
         void handleEvent(int, uint32_t);
 

@@ -23,8 +23,8 @@ enum CgiState
 class CGI : public IEventHandler
 {
     private:
-    int pipeOutFd;         // pipeOut[0]
     int pipeInFd;          // pipeIn[1]
+    int pipeOutFd;         // pipeOut[0]
     pid_t cgiPid;
 
     size_t writeOffset;
@@ -38,7 +38,11 @@ class CGI : public IEventHandler
     std::string execBin;
 
     HttpResponse parseCgiOutput(const std::string &rawOutput);
-
+    void closeInput();
+    void closeOutput();
+    void finish();
+    void handleInput();
+    void handleOutput();
     public:
     virtual ~CGI();
     CGI(Client* client, Server *srv, const HttpRequest &request, const Location &location, std::string path);

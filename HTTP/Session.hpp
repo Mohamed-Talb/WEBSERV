@@ -8,7 +8,7 @@
 class Session
 {
     std::stringstream SessionId;
-public:
+    public:
     Session();
     ~Session();
 

@@ -50,14 +50,12 @@ class Client : public IEventHandler
     
     void appendToWriteBuffer(const std::string &data);
     void appendToReadBuffer(const char *data, size_t size);
-    const ServerConfig *matchConfig(const std::string &host) const;
 
     public:
     time_t timeout;
 
-    Client(int fd, Server *server, const std::vector<ServerConfig*> configs);
+    Client(int fd, Server *srv, const std::vector<ServerConfig *> &confs);
     ~Client();
-
     int getFD() const;
     void handleRead();
     void handleWrite();
@@ -72,8 +70,8 @@ class Client : public IEventHandler
     const std::string &getReadBuffer() const;
     const std::string &getWriteBuffer() const;
 
-    void onCgiDone(HttpResponse response);
     void terminateCgi();
+    void onCgiDone(HttpResponse response);
 };
 
 #endif

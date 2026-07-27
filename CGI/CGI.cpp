@@ -54,122 +54,298 @@ void CGI::freeEnv(char **envp)
 
 int CGI::getFD() const { return -1; }
 
-void CGI::registerHandlers()
-{
-    server->addHandlerFD(this, pipeInFd, EPOLLOUT);
-    server->addHandlerFD(this, pipeOutFd, EPOLLIN);
-}
 
 CGI::CGI(Client* client, Server *srv, const HttpRequest &request, const Location &location, std::string fullResolvedPath)
-    : writeOffset(0),
-      state(WRITING_INPUT),
-      server(srv),
-      parentClient(client),
-      execBin(location.cgiPath)
+    : pipeInFd(-1),
+    pipeOutFd(-1),
+    cgiPid(-1),
+    writeOffset(0),
+    state(WRITING_INPUT),
+    server(srv),
+    parentClient(client),
+    execBin(location.cgiPath)
 {
-    client->timeout = time(NULL);
+    if (!server || !parentClient)
+        throw std::runtime_error("CGI: invalid server or client");
+
+    parentClient->timeout = time(NULL);
     requestBody = request.getBody();
     char **envp = buildEnv(request);
 
-    int pipeIn[2], pipeOut[2];
-    pipe(pipeIn);
-    pipe(pipeOut);
-
-    std::cout << "hhhhhh" << std::endl;
-    fcntl(pipeOut[0], F_SETFL, O_NONBLOCK);
-    fcntl(pipeIn[1], F_SETFL, O_NONBLOCK);
-    cgiPid = fork();
-    if (cgiPid == 0)
+    int pipeIn[2] = {-1, -1};
+    int pipeOut[2] = {-1, -1};
+    if (pipe(pipeIn) < 0)
     {
-        dup2(pipeIn[0], 0);
-        dup2(pipeOut[1], 1);
+        freeEnv(envp);
+        throw std::runtime_error("CGI: input pipe failed");
+    }
+    if (pipe(pipeOut) < 0)
+    {
+        close(pipeIn[0]);
+        close(pipeIn[1]);
+        freeEnv(envp);
+        throw std::runtime_error("CGI: output pipe failed");
+    }
+    int flags = fcntl(pipeIn[1], F_GETFL, 0);
+    if (flags < 0 || fcntl(pipeIn[1], F_SETFL, flags | O_NONBLOCK) < 0)
+    {
+        close(pipeIn[0]);
         close(pipeIn[1]);
         close(pipeOut[0]);
-        close(pipeIn[0]);
         close(pipeOut[1]);
-        char *args[] = {(char *)execBin.c_str(), (char*)fullResolvedPath.c_str(), NULL };
+        freeEnv(envp);
+        throw std::runtime_error("CGI: failed to configure input pipe");
+    }
+    flags = fcntl(pipeOut[0], F_GETFL, 0);
+    if (flags < 0 || fcntl(pipeOut[0], F_SETFL, flags | O_NONBLOCK) < 0)
+    {
+        close(pipeIn[0]);
+        close(pipeIn[1]);
+        close(pipeOut[0]);
+        close(pipeOut[1]);
+        freeEnv(envp);
+        throw std::runtime_error("CGI: failed to configure output pipe");
+    }
+    cgiPid = fork();
+    if (cgiPid < 0)
+    {
+        close(pipeIn[0]);
+        close(pipeIn[1]);
+        close(pipeOut[0]);
+        close(pipeOut[1]);
+        freeEnv(envp);
+        cgiPid = -1;
+        throw std::runtime_error("CGI: fork failed");
+    }
+    if (cgiPid == 0)
+    {
+        if (dup2(pipeIn[0], STDIN_FILENO) < 0)
+            _exit(1);
+
+        if (dup2(pipeOut[1], STDOUT_FILENO) < 0)
+            _exit(1);
+
+        close(pipeIn[0]);
+        close(pipeIn[1]);
+        close(pipeOut[0]);
+        close(pipeOut[1]);
+
+        char *args[] = {
+            const_cast<char *>(execBin.c_str()),
+            const_cast<char *>(fullResolvedPath.c_str()),
+            NULL
+        };
+
         execve(args[0], args, envp);
-        exit(1);
+        _exit(1);
     }
     close(pipeIn[0]);
     close(pipeOut[1]);
-    pipeOutFd = pipeOut[0];
     pipeInFd = pipeIn[1];
+    pipeOutFd = pipeOut[0];
     freeEnv(envp);
+}
+
+void CGI::registerHandlers()
+{
+    server->addHandler(this, pipeOutFd, EPOLLIN);
+    try
+    {
+        if (requestBody.empty())
+        {
+            close(pipeInFd);
+            pipeInFd = -1;
+            return;
+        }
+        server->addHandler(this, pipeInFd, EPOLLOUT);
+    }
+    catch (...)
+    {
+        server->unregisterFD(pipeOutFd);
+        throw;
+    }
 }
 
 CGI::~CGI()
 {
-    if (cgiPid > 0)
-        kill(cgiPid, SIGKILL);
-
-    if (pipeInFd >= 0) 
+    if (pipeInFd >= 0)
     {
-        server->removeHandler(pipeInFd);
         close(pipeInFd);
         pipeInFd = -1;
     }
-    if (pipeOutFd >= 0) 
+    if (pipeOutFd >= 0)
     {
-        server->removeHandler(pipeOutFd);
         close(pipeOutFd);
         pipeOutFd = -1;
     }
-
     if (cgiPid > 0)
-        waitpid(cgiPid, NULL, WNOHANG);
+    {
+        pid_t pid = cgiPid;
+        kill(pid, SIGKILL);
+        while (waitpid(pid, NULL, 0) < 0)
+        {
+            if (errno == EINTR)
+                continue;
+            break;
+        }
+        cgiPid = -1;
+    }
+    parentClient = NULL;
+}
 
-    cgiPid = -1;
+void CGI::closeInput()
+{
+    if (pipeInFd < 0)
+        return;
+
+    server->unregisterFD(pipeInFd);
+    close(pipeInFd);
+    pipeInFd = -1;
+}
+
+void CGI::closeOutput()
+{
+    if (pipeOutFd < 0)
+        return;
+
+    server->unregisterFD(pipeOutFd);
+    close(pipeOutFd);
+    pipeOutFd = -1;
 }
 
 void CGI::killCgi()
 {
+    if (state == DONE)
+        return;
+
+    state = DONE;
+    parentClient = NULL;
+
+    closeInput();
+    closeOutput();
+
     if (cgiPid > 0)
     {
-        kill(cgiPid, SIGKILL);
+        pid_t pid = cgiPid;
+        kill(pid, SIGKILL);
+        while (waitpid(pid, NULL, 0) < 0)
+        {
+            if (errno == EINTR)
+                continue;
+            break;
+        }
+
         cgiPid = -1;
     }
+    server->removeHandler(this);
+}
+
+void CGI::handleInput()
+{
+    while (writeOffset < requestBody.size())
+    {
+        ssize_t written = write( pipeInFd,
+            requestBody.data() + writeOffset,
+            requestBody.size() - writeOffset
+        );
+        if (written > 0)
+        {
+            writeOffset += static_cast<size_t>(written);
+            if (parentClient)
+                parentClient->timeout = time(NULL);
+
+            continue;
+        }
+        if (written < 0 && errno == EINTR)
+            continue;
+        if (written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            return;
+        if (written < 0 && errno == EPIPE)
+        {
+            closeInput();
+            return;
+        }
+        killCgi();
+        return;
+    }
+
+    closeInput();
+}
+
+void CGI::handleOutput()
+{
+    char buffer[4096];
+    while (true)
+    {
+        ssize_t bytesRead = read(pipeOutFd, buffer, sizeof(buffer));
+        if (bytesRead > 0)
+        {
+            rawOutputBuffer.append(buffer, static_cast<size_t>(bytesRead));
+            if (parentClient)
+                parentClient->timeout = time(NULL);
+            continue;
+        }
+        if (bytesRead == 0)
+        {
+            closeOutput();
+            return;
+        }
+        if (errno == EINTR)
+            continue;
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return;
+        killCgi();
+        return;
+    }
+}
+
+void CGI::finish()
+{
+    if (state == DONE)
+        return;
+
+    state = DONE;
+
+    Client *client = parentClient;
+    parentClient = NULL;
+
+    HttpResponse response = parseCgiOutput(rawOutputBuffer);
+    if (cgiPid > 0)
+    {
+        waitpid(cgiPid, NULL, 0);
+        cgiPid = -1;
+    }
+    if (client)
+        client->onCgiDone(response);
+    server->removeHandler(this);
 }
 
 void CGI::handleEvent(int fd, uint32_t events)
 {
-    // Handle input pipe (writable)
-    if (fd == pipeInFd && (events & EPOLLOUT))
+    if (state == DONE)
+        return;
+
+    if (fd == pipeInFd)
     {
-        if (writeOffset < requestBody.size())
-        {
-            ssize_t written = write(pipeInFd, requestBody.c_str() + writeOffset, requestBody.size() - writeOffset);
-            if (written > 0) 
-                writeOffset += written;
-        }
-        if (writeOffset >= requestBody.size())
-        {
-            server->removeHandler(pipeInFd);
-            close(pipeInFd);
-            pipeInFd = -1;
-        }
+        if (events & (EPOLLERR | EPOLLHUP))
+            closeInput();
+        else if (events & EPOLLOUT)
+            handleInput();
     }
-    // Handle output pipe (readable)
-    if (fd == pipeOutFd && (events & EPOLLIN)) 
+    else if (fd == pipeOutFd)
     {
-        char buffer[4096];
-        ssize_t bytesRead = read(pipeOutFd, buffer, sizeof(buffer));
-        if (bytesRead > 0) 
+        if (events & (EPOLLIN | EPOLLHUP))
+            handleOutput();
+        else if (events & EPOLLERR)
         {
-            rawOutputBuffer.append(buffer, bytesRead);
-        } 
-        else if (bytesRead == 0) 
-        {
-            server->removeHandler(pipeOutFd);
-            close(pipeOutFd);
-            pipeOutFd = -1;
+            killCgi();
+            return;
         }
     }
-    if (pipeInFd == -1 && pipeOutFd == -1) 
-    {
-        state = DONE;
-        parentClient->onCgiDone(parseCgiOutput(rawOutputBuffer));
-    }
+    if (state == DONE)
+        return;
+    if (pipeInFd == -1 && pipeOutFd == -1)
+        finish();
 }
 
 HttpResponse CGI::parseCgiOutput(const std::string& rawOutput)
