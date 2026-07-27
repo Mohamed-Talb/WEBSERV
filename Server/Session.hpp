@@ -8,12 +8,12 @@
 
 struct Session
 {
-private:
+    private:
     std::string id;
-    std::map<std::string, std::string> data;
     std::time_t lastAccess;
+    std::map<std::string, std::string> data;
 
-public:
+    public:
     Session();
     Session(const std::string &sessionId);
 
@@ -21,34 +21,32 @@ public:
 
     bool has(const std::string &key) const;
     bool get(const std::string &key, std::string &value) const;
-
-    void set(const std::string &key, const std::string &value);
-    void remove(const std::string &key);
-    void clear();
+    bool isExpired(std::time_t now, std::time_t timeout) const;
 
     void touch();
-    bool isExpired(std::time_t now, std::time_t timeout) const;
+    void clear();
+    void remove(const std::string &key);
+    void set(const std::string &key, const std::string &value);
+
 };
 
 class SessionManager
 {
-private:
+    private:
+    std::string generateSessionId() const;
     std::map<std::string, Session> sessions;
 
-    std::string generateSessionId() const;
-
-public:
+    public:
     SessionManager();
     ~SessionManager();
 
     Session *createSession();
     Session *findSession(const std::string &sessionId);
 
-    bool removeSession(const std::string &sessionId);
-    void removeExpiredSessions(std::time_t now, std::time_t timeout);
-
     void clear();
     std::size_t size() const;
+    bool removeSession(const std::string &sessionId);
+    void removeExpiredSessions(std::time_t now, std::time_t timeout);
 };
 
 #endif

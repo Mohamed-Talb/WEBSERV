@@ -3,8 +3,7 @@
 #include <cerrno>
 #include <cstring>
 
-Listener::Listener(const std::vector<ServerConfig *> &confs, Server *srv)
-    : socketFD(-1), server(srv), configs(confs)
+Listener::Listener(const std::vector<ServerConfig *> &confs, Server *srv) : socketFD(-1), server(srv), configs(confs)
 {
     if (!server)
         throw std::runtime_error("LISTENER: invalid server");
@@ -22,25 +21,23 @@ Listener::Listener(const std::vector<ServerConfig *> &confs, Server *srv)
 
     if (setsockopt(socketFD, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
     {
-        ::close(socketFD);
+        close(socketFD);
         socketFD = -1;
         throw std::runtime_error("LISTENER: setsockopt() failed on port " + intToString(conf->port));
     }
 
     int flags = fcntl(socketFD, F_GETFL, 0);
-
     if (flags < 0 || fcntl(socketFD, F_SETFL, flags | O_NONBLOCK) < 0)
     {
-        ::close(socketFD);
+        close(socketFD);
         socketFD = -1;
         throw std::runtime_error("LISTENER: fcntl() failed on port " + intToString(conf->port));
     }
 
     sockaddr_in addr;
-    std::memset(&addr, 0, sizeof(addr));
-
     addr.sin_family = AF_INET;
     addr.sin_port = htons(conf->port);
+    std::memset(&addr, 0, sizeof(addr));
     addr.sin_addr.s_addr = inet_addr(conf->host.c_str());
 
     if (addr.sin_addr.s_addr == INADDR_NONE)
@@ -48,13 +45,13 @@ Listener::Listener(const std::vector<ServerConfig *> &confs, Server *srv)
 
     if (bind(socketFD, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0)
     {
-        ::close(socketFD);
+        close(socketFD);
         socketFD = -1;
         throw std::runtime_error("LISTENER: bind() failed on port " + intToString(conf->port));
     }
     if (listen(socketFD, SOMAXCONN) < 0)
     {
-        ::close(socketFD);
+        close(socketFD);
         socketFD = -1;
         throw std::runtime_error("LISTENER: listen() failed on port " + intToString(conf->port));
     }
@@ -64,7 +61,7 @@ Listener::~Listener()
 {
     if (socketFD >= 0)
     {
-        ::close(socketFD);
+        close(socketFD);
         socketFD = -1;
     }
 }
@@ -88,7 +85,7 @@ void Listener::handleEvent(int fd, uint32_t events)
             int flags = fcntl(clientFD, F_GETFL, 0);
             if (flags < 0 || fcntl(clientFD, F_SETFL, flags | O_NONBLOCK) < 0)
             {
-                ::close(clientFD);
+                close(clientFD);
                 continue;
             }
             Client *newClient = NULL;
@@ -121,6 +118,5 @@ int Listener::getPort() const
 {
     if (configs.empty() || !configs[0])
         return -1;
-
     return configs[0]->port;
 }

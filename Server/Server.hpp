@@ -28,28 +28,31 @@
 class Server
 {
     private:
-        int epollFD;
-        std::vector<ServerConfig>     configs;
-        std::map<int, IEventHandler*> fdHandlers;
-        std::set<IEventHandler*>   deletionQueue;
-        std::map<IEventHandler *, std::set<int> > registeredFds;
-        SessionManager sessionManager;
-        time_t lastSessionCleanup;
+    int epollFD;
+    time_t lastSessionCleanup;
+    SessionManager sessionManager;
+    std::vector<ServerConfig>     configs;
+    std::map<int, IEventHandler*> fdHandlers;
+    std::set<IEventHandler*>   deletionQueue;
+    std::map<IEventHandler *, std::set<int> > registeredFds;
+
     public:
-        Server();
-        ~Server();
+    Server();
+    ~Server();
 
-        void checkTimeout();
-        void eventLoop();
-        void init(const std::vector<ServerConfig> &confs);
+    void eventLoop();
+    void checkTimeout();
+    void init(const std::vector<ServerConfig> &confs);
 
-        void clearDeletionQueue();
-        void unregisterFD(int fd);
-        void removeHandler(IEventHandler *handler);
-        void modifyHandler(int fd, uint32_t events);
-        void addHandler(IEventHandler *handler, int fd, uint32_t events);
-        SessionManager &getSessionManager();
-        const std::vector<ServerConfig> &getConfigs() const;
+    void clearDeletionQueue();
+    void unregisterFD(int fd);
+    void removeHandler(IEventHandler *handler);
+    void modifyHandler(int fd, uint32_t events);
+    void addHandler(IEventHandler *handler, int fd, uint32_t events);
+    
+    
+    SessionManager &getSessionManager();
+    const std::vector<ServerConfig> &getConfigs() const;
 };
 
 

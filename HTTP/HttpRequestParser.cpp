@@ -9,15 +9,8 @@
 
 
 HttpRequestParser::HttpRequestParser(const std::vector<ServerConfig *> &conf)
-    : maxBodySize(0),
-      parsedSize(0),
-      expectedBodySize(0),
-      bodySizeInitialized(false),
-      state(PARSE_REQUEST_LINE),
-      errorCode(0),
-      configs(conf),
-      activeConfig(NULL)
-{}
+    : maxBodySize(0), parsedSize(0), expectedBodySize(0), bodySizeInitialized(false), state(PARSE_REQUEST_LINE), errorCode(0), configs(conf), activeConfig(NULL) {}
+
 HttpRequestParser::~HttpRequestParser() {}
 
 
@@ -35,13 +28,13 @@ void HttpRequestParser::setError(int code)
 
 void HttpRequestParser::reset()
 {
-    activeConfig = NULL;
-    request.reset();
-    maxBodySize = 0;
+    errorCode = 0;
     parsedSize = 0;
+    maxBodySize = 0;
+    request.reset();
+    activeConfig = NULL;
     expectedBodySize = 0;
     bodySizeInitialized = false;
-    errorCode = 0;
     state = PARSE_REQUEST_LINE;
 }
 
@@ -175,46 +168,37 @@ bool HttpRequestParser::parseCookies()
 {
     if (!request.hasHeader("cookie"))
         return true;
-
     const std::vector<std::string> &cookieHeaders =
         request.getHeader("cookie");
-
     for (size_t i = 0; i < cookieHeaders.size(); ++i)
     {
         const std::string &header = cookieHeaders[i];
         size_t start = 0;
-
         while (start <= header.size())
         {
             size_t end = header.find(';', start);
             std::string pair;
-
             if (end == std::string::npos)
                 pair = header.substr(start);
             else
                 pair = header.substr(start, end - start);
-
             pair = trim(pair);
 
             if (!pair.empty())
             {
                 size_t equalPosition = pair.find('=');
-
                 if (equalPosition == std::string::npos)
                 {
                     setError(400);
                     return false;
                 }
-
                 std::string name = trim(pair.substr(0, equalPosition));
                 std::string value = trim(pair.substr(equalPosition + 1));
-
                 if (name.empty())
                 {
                     setError(400);
                     return false;
                 }
-
                 request.setCookie(name, value);
             }
 
@@ -488,48 +472,6 @@ StepStatus HttpRequestParser::parseBody(const std::string &raw)
     state = PARSE_COMPLETE;
     return STEP_COMPLETE;
 }
-
-// ParseStatus HttpRequestParser::parse(const std::string &rawRequestData)
-// {
-//     while (state != PARSE_COMPLETE && state != PARSE_ERROR)
-//     {
-//         State previousState = state;
-//         StepStatus stepStatus = STEP_ERROR;
-
-//         switch (state)
-//         {
-//             case PARSE_REQUEST_LINE:
-//                 stepStatus = parseRequestLine(rawRequestData);
-//                 break;
-
-//             case PARSE_HEADERS:
-//                 stepStatus = parseHeaders(rawRequestData);
-//                 break;
-
-//             case PARSE_BODY:
-//                 stepStatus = parseBody(rawRequestData);
-//                 break;
-
-//             default:
-//                 setError(500);
-//                 return PARSE_REQUEST_ERROR;
-//         }
-
-//         if (stepStatus == STEP_NEED_MORE_DATA)
-//             return PARSE_NEED_MORE_DATA;
-
-//         if (stepStatus == STEP_ERROR)
-//             return PARSE_REQUEST_ERROR;
-
-//         if (previousState == PARSE_HEADERS && state == PARSE_BODY)
-//             return PARSE_HEADERS_COMPLETE;
-//     }
-
-//     if (state == PARSE_ERROR)
-//         return PARSE_REQUEST_ERROR;
-
-//     return PARSE_REQUEST_COMPLETE;
-// }
 
 const ServerConfig *HttpRequestParser::getActiveConfig()
 {

@@ -3,15 +3,9 @@
 #include <cstdlib>
 #include <unistd.h>
 
-Session::Session()
-    : id(), data(), lastAccess(std::time(NULL))
-{
-}
-
-Session::Session(const std::string &sessionId)
-    : id(sessionId), data(), lastAccess(std::time(NULL))
-{
-}
+SessionManager::~SessionManager() {}
+Session::Session() : lastAccess(std::time(NULL)) {}
+Session::Session(const std::string &sessionId) : id(sessionId), lastAccess(std::time(NULL)) {}
 
 const std::string &Session::getId() const
 {
@@ -23,16 +17,12 @@ bool Session::has(const std::string &key) const
     return data.find(key) != data.end();
 }
 
-bool Session::get(const std::string &key, std::string &value) const
+void Session::touch()
 {
-    std::map<std::string, std::string>::const_iterator it = data.find(key);
-
-    if (it == data.end())
-        return false;
-
-    value = it->second;
-    return true;
+    lastAccess = std::time(NULL);
 }
+
+
 
 void Session::set(const std::string &key, const std::string &value)
 {
@@ -52,9 +42,9 @@ void Session::clear()
     touch();
 }
 
-void Session::touch()
+bool SessionManager::removeSession(const std::string &sessionId)
 {
-    lastAccess = std::time(NULL);
+    return sessions.erase(sessionId) != 0;
 }
 
 bool Session::isExpired(std::time_t now, std::time_t timeout) const
@@ -62,10 +52,24 @@ bool Session::isExpired(std::time_t now, std::time_t timeout) const
     return std::difftime(now, lastAccess) >= timeout;
 }
 
+
+bool Session::get(const std::string &key, std::string &value) const
+{
+    std::map<std::string, std::string>::const_iterator it = data.find(key);
+
+    if (it == data.end())
+        return false;
+
+    value = it->second;
+    return true;
+}
+
+
+
+/*Session manager*/
 SessionManager::SessionManager()
 {
     static bool seeded = false;
-
     if (!seeded)
     {
         std::srand(static_cast<unsigned int>(std::time(NULL) ^ getpid()));
@@ -73,32 +77,24 @@ SessionManager::SessionManager()
     }
 }
 
-SessionManager::~SessionManager()
-{
-}
+
 
 std::string SessionManager::generateSessionId() const
 {
-    static const char characters[] =
-        "0123456789"
-        "abcdefghijklmnopqrstuvwxyz"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    static const char characters[] = "0123456789" "abcdefghijklmnopqrstuvwxyz" "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
     const std::size_t characterCount = sizeof(characters) - 1;
 
     std::string sessionId;
     sessionId.reserve(32);
-
     for (std::size_t i = 0; i < 32; ++i)
         sessionId += characters[std::rand() % characterCount];
-
     return sessionId;
 }
 
 Session *SessionManager::createSession()
 {
     std::string sessionId;
-
     do
     {
         sessionId = generateSessionId();
@@ -125,10 +121,7 @@ Session *SessionManager::findSession(const std::string &sessionId)
     return &it->second;
 }
 
-bool SessionManager::removeSession(const std::string &sessionId)
-{
-    return sessions.erase(sessionId) != 0;
-}
+
 
 void SessionManager::removeExpiredSessions(std::time_t now, std::time_t timeout)
 {

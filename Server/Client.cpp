@@ -10,7 +10,7 @@
 #include <ctime>
 
 Client::Client(int fd, Server *srv, const std::vector<ServerConfig *> &confs)
-    : socketFD(fd), server(srv), configs(confs), activeConfig(NULL), requestParser(confs), activeCgi(NULL), state(READING_REQUEST), closeAfterWrite(false), writeOffset(0), timeout(time(NULL)) {}
+    :socketFD(fd), server(srv), activeCgi(NULL), state(READING_REQUEST),writeOffset(0),  closeAfterWrite(false),requestParser(confs),activeConfig(NULL), configs(confs),  timeout(time(NULL)) {}
 
 Client::~Client()
 {
@@ -73,8 +73,8 @@ void Client::terminateCgi()
     activeCgi = NULL;
 
     writeBuffer = response.toString();
-    requestParser.reset();
     readBuffer.clear();
+    requestParser.reset();
     state = SENDING_RESPONSE;
     server->modifyHandler(socketFD, EPOLLOUT);
 }
@@ -95,6 +95,52 @@ void Client::onCgiDone(HttpResponse &response)
     requestParser.reset();
     state = SENDING_RESPONSE;
     server->modifyHandler(socketFD, EPOLLOUT);
+}
+
+void Client::startCgi(const HttpRequest &request, const HttpResult &result)
+{
+    if (!result.cgiLocation)
+    {
+        errorsHandler(500);
+        return;
+    }
+    Session *session = NULL;
+    bool isNewSession = false;
+    std::string sessionId;
+    if (request.getCookie("session_id", sessionId))
+        session = server->getSessionManager().findSession(sessionId);
+    if (!session)
+    {
+        session = server->getSessionManager().createSession();
+        if (!session)
+        {
+            errorsHandler(500);
+            return;
+        }
+        isNewSession = true;
+    }
+    state = PROCESSING_CGI;
+    try
+    {
+        activeCgi = new CGI( this, server, request, *result.cgiLocation, result.cgiRequestPath, session->getId(), isNewSession);
+        activeCgi->registerHandlers();
+    }
+    catch (...)
+    {
+        if (activeCgi)
+        {
+            CGI *cgi = activeCgi;
+            activeCgi = NULL;
+            cgi->killCgi();
+        }
+        if (isNewSession)
+            server->getSessionManager().removeSession(session->getId());
+
+        state = READING_REQUEST;
+        errorsHandler(500);
+        return;
+    }
+    return;
 }
 
 void Client::errorsHandler(int errorCode)
@@ -120,10 +166,11 @@ void Client::errorsHandler(int errorCode)
     timeout = time(NULL);
     requestParser.reset();
     readBuffer.clear();
-
     state = SENDING_RESPONSE;
     server->modifyHandler(socketFD, EPOLLOUT);
 }
+
+
 
 bool Client::readFromSocket()
 {
@@ -190,48 +237,7 @@ void Client::processReadBuffer()
             consumeReadBuffer(consumedBytes);
             if (result.type == HTTP_RESULT_CGI)
             {
-                if (!result.cgiLocation)
-                {
-                    errorsHandler(500);
-                    return;
-                }
-
-                Session *session = NULL;
-                bool isNewSession = false;
-                std::string sessionId;
-                if (request.getCookie("session_id", sessionId))
-                {
-                    session = server->getSessionManager().findSession(sessionId);
-                }
-                if (!session)
-                {
-                    session = server->getSessionManager().createSession();
-                    if (!session)
-                    {
-                        errorsHandler(500);
-                        return;
-                    }
-                    isNewSession = true;
-                }
-                state = PROCESSING_CGI;
-                try
-                {
-                    activeCgi = new CGI(this, server, request, *result.cgiLocation, result.cgiRequestPath, session->getId(), isNewSession);
-                    activeCgi->registerHandlers();
-                }
-                catch (...)
-                {
-                    if (activeCgi)
-                    {
-                        CGI *cgi = activeCgi;
-                        activeCgi = NULL;
-                        cgi->killCgi();
-                    }
-                    if (isNewSession)
-                        server->getSessionManager().removeSession(session->getId());
-                    errorsHandler(500);
-                    return;
-                }
+                startCgi(request, result);
                 return;
             }
             HttpResponse response = result.response;
