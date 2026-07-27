@@ -74,7 +74,6 @@ class HttpHandler
     std::vector<std::string> resolveIndexFiles(const Location *location) const;
     bool resolveDirectory(RouteMatch &match, const HttpRequest request, HttpResponse &response) const;
     HttpResponse resolveRedirection(const Location &location) const;
-    HttpResult resolveCgi(const RouteMatch &match) const;
     
     public:
     HttpHandler(const ServerConfig &config);

@@ -28,28 +28,6 @@ bool HttpHandler::isCgiRequest(const RouteMatch &match) const
     return match.fullPath.compare(offset, extension.size(), extension) == 0;
 }
 
-
-HttpResult HttpHandler::resolveCgi(const RouteMatch &match) const
-{
-    if (!fileExists(match.fullPath))
-    {
-        return HttpResult::makeResponse(ErrorPage(404, *serverConfig));
-    }
-    if (isDirectory(match.fullPath))
-    {
-        return HttpResult::makeResponse(ErrorPage(403, *serverConfig));
-    }
-    if (!isRegularFile(match.fullPath))
-    {
-        return HttpResult::makeResponse(ErrorPage(403, *serverConfig));
-    }
-    if (!isReadableFile(match.fullPath))
-    {
-        return HttpResult::makeResponse(ErrorPage(403, *serverConfig));
-    }
-    return HttpResult::makeCgi(match.location,match.fullPath);
-}
-
 void HttpHandler::resolveRoute(const HttpRequest &request, RouteMatch &match) const
 {
     match.requestPath = request.getRequestPath();
@@ -178,7 +156,7 @@ HttpResult HttpHandler::process(const HttpRequest &request) const
         return HttpResult::makeResponse(directoryResponse);
 
     if (isCgiRequest(match))
-        return resolveCgi(match);
+        return HttpResult::makeCgi(match.location,match.fullPath);
 
     if (!fileExists(match.fullPath) && method != "POST")
     {

@@ -10,62 +10,108 @@
 
 char **CGI::buildEnv(const HttpRequest &request)
 {
-    std::string contentType;
-    std::string contentLength;
-    std::string serverProtocol;
-    std::string requestUri;
-    std::string serverName;
+    const std::map<std::string, std::vector<std::string> > &headers = request.getHeaders();
+    size_t headerCount = 0;
+    for (std::map<std::string, std::vector<std::string> >::const_iterator it = headers.begin();
+         it != headers.end(); ++it)
+    {
+        std::string key = it->first;
+        if (key == "content-length" || key == "content-type")
+            continue;
+        const std::vector<std::string> &vals = it->second;
+        bool hasValue = false;
+        for (size_t v = 0; v < vals.size(); ++v)
+        {
+            if (!trim(vals[v]).empty())
+            {
+                hasValue = true;
+                break;
+            }
+        }
+        if (hasValue)
+            ++headerCount;
+    }
 
+    char **envp = new char *[12 + headerCount + 1];
+    int idx = 0;
+
+    std::string contentType;
     if (request.hasHeader("content-type"))
     {
-        const std::vector<std::string> &values = request.getHeader("content-type");
-
-        if (!values.empty())
-            contentType = values[0];
+        const std::vector<std::string> &ct = request.getHeader("content-type");
+        if (!ct.empty())
+            contentType = trim(ct[0]);
     }
 
     std::ostringstream lengthStream;
     lengthStream << request.getBody().size();
-    contentLength = lengthStream.str();
 
-    serverProtocol = request.getVersion();
-
-    if (serverProtocol.find("HTTP/") != 0)
-        serverProtocol = "HTTP/" + serverProtocol;
-    requestUri = request.getRequestPath();
-
+    std::string uri = request.getRequestPath();
     if (!request.getQuery().empty())
-        requestUri += "?" + request.getQuery();
+        uri += "?" + request.getQuery();
 
+    std::string serverName;
     if (request.hasHeader("host"))
     {
-        const std::vector<std::string> &hostValues = request.getHeader("host");
-
-        if (!hostValues.empty())
+        const std::vector<std::string> &hostVals = request.getHeader("host");
+        if (!hostVals.empty())
         {
-            serverName = hostValues[0];
-
-            size_t portPosition = serverName.find(':');
-
-            if (portPosition != std::string::npos)
-                serverName = serverName.substr(0, portPosition);
+            serverName = trim(hostVals[0]);
+            size_t colon = serverName.find(':');
+            if (colon != std::string::npos)
+                serverName = serverName.substr(0, colon);
         }
     }
 
-    char **envp = new char *[13];
-    envp[0] = strdup(("REQUEST_METHOD=" + request.getMethod()).c_str());
-    envp[1] = strdup(("REQUEST_URI=" + requestUri).c_str());
-    envp[2] = strdup(("CONTENT_LENGTH=" + contentLength).c_str());
-    envp[3] = strdup(("CONTENT_TYPE=" + contentType).c_str());
-    envp[4] = strdup(("SCRIPT_NAME=" + request.getRequestPath()).c_str());
-    envp[5] = strdup(("PATH_INFO=" + request.getRequestPath()).c_str());
-    envp[6] = strdup(("QUERY_STRING=" + request.getQuery()).c_str());
-    envp[7] = strdup("GATEWAY_INTERFACE=CGI/1.1");
-    envp[8] = strdup(("SERVER_PROTOCOL=" + serverProtocol).c_str());
-    envp[9] = strdup(("SERVER_NAME=" + serverName).c_str());
-    envp[10] = strdup("SERVER_SOFTWARE=webserv");
-    envp[11] = strdup("REDIRECT_STATUS=200");
-    envp[12] = NULL;
+    envp[idx++] = strdup(("REQUEST_METHOD=" + request.getMethod()).c_str());
+    envp[idx++] = strdup(("REQUEST_URI=" + uri).c_str());
+    envp[idx++] = strdup(("CONTENT_LENGTH=" + lengthStream.str()).c_str());
+    envp[idx++] = strdup(("CONTENT_TYPE=" + contentType).c_str());
+    envp[idx++] = strdup(("SCRIPT_NAME=" + request.getRequestPath()).c_str());
+    envp[idx++] = strdup(("PATH_INFO=" + request.getRequestPath()).c_str());
+    envp[idx++] = strdup(("QUERY_STRING=" + request.getQuery()).c_str());
+    envp[idx++] = strdup("GATEWAY_INTERFACE=CGI/1.1");
+    envp[idx++] = strdup(("SERVER_PROTOCOL=" + request.getVersion()).c_str());
+    envp[idx++] = strdup(("SERVER_NAME=" + serverName).c_str());
+    envp[idx++] = strdup("SERVER_SOFTWARE=webserv");
+    envp[idx++] = strdup("REDIRECT_STATUS=200");
+
+    for (std::map<std::string, std::vector<std::string> >::const_iterator it = headers.begin();
+         it != headers.end(); ++it)
+    {
+        std::string key = it->first;
+        if (key == "content-length" || key == "content-type")
+            continue;
+
+        const std::vector<std::string> &values = it->second;
+        std::string combined;
+        for (size_t v = 0; v < values.size(); ++v)
+        {
+            std::string val = trim(values[v]);
+            if (val.empty())
+                continue;
+            if (!combined.empty())
+                combined += ", ";
+            combined += val;
+        }
+
+        if (combined.empty())
+            continue;
+
+        std::string envName = "HTTP_";
+        for (size_t i = 0; i < key.size(); ++i)
+        {
+            char c = key[i];
+            if (c == '-')
+                envName += '_';
+            else
+                envName += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        }
+
+        envp[idx++] = strdup((envName + "=" + combined).c_str());
+    }
+
+    envp[idx] = NULL;
     return envp;
 }
 
