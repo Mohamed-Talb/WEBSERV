@@ -40,6 +40,8 @@ class HttpRequestParser
 
     size_t maxBodySize;
     size_t parsedSize;
+    size_t expectedBodySize;
+    bool bodySizeInitialized;
 
     State state;
     int errorCode;

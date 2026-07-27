@@ -71,7 +71,7 @@ class Client : public IEventHandler
     const std::string &getWriteBuffer() const;
 
     void terminateCgi();
-    void onCgiDone(HttpResponse response);
+    void onCgiDone(HttpResponse &response);
 };
 
 #endif

@@ -12,34 +12,60 @@ char **CGI::buildEnv(const HttpRequest &request)
 {
     std::string contentType;
     std::string contentLength;
-    char **envp = new char*[5];
-    
+    std::string serverProtocol;
+    std::string requestUri;
+    std::string serverName;
+
     if (request.hasHeader("content-type"))
     {
         const std::vector<std::string> &values = request.getHeader("content-type");
+
         if (!values.empty())
             contentType = values[0];
     }
 
-    if (request.hasHeader("content-length"))
+    std::ostringstream lengthStream;
+    lengthStream << request.getBody().size();
+    contentLength = lengthStream.str();
+
+    serverProtocol = request.getVersion();
+
+    if (serverProtocol.find("HTTP/") != 0)
+        serverProtocol = "HTTP/" + serverProtocol;
+    requestUri = request.getRequestPath();
+
+    if (!request.getQuery().empty())
+        requestUri += "?" + request.getQuery();
+
+    if (request.hasHeader("host"))
     {
-        const std::vector<std::string> &values = request.getHeader("content-length");
-        if (!values.empty())
-            contentLength = values[0];
-    }
-    else
-    {
-        std::ostringstream oss;
-        oss << request.getBody().size();
-        contentLength = oss.str();
+        const std::vector<std::string> &hostValues = request.getHeader("host");
+
+        if (!hostValues.empty())
+        {
+            serverName = hostValues[0];
+
+            size_t portPosition = serverName.find(':');
+
+            if (portPosition != std::string::npos)
+                serverName = serverName.substr(0, portPosition);
+        }
     }
 
+    char **envp = new char *[13];
     envp[0] = strdup(("REQUEST_METHOD=" + request.getMethod()).c_str());
-    envp[1] = strdup(("QUERY_STRING=" + request.getQuery()).c_str());
-    envp[2] = strdup(("CONTENT_TYPE=" + contentType).c_str());
-    envp[3] = strdup(("CONTENT_LENGTH=" + contentLength).c_str());
-    envp[4] = NULL;
-
+    envp[1] = strdup(("REQUEST_URI=" + requestUri).c_str());
+    envp[2] = strdup(("CONTENT_LENGTH=" + contentLength).c_str());
+    envp[3] = strdup(("CONTENT_TYPE=" + contentType).c_str());
+    envp[4] = strdup(("SCRIPT_NAME=" + request.getRequestPath()).c_str());
+    envp[5] = strdup(("PATH_INFO=" + request.getRequestPath()).c_str());
+    envp[6] = strdup(("QUERY_STRING=" + request.getQuery()).c_str());
+    envp[7] = strdup("GATEWAY_INTERFACE=CGI/1.1");
+    envp[8] = strdup(("SERVER_PROTOCOL=" + serverProtocol).c_str());
+    envp[9] = strdup(("SERVER_NAME=" + serverName).c_str());
+    envp[10] = strdup("SERVER_SOFTWARE=webserv");
+    envp[11] = strdup("REDIRECT_STATUS=200");
+    envp[12] = NULL;
     return envp;
 }
 
@@ -71,7 +97,6 @@ CGI::CGI(Client* client, Server *srv, const HttpRequest &request, const Location
     parentClient->timeout = time(NULL);
     requestBody = request.getBody();
     char **envp = buildEnv(request);
-
     int pipeIn[2] = {-1, -1};
     int pipeOut[2] = {-1, -1};
     if (pipe(pipeIn) < 0)
@@ -120,24 +145,23 @@ CGI::CGI(Client* client, Server *srv, const HttpRequest &request, const Location
     if (cgiPid == 0)
     {
         if (dup2(pipeIn[0], STDIN_FILENO) < 0)
-            _exit(1);
+            exit(1);
 
         if (dup2(pipeOut[1], STDOUT_FILENO) < 0)
-            _exit(1);
+            exit(1);
 
         close(pipeIn[0]);
         close(pipeIn[1]);
         close(pipeOut[0]);
         close(pipeOut[1]);
-
         char *args[] = {
             const_cast<char *>(execBin.c_str()),
             const_cast<char *>(fullResolvedPath.c_str()),
             NULL
         };
-
         execve(args[0], args, envp);
-        _exit(1);
+        perror("CGI: execve");
+        exit(1);
     }
     close(pipeIn[0]);
     close(pipeOut[1]);
@@ -268,7 +292,6 @@ void CGI::handleInput()
         killCgi();
         return;
     }
-
     closeInput();
 }
 
@@ -308,7 +331,6 @@ void CGI::finish()
 
     Client *client = parentClient;
     parentClient = NULL;
-
     HttpResponse response = parseCgiOutput(rawOutputBuffer);
     if (cgiPid > 0)
     {

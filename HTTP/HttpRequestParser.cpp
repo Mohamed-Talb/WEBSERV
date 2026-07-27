@@ -8,8 +8,16 @@
 #include <algorithm>
 
 
-HttpRequestParser::HttpRequestParser(const std::vector<ServerConfig *> &conf) : maxBodySize(0), parsedSize(0), state(PARSE_REQUEST_LINE), errorCode(0), configs(conf) {}
-
+HttpRequestParser::HttpRequestParser(const std::vector<ServerConfig *> &conf)
+    : maxBodySize(0),
+      parsedSize(0),
+      expectedBodySize(0),
+      bodySizeInitialized(false),
+      state(PARSE_REQUEST_LINE),
+      errorCode(0),
+      configs(conf),
+      activeConfig(NULL)
+{}
 HttpRequestParser::~HttpRequestParser() {}
 
 
@@ -31,6 +39,8 @@ void HttpRequestParser::reset()
     request.reset();
     maxBodySize = 0;
     parsedSize = 0;
+    expectedBodySize = 0;
+    bodySizeInitialized = false;
     errorCode = 0;
     state = PARSE_REQUEST_LINE;
 }
@@ -277,8 +287,7 @@ StepStatus HttpRequestParser::parseChunkedBody(const std::string &raw)
         {
             size_t currentBodySize = request.getBody().size();
 
-            if (currentBodySize > maxBodySize
-                || chunkSize > maxBodySize - currentBodySize)
+            if (currentBodySize > maxBodySize || chunkSize > maxBodySize - currentBodySize)
             {
                 setError(413);
                 return STEP_ERROR;
@@ -302,7 +311,7 @@ StepStatus HttpRequestParser::parseChunkedBody(const std::string &raw)
             return STEP_ERROR;
         }
 
-        request.appendBody(raw.substr(dataStart, chunkSize));
+        request.appendBody(raw.data() + dataStart, chunkSize);
         parsedSize = chunkEndingPosition + crlfSize;
     }
 }
@@ -373,49 +382,49 @@ StepStatus HttpRequestParser::parseBody(const std::string &raw)
     }
     else if (hasContentLength)
     {
-        std::string contentLengthHeader = trim(contentLengthValues[0]);
-        size_t contentLength = 0;
-
-        if (!parseDecimalSize(contentLengthHeader, contentLength))
+        if (!bodySizeInitialized)
         {
-            setError(400);
-            return STEP_ERROR;
-        }
+            std::string contentLengthHeader = trim(contentLengthValues[0]);
 
-        if (maxBodySize > 0 && contentLength > maxBodySize)
-        {
-            setError(413);
-            return STEP_ERROR;
+            if (!parseDecimalSize(contentLengthHeader, expectedBodySize))
+            {
+                setError(400);
+                return STEP_ERROR;
+            }
+            if (maxBodySize > 0 && expectedBodySize > maxBodySize)
+            {
+                setError(413);
+                return STEP_ERROR;
+            }
+            request.reserveBody(expectedBodySize);
+            bodySizeInitialized = true;
         }
 
         size_t currentBodySize = request.getBody().size();
 
-        if (currentBodySize > contentLength)
+        if (currentBodySize > expectedBodySize)
         {
             setError(400);
             return STEP_ERROR;
         }
-
         if (parsedSize > raw.size())
         {
             setError(400);
             return STEP_ERROR;
         }
-
-        size_t neededBytes = contentLength - currentBodySize;
+        size_t neededBytes = expectedBodySize - currentBodySize;
         size_t availableBytes = raw.size() - parsedSize;
         size_t copiedBytes = std::min(neededBytes, availableBytes);
 
         if (copiedBytes > 0)
         {
-            request.appendBody(raw.substr(parsedSize, copiedBytes));
+            request.appendBody(raw.data() + parsedSize, copiedBytes);
             parsedSize += copiedBytes;
         }
 
-        if (request.getBody().size() < contentLength)
+        if (request.getBody().size() < expectedBodySize)
             return STEP_NEED_MORE_DATA;
     }
-
     state = PARSE_COMPLETE;
     return STEP_COMPLETE;
 }
@@ -529,17 +538,14 @@ ParseStatus HttpRequestParser::parse(const std::string &rawRequestData)
             if (request.hasHeader("content-length"))
             {
                 const std::vector<std::string> &lengthValues = request.getHeader("content-length");
-
                 if (!lengthValues.empty())
                 {
                     size_t contentLength = 0;
-
                     if (!parseDecimalSize(lengthValues[0], contentLength))
                     {
                         setError(400);
                         return PARSE_REQUEST_ERROR;
                     }
-
                     if (contentLength > maxBodySize)
                     {
                         setError(413);

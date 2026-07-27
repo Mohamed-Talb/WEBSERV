@@ -26,7 +26,15 @@ const std::string &HttpRequest::getRequestPath() const { return requestPath; }
 void HttpRequest::setQuery(const std::string &value) { query = value; }
 void HttpRequest::setTarget(const std::string &value) { target = value; }
 void HttpRequest::setMethod(const std::string &value) { method = value; }
-void HttpRequest::appendBody(const std::string &value) { body += value; }
+void HttpRequest::appendBody(const char *data, size_t size)
+{
+    body.append(data, size);
+}
+
+void HttpRequest::reserveBody(size_t size)
+{
+    body.reserve(size);
+}
 void HttpRequest::setVersion(const std::string &value) { version = value; }
 void HttpRequest::setRequestPath(const std::string &value) { requestPath = value; }
 

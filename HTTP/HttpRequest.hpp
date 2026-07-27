@@ -30,7 +30,8 @@ class HttpRequest
 
     void setHeader(const std::string &key, const std::string &value);
     void appendHeader(const std::string &key, const std::string &value);
-    void appendBody(const std::string &value);
+    void appendBody(const char *data, size_t size);
+    void reserveBody(size_t size);
 
     bool hasHeader(const std::string &key) const;
     bool headerContainsToken(const std::string &key, const std::string &expected) const;

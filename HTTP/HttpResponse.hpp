@@ -21,6 +21,7 @@ class HttpResponse
     ~HttpResponse();
     HttpResponse(int code, const std::string &reason);
 
+    size_t getBodySize();
     std::string toString() const;
     void setBody(const std::string &content);
     void writeBody(const std::string &chunk);

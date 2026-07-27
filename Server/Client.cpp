@@ -96,8 +96,9 @@ void Client::terminateCgi()
     server->modifyHandler(socketFD, EPOLLOUT);
 }
 
-void Client::onCgiDone(HttpResponse response)
+void Client::onCgiDone(HttpResponse &response)
 {
+    std::cout << response.getBodySize() << std::endl;
     HttpRequest &request = requestParser.getRequest();
 
     closeAfterWrite = request.shouldCloseConnection();
@@ -143,14 +144,17 @@ void Client::errorsHandler(int errorCode)
 
 bool Client::readFromSocket()
 {
-    char buffer[8192];
+    char buffer[65536];
+    size_t totalRead = 0;
+    const size_t maxReadPerCall = 1024 * 1024;
 
-    while (true)
+    while (totalRead < maxReadPerCall)
     {
-        ssize_t bytes = recv(socketFD,buffer,sizeof(buffer),0);
+        ssize_t bytes = recv(socketFD, buffer, sizeof(buffer), 0);
         if (bytes > 0)
         {
             appendToReadBuffer(buffer, static_cast<size_t>(bytes));
+            totalRead += static_cast<size_t>(bytes);
             timeout = time(NULL);
             continue;
         }
@@ -166,6 +170,7 @@ bool Client::readFromSocket()
         closeConnection();
         return false;
     }
+    return true;
 }
 
 void Client::processReadBuffer()
@@ -185,6 +190,7 @@ void Client::processReadBuffer()
         if (parseStatus == PARSE_REQUEST_COMPLETE)
         {
             HttpRequest &request = requestParser.getRequest();
+            std::cout << "[CLIENT REQUEST BODY]: " << request.getBody().size() << std::endl;
             activeConfig = requestParser.getActiveConfig();
 
             if (!activeConfig)

@@ -1,5 +1,10 @@
 #include "HttpResponse.hpp"
 
+size_t HttpResponse::getBodySize()
+{
+    return body.size();
+}
+
 HttpResponse::HttpResponse() : statusCode(200), reasonPhrase("OK")
 {
     headers["Connection"] = "keep-alive";
