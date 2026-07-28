@@ -220,7 +220,6 @@ void Client::processReadBuffer()
         if (parseStatus == PARSE_REQUEST_COMPLETE)
         {
             HttpRequest &request = requestParser.getRequest();
-            std::cout << "[CLIENT REQUEST BODY]: " << request.getBody().size() << std::endl;
             activeConfig = requestParser.getActiveConfig();
 
             if (!activeConfig)

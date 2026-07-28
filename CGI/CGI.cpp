@@ -189,7 +189,6 @@ char **CGI::buildEnv(const HttpRequest &request)
             else
                 envName += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
         }
-
         envp[idx++] = strdup((envName + "=" + combined).c_str());
     }
 
@@ -554,7 +553,6 @@ HttpResponse CGI::parseCgiOutput(const std::string& rawOutput)
 
             statusStream >> statusCode;
             std::getline(statusStream >> std::ws, reasonPhrase);
-
             if (reasonPhrase.empty())
                 reasonPhrase = "OK";
         }
@@ -565,7 +563,6 @@ HttpResponse CGI::parseCgiOutput(const std::string& rawOutput)
                 contentType.erase(0, 1);
         }
     }
-    
     HttpResponse response(statusCode, reasonPhrase);
     response.setHeader("Content-Type", contentType);
     

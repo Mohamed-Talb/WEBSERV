@@ -104,6 +104,8 @@ bool HttpHandler::resolveDirectory(RouteMatch &match, const HttpRequest request,
     
     if (match.requestPath.empty() || match.requestPath[match.requestPath.size() - 1] != '/')
     {
+        if (request.getMethod() == "POST")
+            return true;
         std::string queryString = request.getQuery();
         std::string redirectTarget = match.requestPath + "/";
 
