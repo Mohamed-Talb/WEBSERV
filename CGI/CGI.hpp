@@ -48,13 +48,13 @@ class CGI : public IEventHandler
     void handleOutput();
     public:
     virtual ~CGI();
-    CGI(Client *client, Server *srv, const HttpRequest &request, const Location &location, const std::string &fullResolvedPath, const std::string &sessionIdValue, bool shouldSetCookie);
     void killCgi();
     int getFD() const;
     void registerHandlers();
     void freeEnv(char **envp);
     void handleEvent(int, uint32_t);
     char **buildEnv(const HttpRequest &request);
+    CGI(Client *client, Server *srv, const HttpRequest &request, const Location &location, const std::string &fullResolvedPath, const std::string &sessionIdValue, bool shouldSetCookie);
 };
 
 #endif
