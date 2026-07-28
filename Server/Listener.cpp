@@ -33,11 +33,11 @@ Listener::Listener(const std::vector<ServerConfig *> &confs, Server *srv) : sock
         socketFD = -1;
         throw std::runtime_error("LISTENER: fcntl() failed on port " + intToString(conf->port));
     }
-
     sockaddr_in addr;
+    std::memset(&addr, 0, sizeof(addr));
+
     addr.sin_family = AF_INET;
     addr.sin_port = htons(conf->port);
-    std::memset(&addr, 0, sizeof(addr));
     addr.sin_addr.s_addr = inet_addr(conf->host.c_str());
 
     if (addr.sin_addr.s_addr == INADDR_NONE)
@@ -80,6 +80,7 @@ void Listener::handleEvent(int fd, uint32_t events)
     while (true)
     {
         int clientFD = accept(socketFD, NULL, NULL);
+        std::cout << "[CONNECTION]: new client in fd = " << clientFD << std::endl;
         if (clientFD >= 0)
         {
             int flags = fcntl(clientFD, F_GETFL, 0);
