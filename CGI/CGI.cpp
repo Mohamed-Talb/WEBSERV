@@ -98,7 +98,7 @@ char **CGI::buildEnv(const HttpRequest &request)
          it != headers.end(); ++it)
     {
         std::string key = it->first;
-        if (key == "content-length" || key == "content-type")
+        if (key == "content-length" || key == "content-type" || key == "cookie")
             continue;
         const std::vector<std::string> &vals = it->second;
         bool hasValue = false;
@@ -114,7 +114,7 @@ char **CGI::buildEnv(const HttpRequest &request)
             ++headerCount;
     }
 
-    char **envp = new char *[12 + headerCount + 1];
+    char **envp = new char *[14 + headerCount + 1];
     int idx = 0;
 
     std::string contentType;
@@ -157,12 +157,28 @@ char **CGI::buildEnv(const HttpRequest &request)
     envp[idx++] = strdup(("SERVER_NAME=" + serverName).c_str());
     envp[idx++] = strdup("SERVER_SOFTWARE=webserv");
     envp[idx++] = strdup("REDIRECT_STATUS=200");
+    envp[idx++] = strdup(("SESSION_ID=" + sessionId).c_str());
+
+    std::string cookieHeader;
+    const std::map<std::string, std::string> &cookies = request.getCookies();
+    for (std::map<std::string, std::string>::const_iterator it = cookies.begin(); it != cookies.end(); ++it)
+    {
+        if (it->first == "session_id")
+            continue;
+        if (!cookieHeader.empty())
+            cookieHeader += "; ";
+        cookieHeader += it->first + "=" + it->second;
+    }
+    if (!cookieHeader.empty())
+        cookieHeader += "; ";
+    cookieHeader += "session_id=" + sessionId;
+    envp[idx++] = strdup(("HTTP_COOKIE=" + cookieHeader).c_str());
 
     for (std::map<std::string, std::vector<std::string> >::const_iterator it = headers.begin();
          it != headers.end(); ++it)
     {
         std::string key = it->first;
-        if (key == "content-length" || key == "content-type")
+        if (key == "content-length" || key == "content-type" || key == "cookie")
             continue;
 
         const std::vector<std::string> &values = it->second;
@@ -471,6 +487,8 @@ void CGI::finish()
     Client *client = parentClient;
     parentClient = NULL;
     HttpResponse response = parseCgiOutput(rawOutputBuffer);
+    if (shouldSetCookie)
+        response.setHeader("Set-Cookie", "session_id=" + sessionId + "; Path=/; HttpOnly");
     if (cgiPid > 0)
     {
         waitpid(cgiPid, NULL, 0);
@@ -528,11 +546,6 @@ HttpResponse CGI::parseCgiOutput(const std::string& rawOutput)
     {
         HttpResponse response(statusCode, reasonPhrase);
         response.setHeader("Content-Type", contentType);
-    
-        std::stringstream cl;
-        cl << rawOutput.size();
-        response.setHeader("Content-Length", cl.str());
-        
         response.setBody(rawOutput);
         return response;
     }
@@ -541,6 +554,7 @@ HttpResponse CGI::parseCgiOutput(const std::string& rawOutput)
 
     std::stringstream ss(headersPart);
     std::string line;
+    std::map<std::string, std::string> cgiHeaders;
 
     while (std::getline(ss, line))
     {
@@ -564,16 +578,24 @@ HttpResponse CGI::parseCgiOutput(const std::string& rawOutput)
             if (!contentType.empty() && contentType[0] == ' ')
                 contentType.erase(0, 1);
         }
+        else
+        {
+            size_t colon = line.find(':');
+            if (colon == std::string::npos)
+                continue;
+            std::string name = trim(line.substr(0, colon));
+            std::string value = trim(line.substr(colon + 1));
+            if (!name.empty() && toLower(name) != "content-length")
+                cgiHeaders[name] = value;
+        }
     }
     
     HttpResponse response(statusCode, reasonPhrase);
     response.setHeader("Content-Type", contentType);
-    
-    std::stringstream cl;
-    cl << bodyPart.size();
-    response.setHeader("Content-Length", cl.str());
+    for (std::map<std::string, std::string>::const_iterator it = cgiHeaders.begin();
+         it != cgiHeaders.end(); ++it)
+        response.setHeader(it->first, it->second);
     
     response.setBody(bodyPart);
     return response;
 }
-

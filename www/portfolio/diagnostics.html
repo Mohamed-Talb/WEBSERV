@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>webserv // diagnostics</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar"><div class="topbar-inner"><nav class="nav">
+    <a href="index.html">Home</a><a href="about.html">About</a><a href="upload.html">Upload</a>
+    <a href="uploads.html">Uploads</a><a href="session.html">Session</a><a href="cgi-test.html">CGI Test</a>
+    <a href="diagnostics.html">Diagnostics</a>
+  </nav></div></header>
+  <main class="wrap">
+    <p class="eyebrow">06 — Diagnostics</p>
+    <h1 style="text-transform:none;">HTTP behaviour checks</h1>
+    <p class="lead">Run safe browser-side checks for routing, methods, redirects, CGI failures, and path normalization.</p>
+    <div class="panel" style="margin-top:24px;">
+      <div class="btn-row">
+        <button class="btn accent" data-path="/does-not-exist" data-method="GET">404 missing file</button>
+        <button class="btn" data-path="/portfolio/index.html" data-method="POST">405 method</button>
+        <button class="btn" data-path="/upload" data-method="GET" data-redirect="manual">301 slash redirect</button>
+        <button class="btn" data-path="/cgi-bin/quick.py" data-method="GET">CGI timeout</button>
+        <button class="btn" data-path="/upload/%2e%2e/secret.txt" data-method="GET">path traversal</button>
+      </div>
+      <p class="sub">CGI timeout uses the intentional infinite script and may take the server timeout duration. Malformed raw HTTP cannot be sent by a browser; use the project tester or netcat for that check.</p>
+      <div class="console" id="log">// select a diagnostic check</div>
+    </div>
+  </main>
+  <script src="Common.js"></script>
+  <script>
+    const log = document.querySelector("#log");
+    document.querySelectorAll("button[data-path]").forEach((button) => button.addEventListener("click", async () => {
+      const path = button.dataset.path;
+      const options = { method: button.dataset.method, cache: "no-store" };
+      if (button.dataset.redirect) options.redirect = button.dataset.redirect;
+      wsLog(log, `${options.method} ${wsUrl(path)}`, "k");
+      try {
+        const response = await fetch(wsUrl(path), options);
+        const text = await response.text();
+        wsLog(log, `${response.status} ${response.statusText}`, response.ok ? "ok" : "err");
+        if (text) wsLog(log, text.slice(0, 500));
+      } catch (error) { wsLog(log, "request failed: " + error.message, "err"); }
+    }));
+  </script>
+</body>
+</html>

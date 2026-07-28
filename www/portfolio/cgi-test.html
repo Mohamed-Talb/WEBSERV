@@ -19,6 +19,7 @@
         <a href="uploads.html">Uploads</a>
         <a href="session.html">Session</a>
         <a href="cgi-test.html">CGI Test</a>
+        <a href="diagnostics.html">Diagnostics</a>
       </nav>
     </div>
   </header>
@@ -40,6 +41,8 @@
           <select id="cgiMethod">
             <option value="GET" selected>GET</option>
             <option value="POST">POST</option>
+            <option value="PUT">PUT — expect 405</option>
+            <option value="DELETE">DELETE — expect 405</option>
           </select>
         </div>
       </div>

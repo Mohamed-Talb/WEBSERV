@@ -353,6 +353,15 @@ input[type=file] {
   background: var(--line);
 }
 
+.file-delete {
+  background: transparent;
+  border: 0;
+  color: var(--err);
+  cursor: pointer;
+  font: inherit;
+  padding: 0 0 0 10px;
+}
+
 .btn-row {
   display: flex;
   gap: 10px;

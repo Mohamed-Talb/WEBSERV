@@ -101,6 +101,13 @@ bool HttpHandler::resolveDirectory(RouteMatch &match, const HttpRequest request,
 
     if (!isDirectory(match.fullPath))
         return true;
+
+    // An upload location is a POST endpoint even though its mapped path is a
+    // directory. Do not redirect it to a trailing slash or try to serve an
+    // index before the upload handler gets the request.
+    if (request.getMethod() == "POST" && match.location
+        && match.location->uploadEnabled == "on")
+        return true;
     
     if (match.requestPath.empty() || match.requestPath[match.requestPath.size() - 1] != '/')
     {

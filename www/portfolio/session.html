@@ -19,6 +19,7 @@
         <a href="uploads.html">Uploads</a>
         <a href="session.html">Session</a>
         <a href="cgi-test.html">CGI Test</a>
+        <a href="diagnostics.html">Diagnostics</a>
       </nav>
     </div>
   </header>
@@ -26,32 +27,29 @@
   <main class="wrap">
     <p class="eyebrow">04 — Session</p>
     <h1 style="text-transform:none;">Cookies &amp; sessions</h1>
-    <p class="lead">Round-trips requests to your session endpoints with <code>credentials: "include"</code> so
-      Set-Cookie / Cookie headers behave like a real browser session.</p>
+    <p class="lead">Creates a CGI-backed session, stores its HttpOnly cookie in the browser, then verifies that the
+      next request receives the same server-side session ID.</p>
 
     <div class="panel" style="margin-top:24px;">
       <div class="field-row">
         <div>
-          <label for="createPath">Create endpoint</label>
-          <input type="text" id="createPath" value="/session/create">
+          <label for="sessionPath">Session CGI endpoint</label>
+          <input type="text" id="sessionPath" value="/cgi-bin/session.py">
         </div>
         <div>
-          <label for="readPath">Read endpoint</label>
-          <input type="text" id="readPath" value="/session">
+          <label>How it works</label>
+          <p class="sub" style="margin:0;">The browser sends its cookie automatically. The CGI script prints the validated session ID it receives from WebServ.</p>
         </div>
       </div>
-      <label for="destroyPath">Destroy endpoint</label>
-      <input type="text" id="destroyPath" value="/session/destroy">
 
       <div class="btn-row">
         <button class="btn accent" id="createBtn">Create session</button>
-        <button class="btn" id="readBtn">Read session</button>
-        <button class="btn ghost" id="destroyBtn">Destroy session</button>
+        <button class="btn" id="readBtn">Verify same session</button>
         <button class="btn ghost" id="clearLog">Clear log</button>
       </div>
 
       <div class="meta-row">
-        <span class="meta">document.cookie: <b id="cookieView">(none)</b></span>
+        <span class="meta">HttpOnly cookie: <b id="cookieView">sent by browser (not readable from JavaScript)</b></span>
       </div>
 
       <div class="console" id="log">// session responses will appear here</div>
@@ -69,14 +67,14 @@
     
 
 
-    function refreshCookieView() {
-      cookieView.textContent = document.cookie || "(none)";
-    }
+    function refreshCookieView() { cookieView.textContent = "sent automatically with requests"; }
     refreshCookieView();
 
-    async function hit(pathInputId, method) {
-      const path = document.querySelector(pathInputId).value;
-      const url = wsUrl(path);
+    async function hit(action) {
+      const path = document.querySelector("#sessionPath").value;
+      const separator = path.includes("?") ? "&" : "?";
+      const url = wsUrl(path + separator + "action=" + action);
+      const method = "GET";
       wsLog(log, `${method} ${url}`, "k");
       try {
         const res = await fetch(url, { method, credentials: "include", cache: "no-store" });
@@ -92,9 +90,8 @@
       }
     }
 
-    document.querySelector("#createBtn").addEventListener("click", () => hit("#createPath", "GET"));
-    document.querySelector("#readBtn").addEventListener("click", () => hit("#readPath", "GET"));
-    document.querySelector("#destroyBtn").addEventListener("click", () => hit("#destroyPath", "GET"));
+    document.querySelector("#createBtn").addEventListener("click", () => hit("create"));
+    document.querySelector("#readBtn").addEventListener("click", () => hit("read"));
   </script>
 </body>
 

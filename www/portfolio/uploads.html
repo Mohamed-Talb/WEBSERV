@@ -19,6 +19,7 @@
         <a href="uploads.html">Uploads</a>
         <a href="session.html">Session</a>
         <a href="cgi-test.html">CGI Test</a>
+        <a href="diagnostics.html">Diagnostics</a>
       </nav>
     </div>
   </header>
@@ -26,24 +27,12 @@
   <main class="wrap">
     <p class="eyebrow">03 — Uploads</p>
     <h1 style="text-transform:none;">Stored files</h1>
-    <p class="lead">Fetches your uploads directory and lists what's there. Works with either a JSON array response or an
-      HTML autoindex — pick whichever your server returns.</p>
+    <p class="lead">Fetches the HTML autoindex returned by this WebServ upload directory. Open or delete stored files
+      directly from the list.</p>
 
     <div class="panel" style="margin-top:24px;">
-      <div class="field-row">
-        <div>
-          <label for="listPath">Listing endpoint</label>
-          <input type="text" id="listPath" value="/upload/">
-        </div>
-        <div>
-          <label for="respType">Response format</label>
-          <select id="respType">
-            <option value="auto" selected>Auto-detect</option>
-            <option value="json">JSON array of names</option>
-            <option value="html">HTML directory index</option>
-          </select>
-        </div>
-      </div>
+      <label for="listPath">Listing endpoint</label>
+      <input type="text" id="listPath" value="/upload/">
 
       <div class="btn-row">
         <button class="btn accent" id="refreshBtn">Refresh list</button>
@@ -74,9 +63,28 @@
 
     function renderFromNames(names) {
       if (!names.length) return renderEmpty("directory is empty");
-      listEl.innerHTML = names
-        .map((n) => `<li><span class="fname">${wsEscape(n)}</span><a class="fmeta" href="${wsUrl(document.querySelector("#listPath").value.replace(/\/$/, "") + "/" + n)}" target="_blank">open ↗</a></li>`)
-        .join("");
+      const listPath = document.querySelector("#listPath").value.replace(/\/+$/, "");
+
+      function fileUrl(name) {
+        // Autoindex links are already absolute (e.g. /upload/TEST.TXT),
+        // while JSON listings normally return just the filename.
+        if (String(name).startsWith("/")) return wsUrl(String(name));
+        return wsUrl(listPath + "/" + name);
+      }
+
+      listEl.innerHTML = names.map((n, index) =>
+        `<li><span class="fname">${wsEscape(n)}</span><span><a class="fmeta" href="${wsEscape(fileUrl(n))}" target="_blank">open ↗</a> <button class="file-delete" data-index="${index}">delete</button></span></li>`
+      ).join("");
+
+      listEl.querySelectorAll(".file-delete").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const name = names[Number(button.dataset.index)];
+          if (!confirm(`Delete ${name}?`)) return;
+          const res = await fetch(fileUrl(name), { method: "DELETE" });
+          wsLog(log, `DELETE ${fileUrl(name)} → ${res.status} ${res.statusText}`, res.ok ? "ok" : "err");
+          if (res.ok) refreshBtn.click();
+        });
+      });
     }
 
     function parseHtmlIndex(html) {
@@ -89,7 +97,6 @@
 
     refreshBtn.addEventListener("click", async () => {
       const path = document.querySelector("#listPath").value || "/uploads/";
-      const mode = document.querySelector("#respType").value;
       const url = wsUrl(path);
 
       log.style.display = "block";
@@ -107,21 +114,7 @@
           return;
         }
 
-        let names = [];
-        const ctype = res.headers.get("content-type") || "";
-
-        if (mode === "json" || (mode === "auto" && ctype.includes("json"))) {
-          try {
-            const data = JSON.parse(text);
-            names = Array.isArray(data) ? data : data.files || [];
-          } catch {
-            names = parseHtmlIndex(text);
-          }
-        } else {
-          names = parseHtmlIndex(text);
-        }
-
-        renderFromNames(names);
+        renderFromNames(parseHtmlIndex(text));
       } catch (e) {
         wsLog(log, "request failed: " + e.message, "err");
         renderEmpty("could not reach server");
