@@ -7,7 +7,7 @@
 
 #include "../FileSystem.hpp"
 #include "../Helpers.hpp"
-#include "HttpRequest.hpp"
+#include "./HttpRequest/HttpRequest.hpp"
 #include "HttpResponse.hpp"
 #include "../configParser/configParser.hpp"
 #include "RouteMatch.hpp"
@@ -25,6 +25,7 @@
 #include "RouteMatch.hpp"
 #include "../configParser/configParser.hpp"
 #include <string>
+
 
 enum HttpResultType
 {
@@ -72,7 +73,7 @@ class HttpHandler
     bool isCgiRequest(const RouteMatch &match) const;
     void resolveRoute(const HttpRequest &request,RouteMatch &match) const;
     std::vector<std::string> resolveIndexFiles(const Location *location) const;
-    bool resolveDirectory(RouteMatch &match, const HttpRequest request, HttpResponse &response) const;
+    bool resolveDirectory(RouteMatch &match, const HttpRequest &request, HttpResponse &response) const;
     HttpResponse resolveRedirection(const Location &location) const;
     
     public:

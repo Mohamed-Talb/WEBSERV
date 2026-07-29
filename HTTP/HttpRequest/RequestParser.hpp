@@ -1,14 +1,18 @@
-#ifndef HTTP_REQUEST_PARSER_HPP
-#define HTTP_REQUEST_PARSER_HPP
+#ifndef REQUEST_PARSER_HPP
+#define REQUEST_PARSER_HPP
 
 
 #include <cstddef>
 #include <string>
 #include "HttpRequest.hpp"
 #include "../configParser/configParser.hpp"
+#include "../../Helpers.hpp"
+#include "../HttpUtils/HttpUtils.hpp"
+#include <algorithm>
 
 const size_t MAX_HEADER_SIZE = 16384;
 const size_t MAX_REQUEST_LINE_SIZE = 8192;
+
 
 enum ParseStatus
 {
@@ -33,7 +37,7 @@ enum StepStatus
     STEP_COMPLETE = 1
 };
 
-class HttpRequestParser
+class RequestParser
 {
     private:
     HttpRequest request;
@@ -51,17 +55,16 @@ class HttpRequestParser
     private:
     void setError(int code);
 
-    bool splitTarget();
-
-    StepStatus parseBody(const std::string &raw);
-    StepStatus parseHeaders(const std::string &raw);
-    StepStatus parseRequestLine(const std::string &raw);
+    StepStatus bodyParser(const std::string &raw);
+    StepStatus headersParser(const std::string &raw);
+    StepStatus parseNormalBody(const std::string &raw);
     StepStatus parseChunkedBody(const std::string &raw);
-    bool       storeHeader(const std::string &key, const std::string &value);
-    bool parseCookies();
+    StepStatus requestLineParser(const std::string &raw);
+    bool initializeRequestConfig();
+    
     public:
-    HttpRequestParser(const std::vector<ServerConfig *> &conf);
-    ~HttpRequestParser();
+    RequestParser(const std::vector<ServerConfig *> &conf);
+    ~RequestParser();
     const ServerConfig *getActiveConfig();
 
     ParseStatus parse(const std::string &rawRequestData);

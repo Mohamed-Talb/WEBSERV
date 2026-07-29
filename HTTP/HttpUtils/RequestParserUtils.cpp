@@ -32,6 +32,7 @@ bool isCommaSeparatedHeader(const std::string &name)
         || name == "accept"
         || name == "accept-encoding"
         || name == "accept-language"
+        || name == "cookie"
         || name == "cache-control";
 }
 

@@ -8,8 +8,6 @@
 #include <stdint.h>
 #include "Server.ipp"
 #include "../HTTP/HttpResponse.hpp"
-#include "../HTTP/HttpHandler.hpp"
-#include "../HTTP/HttpRequestParser.hpp"
 #include "../configParser/configParser.hpp"
 
 class Server;
@@ -25,51 +23,55 @@ enum ClientState
 class Client : public IEventHandler
 {
     private:
-    
     int socketFD;
     Server *server;
-    CGI *activeCgi;
-    ClientState state;
-    size_t writeOffset;
-    bool closeAfterWrite;
+
+    const std::vector<ServerConfig *> configs;
+    const ServerConfig *activeConfig;
+
     std::string readBuffer;
     std::string writeBuffer;
-    HttpRequestParser requestParser;
-    const ServerConfig *activeConfig;
-    const std::vector<ServerConfig *> configs;
 
+    RequestParser requestParser;
 
+    CGI *activeCgi;
+    ClientState state;
+    bool closeAfterWrite;
+    size_t writeOffset;
+
+    private:
     bool readFromSocket();
     void processReadBuffer();
     void closeConnection();
     void errorsHandler(int errorCode);
     void consumeReadBuffer(size_t bytes);
+    // void consumeWriteBuffer(size_t bytes);
+    
     void appendToWriteBuffer(const std::string &data);
     void appendToReadBuffer(const char *data, size_t size);
-    void startCgi(const HttpRequest &request, const HttpResult &result);
 
     public:
     time_t timeout;
 
-    ~Client();
     Client(int fd, Server *srv, const std::vector<ServerConfig *> &confs);
-    
-    
+    ~Client();
     int getFD() const;
+    void handleRead();
+    void handleWrite();
+    void handleEvent(int, uint32_t);
+
     bool isConnected() const;
     bool hasPendingWrite() const;
 
-    
-    ClientState getState() const;
     HttpRequest &getActiveRequest();
+
+    ClientState getState() const;
     const std::string &getReadBuffer() const;
     const std::string &getWriteBuffer() const;
 
-    void handleRead();
-    void handleWrite();
     void terminateCgi();
-    void handleEvent(int, uint32_t);
     void onCgiDone(HttpResponse &response);
+    void startCgi(HttpRequest &request, const HttpResult &result);
 };
 
 #endif

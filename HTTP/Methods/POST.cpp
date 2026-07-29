@@ -123,7 +123,6 @@ static bool writeBufferToFile(const std::string &filePath, const char *data, siz
     outfile.close();
     return true;
 }
-
 HttpResponse HttpMethods::POST(const HttpRequest &request, const RouteMatch &match, const ServerConfig &config)
 {
     if (!match.location)
@@ -132,56 +131,61 @@ HttpResponse HttpMethods::POST(const HttpRequest &request, const RouteMatch &mat
     if (match.location->uploadEnabled != "on")
         return ErrorPage(405, config);
 
-    if (match.location->uploadPath.empty() || !isDirectory(match.location->uploadPath))
-    {
+    if (match.location->uploadPath.empty())
         return ErrorPage(500, config);
-    }
 
-    std::string contentType;
-    const std::vector<std::string> &contentTypes = request.getHeader("content-type");
+    std::string uploadDirectory = joinPath(match.root, match.location->uploadPath);
 
-    if (!contentTypes.empty())
-        contentType = contentTypes[0];
+    if (!isDirectory(uploadDirectory))
+        return ErrorPage(500, config);
+
+    const std::string &body = request.getBody();
 
     std::string outputPath;
-    const char *dataStart = NULL;
-    size_t dataLength = 0;
+    const char *dataStart = body.data();
+    size_t dataLength = body.size();
 
-    if (contentType.find("multipart/form-data") != std::string::npos)
+    if (request.hasContentType() && request.getContentType().mediaType == "multipart/form-data")
     {
-        std::string boundary;
-        if (!extractBoundary(contentType, boundary))
+        const ContentTypeData &contentType = request.getContentType();
+        std::map<std::string, std::string>::const_iterator boundaryIt;
+
+        boundaryIt = contentType.parameters.find("boundary");
+
+        if (boundaryIt == contentType.parameters.end() || boundaryIt->second.empty())
             return ErrorPage(400, config);
 
         MultipartFileInfo fileInfo;
-        if (!parseMultipartFileInfo( request.getBody(), boundary, fileInfo))
+
+        if (!parseMultipartFileInfo(body, boundaryIt->second, fileInfo))
+            return ErrorPage(400, config);
+
+        if (fileInfo.filename.empty())
+            return ErrorPage(400, config);
+
+        if (fileInfo.filename.find('/') != std::string::npos || fileInfo.filename.find('\\') != std::string::npos || fileInfo.filename == "." || fileInfo.filename == "..")
         {
             return ErrorPage(400, config);
         }
-        outputPath = joinPath(match.location->uploadPath, fileInfo.filename);
+        if (fileInfo.contentStart > body.size() || fileInfo.contentLength > body.size() - fileInfo.contentStart)
+        {
+            return ErrorPage(400, config);
+        }
 
-        dataStart = request.getBody().data() + fileInfo.contentStart;
+        outputPath = joinPath(uploadDirectory, fileInfo.filename);
+        dataStart = body.data() + fileInfo.contentStart;
         dataLength = fileInfo.contentLength;
     }
     else
     {
-        outputPath = joinPath(match.location->uploadPath, "upload.bin");
-
-        dataStart = request.getBody().data();
-        dataLength = request.getBody().size();
+        outputPath = joinPath(uploadDirectory, "upload.bin");
     }
-    const char *bodyStart = request.getBody().data();
-    const char *bodyEnd = bodyStart + request.getBody().size();
 
-    if (dataLength > 0
-        && (!dataStart || dataStart > bodyEnd || dataLength > static_cast<size_t>(bodyEnd - dataStart)))
-    {
-        return ErrorPage(400, config);
-    }
     if (!writeBufferToFile(outputPath, dataStart, dataLength))
         return ErrorPage(500, config);
 
     HttpResponse response(201, "Created");
+
     response.setBody("File uploaded successfully to: " + outputPath + "\n");
     response.setHeader("Content-Type", "text/plain");
 

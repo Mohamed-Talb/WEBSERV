@@ -4,7 +4,7 @@
 #include "../Server/Server.ipp"
 #include "../HTTP/HttpHandler.hpp"
 #include "../HTTP/HttpResponse.hpp"
-#include "../HTTP/HttpRequest.hpp"
+#include "../HTTP/HttpRequest/HttpRequest.hpp"
 #include "../HTTP/RouteMatch.hpp"
 #include "../configParser/configParser.hpp"
 #include <string>
@@ -36,8 +36,6 @@ class CGI : public IEventHandler
     Server* server;
     Client* parentClient;
     std::string execBin;
-    std::string sessionId;
-    bool shouldSetCookie;
 
 
     HttpResponse parseCgiOutput(const std::string &rawOutput);
@@ -48,13 +46,13 @@ class CGI : public IEventHandler
     void handleOutput();
     public:
     virtual ~CGI();
+    CGI(Client *client, Server *srv, const HttpRequest &request, const Location &location, const std::string &fullResolvedPath);
     void killCgi();
     int getFD() const;
     void registerHandlers();
     void freeEnv(char **envp);
     void handleEvent(int, uint32_t);
     char **buildEnv(const HttpRequest &request);
-    CGI(Client *client, Server *srv, const HttpRequest &request, const Location &location, const std::string &fullResolvedPath, const std::string &sessionIdValue, bool shouldSetCookie);
 };
 
 #endif

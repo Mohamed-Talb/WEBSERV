@@ -3,26 +3,7 @@
 #include <unistd.h>
 #include <stdexcept>
 
-Server::Server() : epollFD(-1), lastSessionCleanup(time(NULL)), sessionManager() {}
-
-SessionManager &Server::getSessionManager()
-{
-    return sessionManager;
-}
-
-const std::vector<ServerConfig>& Server::getConfigs() const
-{
-    return configs;
-}
-
-void Server::clearDeletionQueue()
-{
-    std::set<IEventHandler *> pending = deletionQueue;
-    deletionQueue.clear();
-
-    for (std::set<IEventHandler *>::iterator it = pending.begin(); it != pending.end(); ++it)
-        delete *it;
-}
+Server::Server() : epollFD(-1) {}
 
 
 Server::~Server()
@@ -61,28 +42,6 @@ void Server::init(const std::vector<ServerConfig> &confs)
     }
 }
 
-
-void Server::unregisterFD(int fd)
-{
-    std::map<int, IEventHandler *>::iterator fdIt = fdHandlers.find(fd);
-
-    if (fdIt == fdHandlers.end())
-        return;
-
-    IEventHandler *handler = fdIt->second;
-    epoll_ctl(epollFD, EPOLL_CTL_DEL, fd, NULL);
-    fdHandlers.erase(fdIt);
-
-    std::map<IEventHandler *, std::set<int> >::iterator handlerIt = registeredFds.find(handler);
-    if (handlerIt == registeredFds.end())
-        return;
-
-    handlerIt->second.erase(fd);
-    if (handlerIt->second.empty())
-        registeredFds.erase(handlerIt);
-}
-
-
 void Server::addHandler(IEventHandler *handler, int fd, uint32_t events)
 {
     if (!handler)
@@ -96,6 +55,7 @@ void Server::addHandler(IEventHandler *handler, int fd, uint32_t events)
 
     epoll_event event;
     std::memset(&event, 0, sizeof(event));
+
     event.events = events;
     event.data.fd = fd;
 
@@ -113,11 +73,35 @@ void Server::modifyHandler(int fd, uint32_t events)
 
     epoll_event event;
     std::memset(&event, 0, sizeof(event));
+
     event.events = events;
     event.data.fd = fd;
 
     if (epoll_ctl(epollFD, EPOLL_CTL_MOD, fd, &event) < 0)
         throw std::runtime_error("SERVER: epoll_ctl MOD failed");
+}
+
+void Server::unregisterFD(int fd)
+{
+    std::map<int, IEventHandler *>::iterator fdIt = fdHandlers.find(fd);
+
+    if (fdIt == fdHandlers.end())
+        return;
+
+    IEventHandler *handler = fdIt->second;
+
+    epoll_ctl(epollFD, EPOLL_CTL_DEL, fd, NULL);
+    fdHandlers.erase(fdIt);
+
+    std::map<IEventHandler *, std::set<int> >::iterator handlerIt = registeredFds.find(handler);
+
+    if (handlerIt == registeredFds.end())
+        return;
+
+    handlerIt->second.erase(fd);
+
+    if (handlerIt->second.empty())
+        registeredFds.erase(handlerIt);
 }
 
 void Server::removeHandler(IEventHandler *handler)
@@ -140,6 +124,10 @@ void Server::removeHandler(IEventHandler *handler)
     deletionQueue.insert(handler);
 }
 
+const std::vector<ServerConfig>& Server::getConfigs() const
+{
+    return configs;
+}
 
 void Server::checkTimeout()
 {
@@ -168,14 +156,16 @@ void Server::checkTimeout()
 
     for (size_t i = 0; i < cgiTimeoutClients.size(); ++i)
         cgiTimeoutClients[i]->terminateCgi();
-
-    if (difftime(currentTime, lastSessionCleanup) >= SESSION_CLEANUP_INTERVAL)
-    {
-        sessionManager.removeExpiredSessions(currentTime, SESSION_TIMEOUT);
-        lastSessionCleanup = currentTime;
-    }
 }
 
+void Server::clearDeletionQueue()
+{
+    std::set<IEventHandler *> pending = deletionQueue;
+    deletionQueue.clear();
+
+    for (std::set<IEventHandler *>::iterator it = pending.begin(); it != pending.end(); ++it)
+        delete *it;
+}
 
 void Server::eventLoop()
 {

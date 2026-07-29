@@ -96,23 +96,14 @@ HttpResponse HttpHandler::resolveRedirection(const Location &location) const
     return response;
 }
 
-bool HttpHandler::resolveDirectory(RouteMatch &match, const HttpRequest request, HttpResponse &response) const
+bool HttpHandler::resolveDirectory(RouteMatch &match, const HttpRequest &request, HttpResponse &response) const
 {
 
     if (!isDirectory(match.fullPath))
         return true;
-
-    // An upload location is a POST endpoint even though its mapped path is a
-    // directory. Do not redirect it to a trailing slash or try to serve an
-    // index before the upload handler gets the request.
-    if (request.getMethod() == "POST" && match.location
-        && match.location->uploadEnabled == "on")
-        return true;
     
     if (match.requestPath.empty() || match.requestPath[match.requestPath.size() - 1] != '/')
     {
-        if (request.getMethod() == "POST")
-            return true;
         std::string queryString = request.getQuery();
         std::string redirectTarget = match.requestPath + "/";
 
@@ -147,7 +138,7 @@ bool HttpHandler::resolveDirectory(RouteMatch &match, const HttpRequest request,
 
 HttpResult HttpHandler::process(const HttpRequest &request) const
 {
-    std::cout << "[REQUEST]: HTTP/1.1 " << request.getMethod() << request.getRequestPath() << std::endl;
+    std::cout << "[REQUEST]: " << request.getVersion() << " " << request.getMethod() << " " << request.getRequestPath() << std::endl;
     RouteMatch match;
     resolveRoute(request, match);
     std::cout << "[MAP TO]: " << match.fullPath << std::endl;

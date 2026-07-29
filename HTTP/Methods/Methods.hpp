@@ -6,7 +6,7 @@
 #include "../../Helpers.hpp"
 #include "../RouteMatch.hpp"
 #include "../HttpResponse.hpp"
-#include "../HttpRequest.hpp"
+#include "../HttpRequest/HttpRequest.hpp"
 
 class HttpMethods 
 {

@@ -2,7 +2,7 @@
 #include "../CGI/CGI.hpp"
 #include "../HTTP/HttpUtils/HttpUtils.hpp"
 #include "../HTTP/HttpHandler.hpp"
-#include "../HTTP/HttpRequestParser.hpp"
+#include "../HTTP/HttpRequest/RequestParser.hpp"
 
 #include <sys/socket.h>
 #include <unistd.h>
@@ -10,7 +10,7 @@
 #include <ctime>
 
 Client::Client(int fd, Server *srv, const std::vector<ServerConfig *> &confs)
-    :socketFD(fd), server(srv), activeCgi(NULL), state(READING_REQUEST),writeOffset(0),  closeAfterWrite(false),requestParser(confs),activeConfig(NULL), configs(confs),  timeout(time(NULL)) {}
+    : socketFD(fd), server(srv), configs(confs), activeConfig(NULL), requestParser(confs), activeCgi(NULL), state(READING_REQUEST), closeAfterWrite(false), writeOffset(0), timeout(time(NULL)) {}
 
 Client::~Client()
 {
@@ -57,15 +57,22 @@ void Client::closeConnection()
 
 void Client::terminateCgi()
 {
-    if (!activeCgi) 
+    if (!activeCgi)
         return;
-    const ServerConfig *config = activeConfig ? activeConfig : configs[0];
-    if (!config) 
+
+    const ServerConfig *config = activeConfig;
+
+    if (!config && !configs.empty())
+        config = configs[0];
+
+    if (!config)
     {
         closeConnection();
         return;
     }
+
     HttpResponse response = ErrorPage(504, *config);
+
     response.setHeader("Connection", "close");
     closeAfterWrite = true;
 
@@ -73,56 +80,53 @@ void Client::terminateCgi()
     activeCgi = NULL;
 
     writeBuffer = response.toString();
-    readBuffer.clear();
+    writeOffset = 0;
+    timeout = time(NULL);
+
     requestParser.reset();
+    readBuffer.clear();
+
     state = SENDING_RESPONSE;
     server->modifyHandler(socketFD, EPOLLOUT);
 }
 
 void Client::onCgiDone(HttpResponse &response)
 {
-    std::cout << response.getBodySize() << std::endl;
     HttpRequest &request = requestParser.getRequest();
 
     closeAfterWrite = request.shouldCloseConnection();
+
     if (closeAfterWrite)
         response.setHeader("Connection", "close");
+    else if (request.getVersion() == "HTTP/1.0")
+        response.setHeader("Connection", "keep-alive");
 
     activeCgi = NULL;
+
     writeBuffer = response.toString();
     writeOffset = 0;
     timeout = time(NULL);
+
     requestParser.reset();
+
     state = SENDING_RESPONSE;
     server->modifyHandler(socketFD, EPOLLOUT);
 }
 
-void Client::startCgi(const HttpRequest &request, const HttpResult &result)
+
+void Client::startCgi(HttpRequest &request, const HttpResult &result)
 {
     if (!result.cgiLocation)
     {
         errorsHandler(500);
         return;
     }
-    Session *session = NULL;
-    bool isNewSession = false;
-    std::string sessionId;
-    if (request.getCookie("session_id", sessionId))
-        session = server->getSessionManager().findSession(sessionId);
-    if (!session)
-    {
-        session = server->getSessionManager().createSession();
-        if (!session)
-        {
-            errorsHandler(500);
-            return;
-        }
-        isNewSession = true;
-    }
+
     state = PROCESSING_CGI;
+
     try
     {
-        activeCgi = new CGI( this, server, request, *result.cgiLocation, result.cgiRequestPath, session->getId(), isNewSession);
+        activeCgi = new CGI(this, server, request, *result.cgiLocation, result.cgiRequestPath);
         activeCgi->registerHandlers();
     }
     catch (...)
@@ -133,14 +137,9 @@ void Client::startCgi(const HttpRequest &request, const HttpResult &result)
             activeCgi = NULL;
             cgi->killCgi();
         }
-        if (isNewSession)
-            server->getSessionManager().removeSession(session->getId());
 
-        state = READING_REQUEST;
         errorsHandler(500);
-        return;
     }
-    return;
 }
 
 void Client::errorsHandler(int errorCode)
@@ -164,13 +163,13 @@ void Client::errorsHandler(int errorCode)
     writeBuffer = response.toString();
     writeOffset = 0;
     timeout = time(NULL);
+
     requestParser.reset();
     readBuffer.clear();
+
     state = SENDING_RESPONSE;
     server->modifyHandler(socketFD, EPOLLOUT);
 }
-
-
 
 bool Client::readFromSocket()
 {
@@ -211,44 +210,58 @@ void Client::processReadBuffer()
 
         if (parseStatus == PARSE_NEED_MORE_DATA)
             return;
+
         if (parseStatus == PARSE_REQUEST_ERROR)
         {
             activeConfig = requestParser.getActiveConfig();
             errorsHandler(requestParser.getErrorCode());
             return;
         }
-        if (parseStatus == PARSE_REQUEST_COMPLETE)
+
+        if (parseStatus != PARSE_REQUEST_COMPLETE)
         {
-            HttpRequest &request = requestParser.getRequest();
-            activeConfig = requestParser.getActiveConfig();
-
-            if (!activeConfig)
-            {
-                errorsHandler(500);
-                return;
-            }
-            size_t consumedBytes = requestParser.getParsedSize();
-            closeAfterWrite = request.shouldCloseConnection();
-
-            HttpHandler handler(*activeConfig);
-            HttpResult result = handler.process(request);
-
-            consumeReadBuffer(consumedBytes);
-            if (result.type == HTTP_RESULT_CGI)
-            {
-                startCgi(request, result);
-                return;
-            }
-            HttpResponse response = result.response;
-            if (closeAfterWrite)
-                response.setHeader("Connection", "close");
-            writeBuffer = response.toString();
-            writeOffset = 0;
-            requestParser.reset();
-            state = SENDING_RESPONSE;
-            server->modifyHandler(socketFD, EPOLLOUT);
+            errorsHandler(500);
             return;
         }
+
+        HttpRequest &request = requestParser.getRequest();
+
+        activeConfig = requestParser.getActiveConfig();
+
+        if (!activeConfig)
+        {
+            errorsHandler(500);
+            return;
+        }
+
+        closeAfterWrite = request.shouldCloseConnection();
+
+        HttpHandler handler(*activeConfig);
+        HttpResult result = handler.process(request);
+
+        consumeReadBuffer(requestParser.getParsedSize());
+
+        if (result.type == HTTP_RESULT_CGI)
+        {
+            startCgi(request, result);
+            return;
+        }
+
+        HttpResponse response = result.response;
+
+        if (closeAfterWrite)
+            response.setHeader("Connection", "close");
+        else if (request.getVersion() == "HTTP/1.0")
+            response.setHeader("Connection", "keep-alive");
+
+        writeBuffer = response.toString();
+        writeOffset = 0;
+
+        requestParser.reset();
+
+        state = SENDING_RESPONSE;
+        server->modifyHandler(socketFD, EPOLLOUT);
+        return;
     }
 }
 
@@ -260,36 +273,41 @@ void Client::handleRead()
         return;
     processReadBuffer();
 }
-
 void Client::handleWrite()
 {
     while (writeOffset < writeBuffer.size())
     {
-        ssize_t bytesSent = send(socketFD,  writeBuffer.data() + writeOffset, writeBuffer.size() - writeOffset,MSG_NOSIGNAL);
+        ssize_t bytesSent = send(socketFD, writeBuffer.data() + writeOffset,
+            writeBuffer.size() - writeOffset, MSG_NOSIGNAL);
+
         if (bytesSent > 0)
         {
             writeOffset += static_cast<size_t>(bytesSent);
             continue;
         }
+
         if (bytesSent == 0)
             return;
+
         if (errno == EINTR)
             continue;
+
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             return;
+
         closeConnection();
         return;
     }
-    if (writeOffset == writeBuffer.size())
-    {
-        writeBuffer.clear();
-        writeOffset = 0;
-    }
+
+    writeBuffer.clear();
+    writeOffset = 0;
+
     if (closeAfterWrite)
     {
         closeConnection();
         return;
     }
+
     closeAfterWrite = false;
     activeConfig = NULL;
     state = READING_REQUEST;
@@ -297,8 +315,10 @@ void Client::handleWrite()
     if (!readBuffer.empty())
     {
         processReadBuffer();
+
         if (state == READING_REQUEST)
             server->modifyHandler(socketFD, EPOLLIN);
+
         return;
     }
     server->modifyHandler(socketFD, EPOLLIN);
