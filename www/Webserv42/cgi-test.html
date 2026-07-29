@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WEBSERV // CGI TEST</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <nav class="nav">
+        <a href="index.html">HOME</a>
+        <a href="about.html">ABOUT</a>
+        <a href="upload.html">UPLOAD</a>
+        <a href="uploads.html">UPLOADS</a>
+        <a href="session.html">SESSION</a>
+        <a href="cgi-test.html">CGI TEST</a>
+        <a href="diagnostics.html">DIAGNOSTICS</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <p class="eyebrow">05 — CGI TEST</p>
+    <h1>CGI SCRIPT RUNNER</h1>
+
+    <p class="lead">
+      Sends GET or POST requests to a CGI-mapped path, such as
+      <code>/cgi_bin/test.py</code>, and prints the returned response. Use it to
+      test response headers, request bodies, query strings, and CGI environment
+      variables.
+    </p>
+
+    <div class="panel" style="margin-top:24px;">
+      <div class="field-row">
+        <div>
+          <label for="cgiPath">CGI PATH</label>
+          <input type="text" id="cgiPath" value="/cgi_bin/test.py">
+        </div>
+
+        <div>
+          <label for="cgiMethod">METHOD</label>
+          <select id="cgiMethod">
+            <option value="GET" selected>GET</option>
+            <option value="POST">POST</option>
+            <option value="PUT">PUT — EXPECT 405</option>
+            <option value="DELETE">DELETE — EXPECT 405</option>
+          </select>
+        </div>
+      </div>
+
+      <label for="cgiQuery">
+        QUERY STRING FOR GET — EXAMPLE: name=webserv&amp;n=42
+      </label>
+      <input type="text" id="cgiQuery" placeholder="name=webserv&n=42">
+
+      <label for="cgiBody">REQUEST BODY FOR POST</label>
+      <textarea id="cgiBody" placeholder='foo=bar or {"foo":"bar"}'></textarea>
+
+      <label for="cgiContentType">CONTENT-TYPE FOR POST</label>
+      <input
+        type="text"
+        id="cgiContentType"
+        value="application/x-www-form-urlencoded"
+      >
+
+      <div class="btn-row">
+        <button class="btn accent" id="runBtn">RUN REQUEST</button>
+        <button class="btn ghost" id="clearBtn">CLEAR LOG</button>
+      </div>
+
+      <div class="console" id="log">// CGI OUTPUT WILL APPEAR HERE</div>
+    </div>
+  </main>
+
+  <script src="Common.js"></script>
+
+  <script>
+    const log = document.querySelector("#log");
+    const clearBtn = document.querySelector("#clearBtn");
+    const runBtn = document.querySelector("#runBtn");
+
+    clearBtn.addEventListener("click", () => {
+      log.textContent = "";
+    });
+
+    runBtn.addEventListener("click", async () => {
+      const path = document.querySelector("#cgiPath").value || "/cgi_bin/test.py";
+      const method = document.querySelector("#cgiMethod").value;
+      const query = document.querySelector("#cgiQuery").value.trim();
+      const body = document.querySelector("#cgiBody").value;
+      const contentType = document.querySelector("#cgiContentType").value;
+
+      let fullPath = path;
+
+      if (method === "GET" && query)
+        fullPath += "?" + query;
+
+      const url = wsUrl(fullPath);
+      const options = { method };
+
+      if (method === "POST") {
+        options.headers = {
+          "Content-Type": contentType
+        };
+
+        options.body = body;
+      }
+
+      wsLog(log, `${method} ${url}`, "k");
+
+      if (method === "POST")
+        wsLog(log, `CONTENT-TYPE: ${contentType}\n${body}`);
+
+      try {
+        const response = await fetch(url, options);
+        const text = await response.text();
+
+        wsLog(
+          log,
+          `\n${response.status} ${response.statusText}`,
+          response.ok ? "ok" : "err"
+        );
+
+        response.headers.forEach((value, name) => {
+          wsLog(log, `${name.toUpperCase()}: ${value}`);
+        });
+
+        if (text)
+          wsLog(log, "\n" + text);
+      }
+      catch (error) {
+        wsLog(log, "REQUEST FAILED: " + error.message, "err");
+      }
+    });
+  </script>
+
+</body>
+</html>

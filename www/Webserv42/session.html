@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WEBSERV // SESSION</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <nav class="nav">
+        <a href="index.html">HOME</a>
+        <a href="about.html">ABOUT</a>
+        <a href="upload.html">UPLOAD</a>
+        <a href="uploads.html">UPLOADS</a>
+        <a href="session.html">SESSION</a>
+        <a href="cgi-test.html">CGI TEST</a>
+        <a href="diagnostics.html">DIAGNOSTICS</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <p class="eyebrow">04 — SESSION</p>
+    <h1>COOKIES &amp; SESSIONS</h1>
+
+    <p class="lead">
+      Creates a CGI-backed session, stores its HttpOnly cookie in the browser,
+      and verifies that the next request receives the same server-side session ID.
+    </p>
+
+    <div class="panel" style="margin-top:24px;">
+      <div class="field-row">
+        <div>
+          <label for="sessionPath">SESSION CGI ENDPOINT</label>
+          <input type="text" id="sessionPath" value="/cgi_bin/session.py">
+        </div>
+
+        <div>
+          <label>HOW IT WORKS</label>
+          <p class="sub" style="margin:0;">
+            The browser sends its cookie automatically. The CGI script prints the
+            validated session ID it receives from WebServ.
+          </p>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn accent" id="createBtn">CREATE SESSION</button>
+        <button class="btn" id="readBtn">VERIFY SAME SESSION</button>
+        <button class="btn ghost" id="clearLog">CLEAR LOG</button>
+      </div>
+
+      <div class="meta-row">
+        <span class="meta">
+          HTTPONLY COOKIE:
+          <b id="cookieView">SENT BY BROWSER — NOT READABLE FROM JAVASCRIPT</b>
+        </span>
+      </div>
+
+      <div class="console" id="log">// SESSION RESPONSES WILL APPEAR HERE</div>
+    </div>
+  </main>
+
+  <script src="Common.js"></script>
+
+  <script>
+    const log = document.querySelector("#log");
+    const cookieView = document.querySelector("#cookieView");
+    const clearBtn = document.querySelector("#clearLog");
+
+    clearBtn.addEventListener("click", () => { log.textContent = ""; });
+
+    function refreshCookieView() 
+    {
+      cookieView.textContent = "SENT AUTOMATICALLY WITH REQUESTS";
+    }
+    refreshCookieView();
+
+    async function hit(action) 
+    {
+      const path = document.querySelector("#sessionPath").value;
+      const separator = path.includes("?") ? "&" : "?";
+      const url = wsUrl(path + separator + "action=" + action);
+      const method = "GET";
+
+      wsLog(log, `${method} ${url}`, "k");
+
+      try 
+      {
+        const res = await fetch(url, 
+        {
+          method,
+          credentials: "include",
+          cache: "no-store"
+        });
+
+        const text = await res.text();
+
+        wsLog(log,`${res.status} ${res.statusText}`, res.ok ? "ok" : "err");
+        const setCookie = res.headers.get("set-cookie");
+
+        if (setCookie)
+          wsLog(log, "SET-COOKIE: " + setCookie);
+
+        if (text)
+          wsLog(log, text);
+      }
+      catch (error) 
+      {
+        wsLog(log, "REQUEST FAILED: " + error.message, "err");
+      }
+      finally 
+      {
+        refreshCookieView();
+      }
+    }
+    document.querySelector("#createBtn").addEventListener("click", () => {hit("create");});
+    document.querySelector("#readBtn").addEventListener("click", () => {hit("read");});
+  </script>
+
+</body>
+
+</html>

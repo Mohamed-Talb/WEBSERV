@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WEBSERV // DIAGNOSTICS</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <nav class="nav">
+        <a href="index.html">HOME</a>
+        <a href="about.html">ABOUT</a>
+        <a href="upload.html">UPLOAD</a>
+        <a href="uploads.html">UPLOADS</a>
+        <a href="session.html">SESSION</a>
+        <a href="cgi-test.html">CGI TEST</a>
+        <a href="diagnostics.html">DIAGNOSTICS</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <p class="eyebrow">06 — DIAGNOSTICS</p>
+    <h1>HTTP BEHAVIOUR CHECKS</h1>
+
+    <p class="lead">
+      Run safe browser-side checks for routing, methods, redirects, CGI failures,
+      and path normalization.
+    </p>
+
+    <div class="panel" style="margin-top:24px;">
+      <div class="btn-row">
+        <button
+          class="btn accent"
+          data-path="/does-not-exist"
+          data-method="GET"
+        >
+          404 MISSING FILE
+        </button>
+
+        <button
+          class="btn"
+          data-path="/index.html"
+          data-method="POST"
+        >
+          405 METHOD
+        </button>
+
+        <button
+          class="btn"
+          data-path="/upload"
+          data-method="GET"
+          data-redirect="manual"
+        >
+          301 SLASH REDIRECT
+        </button>
+
+        <button
+          class="btn"
+          data-path="/cgi_bin/quick.py"
+          data-method="GET"
+        >
+          CGI TIMEOUT
+        </button>
+
+        <button
+          class="btn"
+          data-path="/upload/%2e%2e/secret.txt"
+          data-method="GET"
+        >
+          PATH TRAVERSAL
+        </button>
+      </div>
+
+      <p class="sub">
+        The CGI timeout check uses an intentionally slow or infinite script and
+        may take the configured server timeout duration. A browser cannot send
+        malformed raw HTTP requests, so use the project tester or Netcat for
+        those checks.
+      </p>
+
+      <div class="console" id="log">// SELECT A DIAGNOSTIC CHECK</div>
+    </div>
+  </main>
+
+  <script src="Common.js"></script>
+
+  <script>
+    const log = document.querySelector("#log");
+    const diagnosticButtons = document.querySelectorAll("button[data-path]");
+
+    diagnosticButtons.forEach((button) => {
+      button.addEventListener("click", async () => {
+        const path = button.dataset.path;
+
+        const options = {
+          method: button.dataset.method,
+          cache: "no-store"
+        };
+
+        if (button.dataset.redirect)
+          options.redirect = button.dataset.redirect;
+
+        const url = wsUrl(path);
+
+        wsLog(log, `${options.method} ${url}`, "k");
+
+        try {
+          const response = await fetch(url, options);
+          const text = await response.text();
+
+          wsLog(
+            log,
+            `${response.status} ${response.statusText}`,
+            response.ok ? "ok" : "err"
+          );
+
+          response.headers.forEach((value, name) => {
+            wsLog(log, `${name.toUpperCase()}: ${value}`);
+          });
+
+          if (text)
+            wsLog(log, "\n" + text.slice(0, 500));
+        }
+        catch (error) {
+          wsLog(log, "REQUEST FAILED: " + error.message, "err");
+        }
+      });
+    });
+  </script>
+
+</body>
+
+</html>

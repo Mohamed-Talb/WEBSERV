@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>webserv // about</title>
+  <title>WEBSERV // ABOUT</title>
   <link rel="stylesheet" href="style.css">
 </head>
 
@@ -13,27 +13,29 @@
   <header class="topbar">
     <div class="topbar-inner">
       <nav class="nav">
-        <a href="index.html">Home</a>
-        <a href="about.html">About</a>
-        <a href="upload.html">Upload</a>
-        <a href="uploads.html">Uploads</a>
-        <a href="session.html">Session</a>
-        <a href="cgi-test.html">CGI Test</a>
-        <a href="diagnostics.html">Diagnostics</a>
+        <a href="index.html">HOME</a>
+        <a href="about.html">ABOUT</a>
+        <a href="upload.html">UPLOAD</a>
+        <a href="uploads.html">UPLOADS</a>
+        <a href="session.html">SESSION</a>
+        <a href="cgi-test.html">CGI TEST</a>
+        <a href="diagnostics.html">DIAGNOSTICS</a>
       </nav>
     </div>
   </header>
 
   <main class="wrap">
-    <p class="eyebrow">About</p>
+    <p class="eyebrow">ABOUT</p>
 
     <section class="hero">
       <div class="hero-copy">
-        <h1 style="text-transform:none;font-size:24px;">The Project</h1>
+        <h1 style="font-size:24px;">THE PROJECT</h1>
+
         <p class="sub"
           style="text-transform:uppercase;letter-spacing:.08em;font-family:var(--mono);font-size:11px;margin-bottom:14px;">
-          A fully functional HTTP/1.1 server built from scratch in C++98
+          A FULLY FUNCTIONAL HTTP/1.1 SERVER BUILT FROM SCRATCH IN C++98
         </p>
+
         <p class="lead" style="font-size:14px;">
           This project implements a complete web server following the HTTP/1.1
           protocol specification. It handles multiple simultaneous connections,
@@ -41,28 +43,31 @@
           generation.
         </p>
       </div>
+
       <div class="hero-visual">
-        <img src="images.png">
-        <span class="hero-tag">Server Architecture</span>
+        <img src="images.png" alt="Web server architecture">
+        <span class="hero-tag">SERVER ARCHITECTURE</span>
       </div>
     </section>
 
     <div class="section" id="specs">
-      <h2 class="section-title">Technical Specifications</h2>
+      <h2 class="section-title">TECHNICAL SPECIFICATIONS</h2>
+
       <div class="grid">
         <div class="card">
           <span class="card-badge">A</span>
-          <h3>Architecture</h3>
+          <h3>ARCHITECTURE</h3>
           <ul>
             <li>C++98 standard compliant</li>
             <li>Non-blocking I/O with poll()</li>
             <li>Multi-port listening</li>
-            <li>Configurable via .conf file</li>
+            <li>Configurable through a .conf file</li>
           </ul>
         </div>
+
         <div class="card">
           <span class="card-badge">B</span>
-          <h3>HTTP methods</h3>
+          <h3>HTTP METHODS</h3>
           <ul>
             <li>GET — resource retrieval</li>
             <li>POST — data submission</li>
@@ -70,22 +75,24 @@
             <li>Full header parsing</li>
           </ul>
         </div>
+
         <div class="card">
           <span class="card-badge">C</span>
-          <h3>CGI support</h3>
+          <h3>CGI SUPPORT</h3>
           <ul>
             <li>PHP script execution</li>
             <li>Python script execution</li>
-            <li>Fork/execve implementation</li>
+            <li>Fork and execve implementation</li>
             <li>Environment variable passing</li>
           </ul>
         </div>
+
         <div class="card">
           <span class="card-badge">D</span>
-          <h3>File handling</h3>
+          <h3>FILE HANDLING</h3>
           <ul>
             <li>Static file serving</li>
-            <li>Multipart file upload</li>
+            <li>Multipart file uploads</li>
             <li>MIME type detection</li>
             <li>Directory indexing</li>
           </ul>
@@ -94,33 +101,40 @@
     </div>
 
     <div class="section">
-      <h2 class="section-title">Implementation Details</h2>
+      <h2 class="section-title">IMPLEMENTATION DETAILS</h2>
+
       <div class="panel">
         <span class="card-badge">01</span>
-        <h3>Socket management</h3>
+        <h3>SOCKET MANAGEMENT</h3>
+
         <p class="sub" style="max-width:none;">
-          One listening socket per configured port, all multiplexed through a
-          single poll() loop. Each accepted connection is tracked with its own
-          read/write buffers so a slow client on one socket never blocks the
-          others.
+          One listening socket is created for each configured port, with all
+          sockets multiplexed through a single poll() loop. Every accepted
+          connection has its own read and write buffers, so a slow client never
+          blocks the others.
         </p>
       </div>
+
       <div class="panel" style="margin-top:14px;">
         <span class="card-badge">02</span>
-        <h3>Request parsing</h3>
+        <h3>REQUEST PARSING</h3>
+
         <p class="sub" style="max-width:none;">
           Requests are parsed incrementally as bytes arrive: request line,
-          headers, then body — respecting Content-Length and chunked transfer
-          encoding before the handler ever sees a complete request.
+          headers, and body. The parser handles Content-Length and chunked
+          transfer encoding before passing a complete request to the handler.
         </p>
       </div>
+
       <div class="panel" style="margin-top:14px;">
         <span class="card-badge">03</span>
-        <h3>CGI pipeline</h3>
+        <h3>CGI PIPELINE</h3>
+
         <p class="sub" style="max-width:none;">
-          On a CGI-mapped route, the server forks, sets up the standard CGI
-          environment variables, pipes the request body to stdin, and streams
-          stdout back to the client as the response body.
+          When a request matches a CGI route, the server forks a child process,
+          creates the standard CGI environment variables, sends the request
+          body through standard input, and reads the generated response through
+          standard output.
         </p>
       </div>
     </div>
