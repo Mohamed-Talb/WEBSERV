@@ -8,122 +8,15 @@
 #include <sstream>
 #include <errno.h>
 
-/*
-I added CGI session handling in the Client.
-
-The CGI constructor now receives two new arguments:
-
-```cpp
-const std::string &sessionId
-bool shouldSetSessionCookie
-```
-
-Example call:
-
-```cpp
-activeCgi = new CGI(
-    this,
-    server,
-    request,
-    *result.cgiLocation,
-    result.cgiRequestPath,
-    session->getId(),
-    shouldSetSessionCookie
-);
-```
-
-Please add these members to `CGI`:
-
-```cpp
-std::string sessionId;
-bool shouldSetSessionCookie;
-```
-
-The CGI should use `sessionId` in the child environment. Add an environment variable such as:
-
-```text
-SESSION_ID=<sessionId>
-```
-
-Example:
-
-```cpp
-envp[index++] = duplicateString(
-    "SESSION_ID=" + sessionId
-);
-```
-
-Do not store a pointer returned by `.c_str()` from a temporary string. Allocate an independent C string using the same helper used for the other CGI environment variables.
-
-You should also pass cookies through the standard CGI variable:
-
-```text
-HTTP_COOKIE=<request cookies>
-```
-
-The `session_id` sent to CGI must be the valid session ID provided by Client. If the browser sent an invalid old `session_id`, do not pass the old value. Replace it with the new valid `sessionId`, while preserving unrelated cookies.
-
-When CGI output is parsed into `HttpResponse`, check:
-
-```cpp
-if (shouldSetSessionCookie)
-```
-
-If it is true, add:
-
-```cpp
-response.setHeader(
-    "Set-Cookie",
-    "session_id=" + sessionId + "; Path=/; HttpOnly"
-);
-```
-
-Add this before calling:
-
-```cpp
-parentClient->onCgiDone(response);
-```
-
-The flag does not mean the Session data changed. It only means the browser does not yet know this session ID and needs a `Set-Cookie` response.
-
-CGI does not own the Session and should not create, delete, or modify `SessionManager`. It only receives the valid session ID, passes it to the child process, and sends `Set-Cookie` when requested.
- */
-
 
 char **CGI::buildEnv(const HttpRequest &request)
 {
-    const std::map<std::string, std::vector<std::string> > &headers = request.getHeaders();
-    size_t headerCount = 0;
-    for (std::map<std::string, std::vector<std::string> >::const_iterator it = headers.begin();
-         it != headers.end(); ++it)
-    {
-        std::string key = it->first;
-        if (key == "content-length" || key == "content-type")
-            continue;
-        const std::vector<std::string> &vals = it->second;
-        bool hasValue = false;
-        for (size_t v = 0; v < vals.size(); ++v)
-        {
-            if (!trim(vals[v]).empty())
-            {
-                hasValue = true;
-                break;
-            }
-        }
-        if (hasValue)
-            ++headerCount;
-    }
-
-    char **envp = new char *[12 + headerCount + 1];
-    int idx = 0;
+    const std::map<std::string, std::vector<std::string> > &headers = request.getRawHeaders();
+    std::vector<std::string> environment;
 
     std::string contentType;
-    if (request.hasHeader("content-type"))
-    {
-        const std::vector<std::string> &ct = request.getHeader("content-type");
-        if (!ct.empty())
-            contentType = trim(ct[0]);
-    }
+    if (request.hasContentType())
+        contentType = request.getContentType().raw;
 
     std::ostringstream lengthStream;
     lengthStream << request.getBody().size();
@@ -133,69 +26,92 @@ char **CGI::buildEnv(const HttpRequest &request)
         uri += "?" + request.getQuery();
 
     std::string serverName;
-    if (request.hasHeader("host"))
+    if (request.hasHost())
     {
-        const std::vector<std::string> &hostVals = request.getHeader("host");
-        if (!hostVals.empty())
+        serverName = request.getHost();
+        if (!serverName.empty() && serverName[0] == '[')
         {
-            serverName = trim(hostVals[0]);
+            size_t closingBracket = serverName.find(']');
+            if (closingBracket != std::string::npos)
+                serverName = serverName.substr(1, closingBracket - 1);
+        }
+        else
+        {
             size_t colon = serverName.find(':');
             if (colon != std::string::npos)
                 serverName = serverName.substr(0, colon);
         }
     }
 
-    envp[idx++] = strdup(("REQUEST_METHOD=" + request.getMethod()).c_str());
-    envp[idx++] = strdup(("REQUEST_URI=" + uri).c_str());
-    envp[idx++] = strdup(("CONTENT_LENGTH=" + lengthStream.str()).c_str());
-    envp[idx++] = strdup(("CONTENT_TYPE=" + contentType).c_str());
-    envp[idx++] = strdup(("SCRIPT_NAME=" + request.getRequestPath()).c_str());
-    envp[idx++] = strdup(("PATH_INFO=" + request.getRequestPath()).c_str());
-    envp[idx++] = strdup(("QUERY_STRING=" + request.getQuery()).c_str());
-    envp[idx++] = strdup("GATEWAY_INTERFACE=CGI/1.1");
-    envp[idx++] = strdup(("SERVER_PROTOCOL=" + request.getVersion()).c_str());
-    envp[idx++] = strdup(("SERVER_NAME=" + serverName).c_str());
-    envp[idx++] = strdup("SERVER_SOFTWARE=webserv");
-    envp[idx++] = strdup("REDIRECT_STATUS=200");
+    environment.push_back("REQUEST_METHOD=" + request.getMethod());
+    environment.push_back("REQUEST_URI=" + uri);
+    environment.push_back("CONTENT_LENGTH=" + lengthStream.str());
+    environment.push_back("CONTENT_TYPE=" + contentType);
+    environment.push_back("SCRIPT_NAME=" + request.getRequestPath());
+    environment.push_back("PATH_INFO=" + request.getRequestPath());
+    environment.push_back("QUERY_STRING=" + request.getQuery());
+    environment.push_back("GATEWAY_INTERFACE=CGI/1.1");
+    environment.push_back("SERVER_PROTOCOL=" + request.getVersion());
+    environment.push_back("SERVER_NAME=" + serverName);
+    environment.push_back("SERVER_SOFTWARE=webserv");
+    environment.push_back("REDIRECT_STATUS=200");
 
     for (std::map<std::string, std::vector<std::string> >::const_iterator it = headers.begin();
          it != headers.end(); ++it)
     {
-        std::string key = it->first;
+        const std::string &key = it->first;
         if (key == "content-length" || key == "content-type")
             continue;
 
         const std::vector<std::string> &values = it->second;
         std::string combined;
-        for (size_t v = 0; v < values.size(); ++v)
+        std::string separator = ", ";
+        if (key == "cookie")
+            separator = "; ";
+
+        for (size_t i = 0; i < values.size(); ++i)
         {
-            std::string val = trim(values[v]);
-            if (val.empty())
+            std::string value = trim(values[i]);
+            if (value.empty())
                 continue;
             if (!combined.empty())
-                combined += ", ";
-            combined += val;
+                combined += separator;
+            combined += value;
         }
-
         if (combined.empty())
             continue;
 
         std::string envName = "HTTP_";
         for (size_t i = 0; i < key.size(); ++i)
         {
-            char c = key[i];
-            if (c == '-')
+            unsigned char current = static_cast<unsigned char>(key[i]);
+            if (current == '-')
                 envName += '_';
             else
-                envName += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+                envName += static_cast<char>(std::toupper(current));
         }
-
-        envp[idx++] = strdup((envName + "=" + combined).c_str());
+        environment.push_back(envName + "=" + combined);
     }
 
-    envp[idx] = NULL;
+    char **envp = new char *[environment.size() + 1];
+    for (size_t i = 0; i <= environment.size(); ++i)
+        envp[i] = NULL;
+
+    for (size_t i = 0; i < environment.size(); ++i)
+    {
+        envp[i] = strdup(environment[i].c_str());
+        if (!envp[i])
+        {
+            for (size_t j = 0; j < i; ++j)
+                free(envp[j]);
+            delete[] envp;
+            throw std::bad_alloc();
+        }
+    }
+    envp[environment.size()] = NULL;
     return envp;
 }
+
 
 void CGI::freeEnv(char **envp)
 {

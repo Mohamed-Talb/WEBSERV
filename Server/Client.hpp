@@ -9,6 +9,17 @@
 #include "Server.ipp"
 #include "../HTTP/HttpResponse.hpp"
 #include "../configParser/configParser.hpp"
+#include "./Server.hpp"
+#include "../CGI/CGI.hpp"
+#include "../HTTP/HttpUtils/HttpUtils.hpp"
+#include "../HTTP/HttpHandler.hpp"
+#include "../HTTP/HttpRequest/RequestParser.hpp"
+
+#include <sys/socket.h>
+#include <unistd.h>
+#include <errno.h>
+#include <ctime>
+
 
 class Server;
 class CGI;

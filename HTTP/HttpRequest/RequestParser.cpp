@@ -1,6 +1,6 @@
 #include "RequestParser.hpp"
 
-#include "./HttpUtils/HttpUtils.hpp"
+#include "../HttpUtils/HttpUtils.hpp"
 
 RequestParser::RequestParser(const std::vector<ServerConfig *> &conf)
     : maxBodySize(0),

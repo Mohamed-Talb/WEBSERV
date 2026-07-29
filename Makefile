@@ -1,8 +1,9 @@
-WEBSERV_SRC = main.cpp Helpers.cpp\
+
+WEBSERV_SRC = main.cpp \
+	Helpers.cpp FileSystem.cpp \
 	Server/Server.cpp \
 	Server/Listener.cpp \
 	Server/Client.cpp \
-	Server/Session.cpp \
 	configParser/configParser.cpp \
 	configParser/valuesParser.cpp \
 	configParser/locationHandlers.cpp \
@@ -10,9 +11,12 @@ WEBSERV_SRC = main.cpp Helpers.cpp\
 	configParser/configError.cpp \
 	configParser/Tokenize/tokenStream.cpp \
 	configParser/Tokenize/tokenizer.cpp \
-	HTTP/HttpRequestParser.cpp \
+	HTTP/HttpRequest/HttpRequest.cpp \
+	HTTP/HttpRequest/RequestParser.cpp \
+	HTTP/HttpRequest/RequestLineParser.cpp \
+	HTTP/HttpRequest/HeadersParser.cpp \
+	HTTP/HttpRequest/BodyParser.cpp \
 	HTTP/HttpHandler.cpp \
-	HTTP/HttpRequest.cpp \
 	HTTP/HttpResponse.cpp \
 	HTTP/HttpUtils/ContentType.cpp \
 	HTTP/HttpUtils/RequestParserUtils.cpp \
@@ -24,8 +28,8 @@ WEBSERV_SRC = main.cpp Helpers.cpp\
 	HTTP/Methods/GET.cpp \
 	HTTP/Methods/POST.cpp \
 	HTTP/Methods/DELETE.cpp \
-	FileSystem.cpp \
-	CGI/CGI.cpp \
+	CGI/CGI.cpp
+
 			
 WEBSERV_OBJ = $(WEBSERV_SRC:.cpp=.o)
 

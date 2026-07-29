@@ -53,27 +53,6 @@ static bool extractFilename(const std::string &partHeaders, std::string &filenam
     return isSafeFilename(filename);
 }
 
-static bool extractBoundary(const std::string &contentType, std::string &boundary)
-{
-    std::string key = "boundary=";
-    size_t pos = contentType.find(key);
-
-    if (pos == std::string::npos)
-        return false;
-
-    boundary = contentType.substr(pos + key.size());
-
-    size_t semicolon = boundary.find(';');
-    if (semicolon != std::string::npos)
-        boundary = boundary.substr(0, semicolon);
-
-    boundary = trim(boundary);
-
-    if (boundary.size() >= 2 && boundary[0] == '"' && boundary[boundary.size() - 1] == '"')
-        boundary = boundary.substr(1, boundary.size() - 2);
-
-    return !boundary.empty();
-}
 
 static bool parseMultipartFileInfo(const std::string &body, const std::string &boundary, MultipartFileInfo &info)
 {

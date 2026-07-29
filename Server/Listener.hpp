@@ -1,10 +1,14 @@
 #ifndef LISTENER_HPP
 #define LISTENER_HPP
 
-#include "Server.hpp"
+
 #include <cctype>
 #include <fstream>
+#include "Client.hpp"
+#include <cerrno>
+#include <cstring>
 
+class Server;
 class Listener : public IEventHandler 
 {
         private:

@@ -14,6 +14,7 @@ bool HttpHandler::isMethodAllowed(const Location *location, const std::string &m
 
     return std::find(location->methods.begin(), location->methods.end(), method) != location->methods.end();
 }
+
 bool HttpHandler::isCgiRequest(const RouteMatch &match) const
 {
     if (!match.location || match.location->cgiExt.empty())
@@ -99,6 +100,8 @@ HttpResponse HttpHandler::resolveRedirection(const Location &location) const
 bool HttpHandler::resolveDirectory(RouteMatch &match, const HttpRequest &request, HttpResponse &response) const
 {
 
+    if (request.getMethod() == "POST")
+        return true;
     if (!isDirectory(match.fullPath))
         return true;
     

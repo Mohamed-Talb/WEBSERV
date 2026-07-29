@@ -1,13 +1,4 @@
-#include "./Server.hpp"
-#include "../CGI/CGI.hpp"
-#include "../HTTP/HttpUtils/HttpUtils.hpp"
-#include "../HTTP/HttpHandler.hpp"
-#include "../HTTP/HttpRequest/RequestParser.hpp"
-
-#include <sys/socket.h>
-#include <unistd.h>
-#include <errno.h>
-#include <ctime>
+#include "Client.hpp"
 
 Client::Client(int fd, Server *srv, const std::vector<ServerConfig *> &confs)
     : socketFD(fd), server(srv), configs(confs), activeConfig(NULL), requestParser(confs), activeCgi(NULL), state(READING_REQUEST), closeAfterWrite(false), writeOffset(0), timeout(time(NULL)) {}
@@ -137,7 +128,6 @@ void Client::startCgi(HttpRequest &request, const HttpResult &result)
             activeCgi = NULL;
             cgi->killCgi();
         }
-
         errorsHandler(500);
     }
 }

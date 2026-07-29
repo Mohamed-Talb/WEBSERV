@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <string>
 #include "HttpRequest.hpp"
-#include "../configParser/configParser.hpp"
+#include "../../configParser/configParser.hpp"
 #include "../../Helpers.hpp"
 #include "../HttpUtils/HttpUtils.hpp"
 #include <algorithm>
