@@ -2,23 +2,22 @@
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap");
 
 /* ===========================================================
-   WEBSERV // SHARED STYLES
+WEBSERV // SHARED STYLES
 
-   COLORS:
-   --bg          PURE BLACK PAGE BACKGROUND
-   --panel       DEEP BLACK PANELS
-   --panel-high  DARK-GRAY INTERACTIVE SURFACES
-   --ink         PRIMARY WHITE TEXT
-   --muted       SECONDARY DARK-GRAY TEXT
-   --line        DARK-GRAY BORDERS
+COLORS:
+--bg          PURE BLACK PAGE BACKGROUND
+--panel       DEEP BLACK PANELS
+--panel-high  DARK-GRAY INTERACTIVE SURFACES
+--ink         PRIMARY WHITE TEXT
+--muted       SECONDARY DARK-GRAY TEXT
+--line        DARK-GRAY BORDERS
 
-   TYPE:
-   JETBRAINS MONO ACROSS THE ENTIRE WEBSITE
-   =========================================================== */
+TYPE:
+JETBRAINS MONO ACROSS THE ENTIRE WEBSITE
+=========================================================== */
 
-:root 
-{
-  --bg: #000000;
+:root {
+  --bg: #080404;
   --panel: #080808;
   --panel-low: #101010;
   --panel-high: #1a1a1a;
@@ -47,7 +46,8 @@
 }
 
 html,
-body {
+body 
+{
   min-height: 100%;
   margin: 0;
   padding: 0;

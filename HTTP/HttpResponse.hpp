@@ -7,26 +7,28 @@
 #include <fstream>
 #include <iostream>
 #include "../Helpers.hpp"
+#include <vector>
 
 class HttpResponse
 {
-	private:
-    int statusCode;
-    std::string reasonPhrase;
-    std::map<std::string, std::string> headers;
-    std::string body;
+    private:
+        int statusCode;
+        std::string reasonPhrase;
+        std::map<std::string, std::vector<std::string> > headers;
+        std::string body;
 
-	public:
-    HttpResponse();
-    ~HttpResponse();
-    HttpResponse(int code, const std::string &reason);
+    public:
+        HttpResponse();
+        ~HttpResponse();
+        HttpResponse(int code, const std::string &reason);
 
-    size_t getBodySize();
-    std::string toString() const;
-    void setBody(const std::string &content);
-    void writeBody(const std::string &chunk);
-    bool setBodyFromFile(const std::string &filePath);
-    void setHeader(const std::string &key, const std::string &value);
+        size_t getBodySize();
+        std::string toString() const;
+        void setBody(const std::string &content);
+        void writeBody(const std::string &chunk);
+        bool setBodyFromFile(const std::string &filePath);
+        void setHeader(const std::string &key, const std::string &value);
+        void addHeader(const std::string &key, const std::string &value);
 };
 
 #endif

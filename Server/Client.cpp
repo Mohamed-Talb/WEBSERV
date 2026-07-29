@@ -67,8 +67,9 @@ void Client::terminateCgi()
     response.setHeader("Connection", "close");
     closeAfterWrite = true;
 
-    delete activeCgi;
+    CGI *cgi = activeCgi;
     activeCgi = NULL;
+    cgi->killCgi();
 
     writeBuffer = response.toString();
     writeOffset = 0;

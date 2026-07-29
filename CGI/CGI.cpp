@@ -420,71 +420,103 @@ void CGI::handleEvent(int fd, uint32_t events)
         finish();
 }
 
-HttpResponse CGI::parseCgiOutput(const std::string& rawOutput)
+
+HttpResponse CGI::parseCgiOutput(const std::string &rawOutput)
 {
     int statusCode = 200;
     std::string reasonPhrase = "OK";
     std::string contentType = "text/html";
+    std::vector<std::pair<std::string, std::string> > headers;
 
     size_t delimiter = rawOutput.find("\r\n\r\n");
-    size_t delimiterLen = 4;
+    size_t delimiterLength = 4;
 
     if (delimiter == std::string::npos)
     {
         delimiter = rawOutput.find("\n\n");
-        delimiterLen = 2;
+        delimiterLength = 2;
     }
-    
+
     if (delimiter == std::string::npos)
     {
         HttpResponse response(statusCode, reasonPhrase);
+
         response.setHeader("Content-Type", contentType);
-    
-        std::stringstream cl;
-        cl << rawOutput.size();
-        response.setHeader("Content-Length", cl.str());
-        
         response.setBody(rawOutput);
+
         return response;
     }
-    std::string headersPart = rawOutput.substr(0, delimiter);
-    std::string bodyPart = rawOutput.substr(delimiter + delimiterLen);
 
-    std::stringstream ss(headersPart);
+    std::string headersPart = rawOutput.substr(0, delimiter);
+    std::string bodyPart = rawOutput.substr(delimiter + delimiterLength);
+
+    std::stringstream stream(headersPart);
     std::string line;
 
-    while (std::getline(ss, line))
+    while (std::getline(stream, line))
     {
         if (!line.empty() && line[line.size() - 1] == '\r')
             line.erase(line.size() - 1);
-            
-        if (line.find("Status:") == 0)
+
+        if (line.empty())
+            continue;
+
+        size_t colon = line.find(':');
+
+        if (colon == std::string::npos)
+            continue;
+
+        std::string name = trim(line.substr(0, colon));
+        std::string value = trim(line.substr(colon + 1));
+        std::string lowerName = toLower(name);
+
+        if (lowerName == "status")
         {
-            std::string statusValue = line.substr(7);
-            std::stringstream statusStream(statusValue);
+            std::stringstream statusStream(value);
 
             statusStream >> statusCode;
             std::getline(statusStream >> std::ws, reasonPhrase);
 
-            if (reasonPhrase.empty())
+            if (statusStream.fail())
+            {
+                statusCode = 200;
                 reasonPhrase = "OK";
+            }
+            else if (reasonPhrase.empty())
+            {
+                reasonPhrase = "OK";
+            }
+
+            continue;
         }
-        else if (line.find("Content-Type:") == 0)
+
+        if (lowerName == "content-type")
         {
-            contentType = line.substr(13);
-            if (!contentType.empty() && contentType[0] == ' ')
-                contentType.erase(0, 1);
+            contentType = value;
+            continue;
         }
+
+        if (lowerName == "content-length")
+            continue;
+
+        headers.push_back(std::make_pair(name, value));
     }
-    
+
     HttpResponse response(statusCode, reasonPhrase);
     response.setHeader("Content-Type", contentType);
-    
-    std::stringstream cl;
-    cl << bodyPart.size();
-    response.setHeader("Content-Length", cl.str());
-    
+    for (size_t i = 0; i < headers.size(); ++i)
+    {
+        const std::string &name = headers[i].first;
+        const std::string &value = headers[i].second;
+
+        if (toLower(name) == "set-cookie")
+            response.addHeader(name, value);
+        else
+            response.setHeader(name, value);
+    }
     response.setBody(bodyPart);
     return response;
 }
+
+
 

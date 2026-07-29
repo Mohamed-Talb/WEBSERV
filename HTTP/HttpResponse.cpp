@@ -7,19 +7,28 @@ size_t HttpResponse::getBodySize()
 
 HttpResponse::HttpResponse() : statusCode(200), reasonPhrase("OK")
 {
-    headers["Connection"] = "keep-alive";
+    setHeader("Connection", "keep-alive");
 }
 
-HttpResponse::HttpResponse(int code, const std::string &reason) : statusCode(code), reasonPhrase(reason)
+HttpResponse::HttpResponse(int code, const std::string &reason)
+    : statusCode(code), reasonPhrase(reason)
 {
-    headers["Connection"] = "keep-alive";
+    setHeader("Connection", "keep-alive");
 }
 
-HttpResponse::~HttpResponse() {}
-
-void HttpResponse::setHeader(const std::string &name, const std::string &value)
+HttpResponse::~HttpResponse()
 {
-    headers[toLower(name)] = value;
+}
+
+void HttpResponse::setHeader(const std::string &key, const std::string &value)
+{
+    headers[key].clear();
+    headers[key].push_back(value);
+}
+
+void HttpResponse::addHeader(const std::string &key, const std::string &value)
+{
+    headers[key].push_back(value);
 }
 
 void HttpResponse::setBody(const std::string &content)
@@ -28,7 +37,8 @@ void HttpResponse::setBody(const std::string &content)
 
     std::ostringstream sizeStream;
     sizeStream << body.size();
-    headers["Content-Length"] = sizeStream.str();
+
+    setHeader("Content-Length", sizeStream.str());
 }
 
 void HttpResponse::writeBody(const std::string &chunk)
@@ -37,7 +47,8 @@ void HttpResponse::writeBody(const std::string &chunk)
 
     std::ostringstream sizeStream;
     sizeStream << body.size();
-    headers["Content-Length"] = sizeStream.str();
+
+    setHeader("Content-Length", sizeStream.str());
 }
 
 bool HttpResponse::setBodyFromFile(const std::string &filePath)
@@ -57,7 +68,8 @@ bool HttpResponse::setBodyFromFile(const std::string &filePath)
 
     std::ostringstream sizeStream;
     sizeStream << body.size();
-    headers["Content-Length"] = sizeStream.str();
+
+    setHeader("Content-Length", sizeStream.str());
 
     return true;
 }
@@ -65,13 +77,28 @@ bool HttpResponse::setBodyFromFile(const std::string &filePath)
 std::string HttpResponse::toString() const
 {
     std::ostringstream responseStream;
-    responseStream << "HTTP/1.1 " << statusCode << " " << reasonPhrase << "\r\n";
-    std::cout << "[RESPONSE]: HTTP/1.1 " << statusCode << " " << reasonPhrase << std::endl;
-    std::map<std::string, std::string>::const_iterator headerIterator;
+
+    responseStream << "HTTP/1.1 " << statusCode << " "
+                   << reasonPhrase << "\r\n";
+
+    std::cout << "[RESPONSE]: HTTP/1.1 " << statusCode << " "
+              << reasonPhrase << std::endl;
+
+    std::map<std::string, std::vector<std::string> >::const_iterator headerIterator;
+
     for (headerIterator = headers.begin(); headerIterator != headers.end(); ++headerIterator)
     {
-        responseStream << headerIterator->first << ": " << headerIterator->second << "\r\n";
+        const std::vector<std::string> &values = headerIterator->second;
+
+        for (size_t i = 0; i < values.size(); ++i)
+        {
+            responseStream << headerIterator->first << ": "
+                           << values[i] << "\r\n";
+        }
     }
-    responseStream << "\r\n" << body;
+
+    responseStream << "\r\n";
+    responseStream << body;
+
     return responseStream.str();
 }
