@@ -144,6 +144,9 @@ HttpResult HttpHandler::process(const HttpRequest &request) const
     std::cout << "[REQUEST]: " << request.getVersion() << " " << request.getMethod() << " " << request.getRequestPath() << std::endl;
     RouteMatch match;
     resolveRoute(request, match);
+    std::cout << "[LOCATION]: "
+          << (match.location ? match.location->path : "NONE")
+          << std::endl;
     std::cout << "[MAP TO]: " << match.fullPath << std::endl;
     if (match.location && match.location->redirectCode != 0)
     {

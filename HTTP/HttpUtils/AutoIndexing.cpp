@@ -69,7 +69,7 @@ HttpResponse resolveAutoIndexing(const RouteMatch &match, const ServerConfig &se
     response.writeBody(htmlEscaping(urlBase));
     response.writeBody("</title></head>");
     response.writeBody("<body>");
-    response.writeBody("<h1>Index of ");
+    response.writeBody("<h1>Indexs of ");
     response.writeBody(htmlEscaping(urlBase));
     response.writeBody("</h1>");
     response.writeBody("<ul>");
