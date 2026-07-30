@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>WEBSERV // SESSION</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="/favicon.ico">
 </head>
 
 <body>
@@ -19,7 +20,8 @@
         <a href="upload.html">UPLOAD</a>
         <a href="uploads.html">UPLOADS</a>
         <a href="cgi-test.html">CGI TEST</a>
-        <a href="session.html">SESSION</a>
+        <a class="active" href="session.html">SESSION</a>
+        <a href="configuration.html">CONFIGURATION</a>
       </nav>
     </div>
   </header>
@@ -29,40 +31,89 @@
     <h1>COOKIES &amp; SESSIONS</h1>
 
     <p class="lead">
-      Creates a CGI-backed session, stores its HttpOnly cookie in the browser,
-      and verifies that the next request receives the same server-side session ID.
+      Create a server-side session, store its identifier in an HttpOnly cookie,
+      update its variables, and inspect all sessions stored in the JSON file.
     </p>
 
-    <div class="panel" style="margin-top:24px;">
-      <div class="field-row">
-        <div>
-          <label for="sessionPath">SESSION CGI ENDPOINT</label>
-          <input type="text" id="sessionPath" value="/cgi_bin/session.py">
-        </div>
+    <div class="panel" style="margin-top: 24px; margin-bottom: 28px;">
+      <div style="margin-bottom: 28px;">
+        <label>HOW IT WORKS</label>
 
-        <div>
-          <label>HOW IT WORKS</label>
-          <p class="sub" style="margin:0;">
-            The browser sends its cookie automatically. The CGI script prints the
-            validated session ID it receives from WebServ.
-          </p>
-        </div>
+        <p class="sub" style="margin: 0;">
+          The browser stores only the session ID. The CGI script stores the
+          session variables and expiration time inside a JSON file.
+        </p>
       </div>
 
+      <div>
+        <label for="sessionPath">SESSION CGI ENDPOINT</label>
+
+        <input
+          type="text"
+          id="sessionPath"
+          value="/cgi_bin/session.py"
+        >
+      </div>
+
+      <div>
+        <label for="sessionUsername">USERNAME</label>
+
+        <input
+          type="text"
+          id="sessionUsername"
+          placeholder="guest"
+        >
+      </div>
+
+      <div>
+        <label for="sessionValue">SESSION VALUE</label>
+
+        <input
+          type="text"
+          id="sessionValue"
+          placeholder="webserv"
+        >
+      </div>
+    </div>
+
       <div class="btn-row">
-        <button class="btn accent" id="createBtn">CREATE SESSION</button>
-        <button class="btn" id="readBtn">VERIFY SAME SESSION</button>
-        <button class="btn ghost" id="clearLog">CLEAR LOG</button>
+        <button class="btn accent" id="createBtn">
+          CREATE SESSION
+        </button>
+
+        <button class="btn" id="readBtn">
+          READ SESSION
+        </button>
+
+        <button class="btn" id="updateBtn">
+          UPDATE SESSION
+        </button>
+
+        <button class="btn" id="listBtn">
+          LIST ALL SESSIONS
+        </button>
+
+        <button class="btn ghost" id="destroyBtn">
+          DESTROY SESSION
+        </button>
+
+        <button class="btn ghost" id="clearLog">
+          CLEAR LOG
+        </button>
       </div>
 
       <div class="meta-row">
         <span class="meta">
           HTTPONLY COOKIE:
-          <b id="cookieView">SENT BY BROWSER — NOT READABLE FROM JAVASCRIPT</b>
+          <b id="cookieView">
+            SENT BY BROWSER — NOT READABLE FROM JAVASCRIPT
+          </b>
         </span>
       </div>
 
-      <div class="console" id="log">// SESSION RESPONSES WILL APPEAR HERE</div>
+      <div class="console" id="log">
+        // SESSION RESPONSES WILL APPEAR HERE
+      </div>
     </div>
   </main>
 
@@ -71,21 +122,42 @@
   <script>
     const log = document.querySelector("#log");
     const cookieView = document.querySelector("#cookieView");
-    const clearBtn = document.querySelector("#clearLog");
 
-    clearBtn.addEventListener("click", () => { log.textContent = ""; });
-
-    function refreshCookieView() 
+    function refreshCookieView()
     {
       cookieView.textContent = "SENT AUTOMATICALLY WITH REQUESTS";
     }
-    refreshCookieView();
+
+    function buildSessionUrl(action)
+    {
+      const path = document.querySelector("#sessionPath").value.trim();
+      const url = new URL(wsUrl(path), window.location.origin);
+
+      url.searchParams.set("action", action);
+
+      if (action === "create" || action === "update")
+      {
+        const username =
+          document.querySelector("#sessionUsername").value.trim();
+
+        const value =
+          document.querySelector("#sessionValue").value.trim();
+
+        if (username)
+          url.searchParams.set("username", username);
+
+        if (value)
+          url.searchParams.set("value", value);
+      }
+
+      return url.toString();
+    }
 
     async function hit(action)
     {
-      const path = document.querySelector("#sessionPath").value;
-      const separator = path.includes("?") ? "&" : "?";
-      const url = wsUrl(path + separator + "action=" + action);
+      const url = buildSessionUrl(action);
+
+      log.textContent = "";
 
       wsLog(log, `GET ${url}`, "k");
 
@@ -97,6 +169,7 @@
           credentials: "include",
           cache: "no-store"
         });
+
         const text = await response.text();
 
         wsLog(
@@ -107,20 +180,54 @@
 
         if (text)
           wsLog(log, text);
+        else
+          wsLog(log, "<EMPTY RESPONSE BODY>");
       }
       catch (error)
       {
-        wsLog(log, "REQUEST FAILED: " + error.message, "err");
+        wsLog(
+          log,
+          "REQUEST FAILED: " + error.message,
+          "err"
+        );
       }
       finally
       {
         refreshCookieView();
       }
     }
-    document.querySelector("#createBtn").addEventListener("click", () => {hit("create");});
-    document.querySelector("#readBtn").addEventListener("click", () => {hit("read");});
+
+    document.querySelector("#createBtn")
+      .addEventListener("click", () => {
+        hit("create");
+      });
+
+    document.querySelector("#readBtn")
+      .addEventListener("click", () => {
+        hit("read");
+      });
+
+    document.querySelector("#updateBtn")
+      .addEventListener("click", () => {
+        hit("update");
+      });
+
+    document.querySelector("#listBtn")
+      .addEventListener("click", () => {
+        hit("list");
+      });
+
+    document.querySelector("#destroyBtn")
+      .addEventListener("click", () => {
+        hit("destroy");
+      });
+
+    document.querySelector("#clearLog")
+      .addEventListener("click", () => {
+        log.textContent = "";
+      });
+
+    refreshCookieView();
   </script>
-
 </body>
-
 </html>

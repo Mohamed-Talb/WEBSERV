@@ -381,6 +381,14 @@ void CGI::finish()
 
     Client *client = parentClient;
     parentClient = NULL;
+    std::cout << "[CGI RAW SIZE]: "
+              << rawOutputBuffer.size()
+              << std::endl;
+
+    std::cout << "[CGI RAW OUTPUT BEGIN]\n"
+              << rawOutputBuffer
+              << "\n[CGI RAW OUTPUT END]"
+              << std::endl;
     HttpResponse response = parseCgiOutput(rawOutputBuffer);
     if (cgiPid > 0)
     {
