@@ -35,44 +35,60 @@
 
     <div class="panel" style="margin-top:24px;">
       <div class="btn-row">
-        <button
-          class="btn accent"
-          data-path="/does-not-exist"
-          data-method="GET"
-        >
-          404 MISSING FILE
+        <button class="btn" data-path="/index.html" data-method="GET" data-expected="200">
+          200 STATIC FILE
         </button>
 
-        <button
-          class="btn"
-          data-path="/index.html"
-          data-method="POST"
-        >
-          405 METHOD
+        <button class="btn" data-path="/index.html" data-method="HEAD" data-expected="200">
+          HEAD REQUEST
         </button>
 
-        <button
-          class="btn"
-          data-path="/upload"
-          data-method="GET"
-          data-redirect="manual"
-        >
+        <button class="btn" data-path="/index.html?test=webserv&value=42" data-method="GET" data-expected="200">
+          QUERY STRING
+        </button>
+
+        <button class="btn" data-path="/./index.html" data-method="GET" data-expected="200">
+          DOT NORMALIZATION
+        </button>
+
+        <button class="btn" data-path="/folder/../index.html" data-method="GET" data-expected="200">
+          PARENT NORMALIZATION
+        </button>
+
+        <button class="btn" data-path="/%69%6e%64%65%78.html" data-method="GET" data-expected="200">
+          URL DECODING
+        </button>
+
+        <button class="btn" data-path="/upload" data-method="GET" data-redirect="manual" data-expected="301">
           301 SLASH REDIRECT
         </button>
 
-        <button
-          class="btn"
-          data-path="/cgi_bin/quick.py"
-          data-method="GET"
-        >
+        <button class="btn" data-path="/does-not-exist" data-method="GET" data-expected="404">
+          404 MISSING FILE
+        </button>
+
+        <button class="btn" data-path="/index.html" data-method="POST" data-body="TEST BODY" data-expected="405">
+          405 METHOD
+        </button>
+
+        <button class="btn" data-path="/cgi_bin/quick.py?name=webserv" data-method="GET" data-expected="200">
+          CGI GET
+        </button>
+
+        <button class="btn" data-path="/cgi_bin/echo.py" data-method="POST" data-body="message=hello"
+          data-content-type="application/x-www-form-urlencoded" data-expected="200">
+          CGI POST
+        </button>
+
+        <button class="btn" data-path="/cgi_bin/does-not-exist.py" data-method="GET" data-expected="404">
+          CGI NOT FOUND
+        </button>
+
+        <button class="btn" data-path="/cgi_bin/timeout.py" data-method="GET" data-expected="504">
           CGI TIMEOUT
         </button>
 
-        <button
-          class="btn"
-          data-path="/upload/%2e%2e/secret.txt"
-          data-method="GET"
-        >
+        <button class="btn" data-path="/upload/%2e%2e/secret.txt" data-method="GET" data-expected="403">
           PATH TRAVERSAL
         </button>
       </div>
@@ -89,7 +105,6 @@
   </main>
 
   <script src="Common.js"></script>
-
   <script>
     const log = document.querySelector("#log");
     const diagnosticButtons = document.querySelectorAll("button[data-path]");
@@ -97,28 +112,44 @@
     diagnosticButtons.forEach((button) => {
       button.addEventListener("click", async () => {
         const path = button.dataset.path;
+        const method = button.dataset.method || "GET";
+        const expectedStatus = Number(button.dataset.expected);
 
         const options = {
-          method: button.dataset.method,
-          cache: "no-store"
+          method: method,
+          cache: "no-store",
+          credentials: "include"
         };
 
         if (button.dataset.redirect)
           options.redirect = button.dataset.redirect;
 
+        if (button.dataset.body && method !== "GET" && method !== "HEAD")
+          options.body = button.dataset.body;
+
+        if (button.dataset.contentType) {
+          options.headers = {
+            "Content-Type": button.dataset.contentType
+          };
+        }
+
         const url = wsUrl(path);
 
-        wsLog(log, `${options.method} ${url}`, "k");
+        wsLog(log, `${method} ${url}`, "k");
 
         try {
           const response = await fetch(url, options);
-          const text = await response.text();
+          const text = method === "HEAD" ? "" : await response.text();
+          const passed = !expectedStatus || response.status === expectedStatus;
 
           wsLog(
             log,
-            `${response.status} ${response.statusText}`,
-            response.ok ? "ok" : "err"
+            `${response.status} ${response.statusText} — ${passed ? "PASS" : "FAIL"}`,
+            passed ? "ok" : "err"
           );
+
+          if (expectedStatus && !passed)
+            wsLog(log, `EXPECTED STATUS: ${expectedStatus}`, "err");
 
           response.headers.forEach((value, name) => {
             wsLog(log, `${name.toUpperCase()}: ${value}`);
@@ -133,7 +164,5 @@
       });
     });
   </script>
-
 </body>
-
 </html>

@@ -742,3 +742,36 @@ footer p {
   }
 }
 
+
+
+.error-page {
+  max-width: 720px;
+  margin: 80px auto;
+  padding: 48px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.error-code {
+  margin: 0;
+  font-size: clamp(90px, 20vw, 190px);
+  line-height: 1;
+  letter-spacing: -0.08em;
+  color: var(--ink);
+}
+
+.error-page h2 {
+  margin: 12px 0;
+  font-size: 20px;
+  letter-spacing: 0.12em;
+}
+
+.error-page .sub {
+  margin: 0 auto 28px;
+}
+
+.error-page .btn {
+  display: inline-block;
+  text-decoration: none;
+}
