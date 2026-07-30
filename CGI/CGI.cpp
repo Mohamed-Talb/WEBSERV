@@ -144,7 +144,7 @@ CGI::CGI(
     if (!server || !parentClient)
         throw std::runtime_error("CGI: invalid server or client");
 
-    parentClient->timeout = time(NULL);
+    parentClient->timeout = std::time(NULL);
     requestBody = request.getBody();
     char **envp = buildEnv(request);
     int pipeIn[2] = {-1, -1};
@@ -326,7 +326,7 @@ void CGI::handleInput()
         {
             writeOffset += static_cast<size_t>(written);
             if (parentClient)
-                parentClient->timeout = time(NULL);
+                parentClient->timeout = std::time(NULL);
 
             continue;
         }
@@ -355,7 +355,7 @@ void CGI::handleOutput()
         {
             rawOutputBuffer.append(buffer, static_cast<size_t>(bytesRead));
             if (parentClient)
-                parentClient->timeout = time(NULL);
+                parentClient->timeout = std::time(NULL);
             continue;
         }
         if (bytesRead == 0)

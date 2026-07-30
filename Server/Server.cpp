@@ -16,7 +16,7 @@ Server::~Server()
     fdHandlers.clear();
     if (epollFD >= 0)
     {
-        ::close(epollFD);
+        close(epollFD);
         epollFD = -1;
     }
 }
@@ -84,7 +84,6 @@ void Server::modifyHandler(int fd, uint32_t events)
 void Server::unregisterFD(int fd)
 {
     std::map<int, IEventHandler *>::iterator fdIt = fdHandlers.find(fd);
-
     if (fdIt == fdHandlers.end())
         return;
 
@@ -94,7 +93,6 @@ void Server::unregisterFD(int fd)
     fdHandlers.erase(fdIt);
 
     std::map<IEventHandler *, std::set<int> >::iterator handlerIt = registeredFds.find(handler);
-
     if (handlerIt == registeredFds.end())
         return;
 
@@ -131,7 +129,7 @@ const std::vector<ServerConfig>& Server::getConfigs() const
 
 void Server::checkTimeout()
 {
-    time_t currentTime = time(NULL);
+    time_t currentTime = std::time(NULL);
     std::vector<Client *> expiredClients;
     std::vector<Client *> cgiTimeoutClients;
 
@@ -190,10 +188,6 @@ void Server::eventLoop()
             if (fdHandlers.find(fd) == fdHandlers.end())
                 continue;
             IEventHandler* handler = fdHandlers[fd];
-            if (currEvent & (EPOLLERR | EPOLLHUP))
-            {
-                currEvent |= EPOLLIN | EPOLLOUT;
-            }
             handler->handleEvent(fd, currEvent);
         }
         checkTimeout();

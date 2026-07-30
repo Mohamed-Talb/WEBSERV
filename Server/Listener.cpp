@@ -21,7 +21,7 @@ Listener::Listener(const std::vector<ServerConfig *> &confs, Server *srv)
 
     if (setsockopt(socketFD, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
     {
-        ::close(socketFD);
+        close(socketFD);
         socketFD = -1;
         throw std::runtime_error("LISTENER: setsockopt() failed on port " + intToString(conf->port));
     }
@@ -30,7 +30,7 @@ Listener::Listener(const std::vector<ServerConfig *> &confs, Server *srv)
 
     if (flags < 0 || fcntl(socketFD, F_SETFL, flags | O_NONBLOCK) < 0)
     {
-        ::close(socketFD);
+        close(socketFD);
         socketFD = -1;
         throw std::runtime_error("LISTENER: fcntl() failed on port " + intToString(conf->port));
     }
@@ -47,13 +47,13 @@ Listener::Listener(const std::vector<ServerConfig *> &confs, Server *srv)
 
     if (bind(socketFD, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0)
     {
-        ::close(socketFD);
+        close(socketFD);
         socketFD = -1;
         throw std::runtime_error("LISTENER: bind() failed on port " + intToString(conf->port));
     }
     if (listen(socketFD, SOMAXCONN) < 0)
     {
-        ::close(socketFD);
+        close(socketFD);
         socketFD = -1;
         throw std::runtime_error("LISTENER: listen() failed on port " + intToString(conf->port));
     }
@@ -63,7 +63,7 @@ Listener::~Listener()
 {
     if (socketFD >= 0)
     {
-        ::close(socketFD);
+        close(socketFD);
         socketFD = -1;
     }
 }
@@ -87,7 +87,7 @@ void Listener::handleEvent(int fd, uint32_t events)
             int flags = fcntl(clientFD, F_GETFL, 0);
             if (flags < 0 || fcntl(clientFD, F_SETFL, flags | O_NONBLOCK) < 0)
             {
-                ::close(clientFD);
+                close(clientFD);
                 continue;
             }
             Client *newClient = NULL;
@@ -103,10 +103,6 @@ void Listener::handleEvent(int fd, uint32_t events)
             }
             continue;
         }
-        if (errno == EINTR)
-            continue;
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return;
         return;
     }
 }
@@ -120,6 +116,5 @@ int Listener::getPort() const
 {
     if (configs.empty() || !configs[0])
         return -1;
-
     return configs[0]->port;
 }

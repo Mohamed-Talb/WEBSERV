@@ -1,7 +1,7 @@
 #include "Client.hpp"
 
 Client::Client(int fd, Server *srv, const std::vector<ServerConfig *> &confs)
-    : socketFD(fd), server(srv), configs(confs), activeConfig(NULL), requestParser(confs), activeCgi(NULL), state(READING_REQUEST), closeAfterWrite(false), writeOffset(0), timeout(time(NULL)) {}
+    : socketFD(fd), server(srv), configs(confs), activeConfig(NULL), requestParser(confs), activeCgi(NULL), state(READING_REQUEST), closeAfterWrite(false), writeOffset(0), timeout(std::time(NULL)) {}
 
 Client::~Client()
 {
@@ -42,7 +42,7 @@ void Client::closeConnection()
         cgi->killCgi();
     }
     writeOffset = 0;
-    timeout = time(NULL);
+    timeout = std::time(NULL);
     server->removeHandler(this);
 }
 
@@ -61,9 +61,7 @@ void Client::terminateCgi()
         closeConnection();
         return;
     }
-
     HttpResponse response = ErrorPage(504, *config);
-
     response.setHeader("Connection", "close");
     closeAfterWrite = true;
 
@@ -73,7 +71,7 @@ void Client::terminateCgi()
 
     writeBuffer = response.toString();
     writeOffset = 0;
-    timeout = time(NULL);
+    timeout = std::time(NULL);
 
     requestParser.reset();
     readBuffer.clear();
@@ -97,7 +95,7 @@ void Client::onCgiDone(HttpResponse &response)
 
     writeBuffer = response.toString();
     writeOffset = 0;
-    timeout = time(NULL);
+    timeout = std::time(NULL);
 
     requestParser.reset();
 
@@ -113,9 +111,7 @@ void Client::startCgi(HttpRequest &request, const HttpResult &result)
         errorsHandler(500);
         return;
     }
-
     state = PROCESSING_CGI;
-
     try
     {
         activeCgi = new CGI(this, server, request, *result.cgiLocation, result.cgiRequestPath);
@@ -153,7 +149,7 @@ void Client::errorsHandler(int errorCode)
 
     writeBuffer = response.toString();
     writeOffset = 0;
-    timeout = time(NULL);
+    timeout = std::time(NULL);
 
     requestParser.reset();
     readBuffer.clear();
@@ -166,29 +162,23 @@ bool Client::readFromSocket()
 {
     char buffer[65536];
     size_t totalRead = 0;
-    const size_t maxReadPerCall = 1024 * 1024;
-
-    while (totalRead < maxReadPerCall)
+    const size_t maxReadPerEvent = 1024 * 1024;
+    while (totalRead < maxReadPerEvent)
     {
-        ssize_t bytes = recv(socketFD, buffer, sizeof(buffer), 0);
-        if (bytes > 0)
+        ssize_t bytesRead = recv(socketFD, buffer, sizeof(buffer), 0);
+        if (bytesRead > 0)
         {
-            appendToReadBuffer(buffer, static_cast<size_t>(bytes));
-            totalRead += static_cast<size_t>(bytes);
-            timeout = time(NULL);
+            appendToReadBuffer(buffer, static_cast<size_t>(bytesRead));
+            totalRead += static_cast<size_t>(bytesRead);
+            timeout = std::time(NULL);
             continue;
         }
-        if (bytes == 0)
+        if (bytesRead == 0)
         {
             closeConnection();
             return false;
         }
-        if (errno == EINTR)
-            continue;
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return true;
-        closeConnection();
-        return false;
+        return true;
     }
     return true;
 }
@@ -198,7 +188,6 @@ void Client::processReadBuffer()
     while (state == READING_REQUEST)
     {
         ParseStatus parseStatus = requestParser.parse(readBuffer);
-
         if (parseStatus == PARSE_NEED_MORE_DATA)
             return;
 
@@ -208,15 +197,12 @@ void Client::processReadBuffer()
             errorsHandler(requestParser.getErrorCode());
             return;
         }
-
         if (parseStatus != PARSE_REQUEST_COMPLETE)
         {
             errorsHandler(500);
             return;
         }
-
         HttpRequest &request = requestParser.getRequest();
-
         activeConfig = requestParser.getActiveConfig();
 
         if (!activeConfig)
@@ -268,48 +254,40 @@ void Client::handleWrite()
 {
     while (writeOffset < writeBuffer.size())
     {
-        ssize_t bytesSent = send(socketFD, writeBuffer.data() + writeOffset,
-            writeBuffer.size() - writeOffset, MSG_NOSIGNAL);
-
+        ssize_t bytesSent = send(
+            socketFD,
+            writeBuffer.data() + writeOffset,
+            writeBuffer.size() - writeOffset,
+            MSG_NOSIGNAL
+        );
         if (bytesSent > 0)
         {
             writeOffset += static_cast<size_t>(bytesSent);
+            timeout = std::time(NULL);
             continue;
         }
-
         if (bytesSent == 0)
             return;
-
-        if (errno == EINTR)
-            continue;
-
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return;
-
-        closeConnection();
         return;
     }
 
     writeBuffer.clear();
     writeOffset = 0;
-
     if (closeAfterWrite)
     {
         closeConnection();
         return;
     }
-
     closeAfterWrite = false;
     activeConfig = NULL;
     state = READING_REQUEST;
-
     if (!readBuffer.empty())
     {
         processReadBuffer();
-
-        if (state == READING_REQUEST)
+        if (state == SENDING_RESPONSE)
+            server->modifyHandler(socketFD, EPOLLOUT);
+        else if (state == READING_REQUEST)
             server->modifyHandler(socketFD, EPOLLIN);
-
         return;
     }
     server->modifyHandler(socketFD, EPOLLIN);
@@ -317,11 +295,19 @@ void Client::handleWrite()
 
 void Client::handleEvent(int fd, uint32_t events)
 {
-    if (fd == socketFD)
+    if (fd != socketFD)
+        return;
+    if (events & EPOLLIN)
     {
-        if (events & EPOLLIN)
-            handleRead();
-        if (events & EPOLLOUT)
-            handleWrite();
+        handleRead();
+    }
+    if (events & EPOLLOUT)
+    {
+        handleWrite();
+    }
+    if (events & (EPOLLERR | EPOLLHUP))
+    {
+        closeConnection();
+        return;
     }
 }

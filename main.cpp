@@ -4,10 +4,7 @@
 int main(int ac, char **av)
 {
     signal(SIGPIPE, SIG_IGN);
-    srand(time(NULL));
-
-    // Session session;
-    // std::cout << "Session ID: " << session.getSessionId() << std::endl;
+    srand(std::time(NULL));
     std::string configPath;
     if (ac > 2)
     {
@@ -32,10 +29,6 @@ int main(int ac, char **av)
         return 1;
     }
 }
-
-// 405 Method Not Allowed -> http://localhost:8080/upload.html;
-// handl duplacated server names
-
 
 /*
 With this invalid CGI interpreter:
