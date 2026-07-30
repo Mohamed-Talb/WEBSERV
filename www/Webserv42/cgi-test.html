@@ -73,7 +73,7 @@
         <button class="btn ghost" id="clearBtn">CLEAR LOG</button>
       </div>
 
-      <div class="console" id="log">// CGI OUTPUT WILL APPEAR HERE</div>
+      <div class="console" id="log"></div>
     </div>
   </main>
 
@@ -89,6 +89,8 @@
     });
 
     runBtn.addEventListener("click", async () => {
+      log.textContent = "";
+
       const path = document.querySelector("#cgiPath").value || "/cgi_bin/test.py";
       const method = document.querySelector("#cgiMethod").value;
       const query = document.querySelector("#cgiQuery").value.trim();
@@ -111,7 +113,14 @@
         options.body = body;
       }
 
+      wsLog(log, "Request:", "type");
       wsLog(log, `${method} ${url}`, "k");
+
+      for (let i = 0; i < 2; i++) {
+        const new_line = document.createElement("br");
+        log.appendChild(new_line);
+      }
+      wsLog(log, "Response:", "type");
 
       if (method === "POST")
         wsLog(log, `CONTENT-TYPE: ${contentType}\n${body}`);

@@ -140,8 +140,15 @@
       log.style.display = "block";
       log.textContent = "";
 
+      wsLog(log, "Request:", "type");
       wsLog(log, `GET ${url}`, "k");
 
+      for (let i = 0; i < 2; i++) {
+        const new_line = document.createElement("br");
+        log.appendChild(new_line);
+      }
+
+      wsLog(log, "Response:", "type");
       refreshBtn.disabled = true;
       refreshBtn.textContent = "LOADING…";
 

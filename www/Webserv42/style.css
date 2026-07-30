@@ -523,7 +523,7 @@ textarea {
   overflow: auto;
   margin-top: 16px;
   padding: 16px;
-  color: var(--accent-hover);
+  color: var(--ink);
   background: var(--panel);
   border: 1px solid var(--line);
   font-family: var(--mono);
@@ -534,15 +534,20 @@ textarea {
 }
 
 .console .k {
-  color: var(--ink);
+  color: blue;
 }
 
 .console .ok {
-  color: var(--accent-hover);
+  color: green;
 }
 
 .console .err {
-  color: var(--accent-dark);
+  color: red;
+}
+
+.console .type {
+  color: var(--muted);
+  font-style: italic;
 }
 
 /* ---------- META ---------- */
