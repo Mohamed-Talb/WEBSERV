@@ -144,10 +144,7 @@ HttpResult HttpHandler::process(const HttpRequest &request) const
     std::cout << "[REQUEST]: " << request.getVersion() << " " << request.getMethod() << " " << request.getRequestPath() << std::endl;
     RouteMatch match;
     resolveRoute(request, match);
-    std::cout << "[LOCATION]: "
-          << (match.location ? match.location->path : "NONE")
-          << std::endl;
-    std::cout << "[MAP TO]: " << match.fullPath << std::endl;
+    std::cout << "[LOCATION]: " << (match.location ? match.location->path : "NONE") << std::endl;
     if (match.location && match.location->redirectCode != 0)
     {
         return HttpResult::makeResponse(resolveRedirection(*match.location));
@@ -160,7 +157,7 @@ HttpResult HttpHandler::process(const HttpRequest &request) const
     HttpResponse directoryResponse;
     if (!resolveDirectory(match, request, directoryResponse))
         return HttpResult::makeResponse(directoryResponse);
-
+    std::cout << "[MAP TO]: " << match.fullPath << std::endl;
     if (isCgiRequest(match))
         return HttpResult::makeCgi(match.location,match.fullPath);
 
