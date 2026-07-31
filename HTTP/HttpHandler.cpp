@@ -96,6 +96,27 @@ HttpResponse HttpHandler::resolveRedirection(const Location &location) const
     return response;
 }
 
+HttpResult HttpHandler::resolveCgi(const RouteMatch &match) const
+{
+    if (!isRegularFile(match.fullPath))
+        return HttpResult::makeResponse(ErrorPage(404, *serverConfig));
+
+    size_t dotPos = match.fullPath.find_last_of('.');
+
+    if (dotPos == std::string::npos)
+        return HttpResult::makeResponse(ErrorPage(500, *serverConfig));
+
+    std::string extension = match.fullPath.substr(dotPos);
+
+    std::map<std::string, std::string>::const_iterator it;
+    it = match.location->cgiMappings.find(extension);
+
+    if (it == match.location->cgiMappings.end())
+        return HttpResult::makeResponse(ErrorPage(500, *serverConfig));
+
+    return HttpResult::makeCgi(match.location, match.fullPath, it->second);
+}
+
 bool HttpHandler::resolveDirectory(RouteMatch &match, const HttpRequest &request, HttpResponse &response) const
 {
     if (request.getMethod() == "POST")
@@ -175,18 +196,8 @@ HttpResult HttpHandler::process(const HttpRequest &request) const
         return HttpResult::makeResponse(directoryResponse);
     if (isCgiRequest(match))
     {
-        if (!isRegularFile(match.fullPath))
-            return HttpResult::makeResponse(ErrorPage(404, *serverConfig));
-
-        size_t dotPos = match.fullPath.find_last_of('.');
-        std::string extension = match.fullPath.substr(dotPos);
-        std::map<std::string, std::string>::const_iterator it = match.location->cgiMappings.find(extension);
-        if (it == match.location->cgiMappings.end())
-            return HttpResult::makeResponse(ErrorPage(500, *serverConfig));
-        std::string interpreter = it->second;
-        return HttpResult::makeCgi(match.location, match.fullPath, interpreter);
+        return resolveCgi(match);
     }
-
     if (!fileExists(match.fullPath) && method != "POST")
     {
         return HttpResult::makeResponse(ErrorPage(404, *serverConfig));

@@ -63,6 +63,7 @@ class HttpHandler
     const ServerConfig *serverConfig;
 
     bool isCgiRequest(const RouteMatch &match) const;
+    HttpResult resolveCgi(const RouteMatch &match) const;
     HttpResponse resolveRedirection(const Location &location) const;
     void resolveRoute(const HttpRequest &request,RouteMatch &match) const;
     std::vector<std::string> resolveIndexFiles(const Location *location) const;

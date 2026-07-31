@@ -41,40 +41,52 @@ StepStatus RequestParser::parseNormalBody(const std::string &raw)
 
 StepStatus RequestParser::parseChunkedBody(const std::string &raw)
 {
-    const std::string crlf = "\r\n";
-    const size_t crlfSize = crlf.size();
-
+    const size_t crlfSize = 2;
+    const size_t maxChunkHeaderSize = 1024;
     while (true)
     {
-        size_t chunkHeaderEnd = raw.find(crlf, parsedSize);
-
+        if (parsedSize > raw.size())
+        {
+            setError(400);
+            return STEP_ERROR;
+        }
+        size_t chunkHeaderEnd = raw.find("\r\n", parsedSize);
         if (chunkHeaderEnd == std::string::npos)
+        {
+            if (raw.size() - parsedSize > maxChunkHeaderSize)
+            {
+                setError(400);
+                return STEP_ERROR;
+            }
             return STEP_NEED_MORE_DATA;
+        }
+        if (chunkHeaderEnd - parsedSize > maxChunkHeaderSize)
+        {
+            setError(400);
+            return STEP_ERROR;
+        }
 
         std::string chunkHeader = raw.substr(parsedSize, chunkHeaderEnd - parsedSize);
-        size_t extensionPosition = chunkHeader.find(';');
 
+        size_t extensionPosition = chunkHeader.find(';');
         if (extensionPosition != std::string::npos)
-            chunkHeader = chunkHeader.substr(0, extensionPosition);
+            chunkHeader.erase(extensionPosition);
 
         chunkHeader = trim(chunkHeader);
 
         size_t chunkSize = 0;
-
         if (!parseHexSize(chunkHeader, chunkSize))
         {
             setError(400);
             return STEP_ERROR;
         }
 
-        size_t dataStart = chunkHeaderEnd + crlfSize;
-
+        const size_t dataStart = chunkHeaderEnd + crlfSize;
         if (chunkSize == 0)
         {
-            if (raw.size() < dataStart + crlfSize)
+            if (dataStart > raw.size() || raw.size() - dataStart < crlfSize)
                 return STEP_NEED_MORE_DATA;
-
-            if (raw.compare(dataStart, crlfSize, crlf) != 0)
+            if (raw.compare(dataStart, crlfSize, "\r\n") != 0)
             {
                 setError(400);
                 return STEP_ERROR;
@@ -82,23 +94,23 @@ StepStatus RequestParser::parseChunkedBody(const std::string &raw)
             parsedSize = dataStart + crlfSize;
             return STEP_COMPLETE;
         }
-
-        size_t currentBodySize = request.getBody().size();
-
-        if (maxBodySize > 0 && (currentBodySize > maxBodySize || chunkSize > maxBodySize - currentBodySize))
+        const size_t currentBodySize = request.getBody().size();
+        if (maxBodySize > 0)
         {
-            setError(413);
-            return STEP_ERROR;
+            if (currentBodySize > maxBodySize || chunkSize > maxBodySize - currentBodySize)
+            {
+                setError(413);
+                return STEP_ERROR;
+            }
         }
-
         if (dataStart > raw.size() || chunkSize > raw.size() - dataStart)
             return STEP_NEED_MORE_DATA;
 
-        size_t chunkEnd = dataStart + chunkSize;
-        if (raw.size() < chunkEnd + crlfSize)
+        const size_t chunkEnd = dataStart + chunkSize;
+        if (raw.size() - chunkEnd < crlfSize)
             return STEP_NEED_MORE_DATA;
 
-        if (raw.compare(chunkEnd, crlfSize, crlf) != 0)
+        if (raw.compare(chunkEnd, crlfSize, "\r\n") != 0)
         {
             setError(400);
             return STEP_ERROR;
@@ -110,12 +122,14 @@ StepStatus RequestParser::parseChunkedBody(const std::string &raw)
 
 StepStatus RequestParser::bodyParser(const std::string &raw)
 {
-    StepStatus status = STEP_COMPLETE;
+    StepStatus status;
 
     if (request.isChunked())
         status = parseChunkedBody(raw);
     else if (request.hasContentLength())
         status = parseNormalBody(raw);
+    else
+        status = STEP_COMPLETE;
 
     if (status != STEP_COMPLETE)
         return status;
