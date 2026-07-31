@@ -84,11 +84,46 @@ void ConfigParser::locationClientMaxBodySize(Location &loc)
 
 void ConfigParser::locationCgiMapping(Location &loc)
 {
-    checkDuplicate(loc, "cgi");
-    tokens.expect("cgi");
-    
-    loc.cgiMappings = valuesParser::parseCgiMappings(tokens);
-    
+    tokens.expect("cgi_pass");
+
+    const Token &extToken = tokens.peekValue("cgi extension");
+    std::string extension = extToken.text;
+
+    if (extension.empty() || extension.find("..") != std::string::npos || extension.find('/') != std::string::npos)
+        throwConfigError(tokens, ERR_INVALID_EXTENSION);
+
+    if (extension[0] != '.')
+        extension = "." + extension;
+
+    if (extension.size() == 1)
+        throwConfigError(tokens, ERR_INVALID_EXTENSION);
+
+    for (size_t i = 1; i < extension.size(); ++i)
+    {
+        unsigned char c = static_cast<unsigned char>(extension[i]);
+
+        if (!std::isalnum(c) && c != '_' && c != '-')
+            throwConfigError(tokens, ERR_INVALID_EXTENSION);
+    }
+
+    tokens.consume();
+
+    const Token &pathToken = tokens.peekValue("cgi path");
+    std::string path = mergeSlashes(pathToken.text);
+
+    if (path.empty() || path.find("..") != std::string::npos)
+        throwConfigError(tokens, ERR_INVALID_PATH);
+
+    while (path.size() > 1 && path[path.size() - 1] == '/')
+        path.erase(path.size() - 1);
+
+    tokens.consume();
+
+    if (loc.cgiMappings.find(extension) != loc.cgiMappings.end())
+        throwConfigError(tokens, ERR_DUPLICATE_VALUE);
+
+    loc.cgiMappings[extension] = path;
+
     tokens.expect(";");
 }
 
