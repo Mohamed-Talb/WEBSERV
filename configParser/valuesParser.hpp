@@ -17,13 +17,12 @@
 namespace valuesParser
 {
     size_t parseBodySizeValue(TokenStream &tokens);
-    std::string parseCgiExtValue(TokenStream &tokens);
-    std::string parseCgiPathValue(TokenStream &tokens);
     std::string parseLocationPath(TokenStream &tokens);
     std::string parseFilesystemPath(TokenStream &tokens);
     std::string parseErrorPagePathValue(TokenStream &tokens);
     std::string parseRedirectTargetValue(TokenStream &tokens);
     std::vector<std::string> parseIndexesList(TokenStream &tokens);
+    std::map<std::string, std::string> parseCgiMappings(TokenStream &tokens);
     std::vector<std::string> parseWordListUntilSemicolon(TokenStream &tokens, const std::string &directiveName);
 }
 

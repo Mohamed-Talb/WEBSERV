@@ -72,16 +72,6 @@ void ConfigParser::locationIndex(Location &loc)
     tokens.expect(";");
 }
 
-void ConfigParser::locationCgiPath(Location &loc)
-{
-    checkDuplicate(loc, "cgi_path");
-    tokens.expect("cgi_path");
-
-    loc.cgiPath = valuesParser::parseCgiPathValue(tokens);
-
-    tokens.expect(";");
-}
-
 void ConfigParser::locationClientMaxBodySize(Location &loc)
 {
     checkDuplicate(loc, "client_max_body_size");
@@ -92,13 +82,13 @@ void ConfigParser::locationClientMaxBodySize(Location &loc)
     tokens.expect(";");
 }
 
-void ConfigParser::locationCgiExt(Location &loc)
+void ConfigParser::locationCgiMapping(Location &loc)
 {
-    checkDuplicate(loc, "cgi_ext");
-    tokens.expect("cgi_ext");
-
-    loc.cgiExt = valuesParser::parseCgiExtValue(tokens);
-
+    checkDuplicate(loc, "cgi");
+    tokens.expect("cgi");
+    
+    loc.cgiMappings = valuesParser::parseCgiMappings(tokens);
+    
     tokens.expect(";");
 }
 

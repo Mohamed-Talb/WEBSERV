@@ -128,8 +128,8 @@ CGI::CGI(
     Client *client,
     Server *srv,
     const HttpRequest &request,
-    const Location &location,
-    const std::string &fullResolvedPath
+    const std::string &fullResolvedPath,
+    const std::string &interpreter
 )
     : pipeInFd(-1),
       pipeOutFd(-1),
@@ -138,8 +138,7 @@ CGI::CGI(
       state(WRITING_INPUT),
       server(srv),
       parentClient(client),
-      execBin(location.cgiPath)
-
+      execBin(interpreter)
 {
     if (!server || !parentClient)
         throw std::runtime_error("CGI: invalid server or client");

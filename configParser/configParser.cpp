@@ -19,22 +19,6 @@ void ConfigParser::validateLocation(Location &loc)
             + "': upload_path is set but upload is disabled"
         );
     }
-
-    if (!loc.cgiExt.empty() && loc.cgiPath.empty())
-    {
-        throw std::runtime_error(
-            "Config error in location '" + loc.path
-            + "': cgi_ext requires cgi_path"
-        );
-    }
-
-    if (!loc.cgiPath.empty() && loc.cgiExt.empty())
-    {
-        throw std::runtime_error(
-            "Config error in location '" + loc.path
-            + "': cgi_path requires cgi_ext"
-        );
-    }
 }
 
 void ConfigParser::checkDuplicate(ServerConfig &conf, const std::string &directive) const
@@ -87,8 +71,7 @@ void ConfigParser::initLocationDispatch()
     locationDispatch["root"] = &ConfigParser::locationRoot;
     locationDispatch["autoindex"] = &ConfigParser::locationAutoindex;
     locationDispatch["index"] = &ConfigParser::locationIndex;
-    locationDispatch["cgi_path"] = &ConfigParser::locationCgiPath;
-    locationDispatch["cgi_ext"] = &ConfigParser::locationCgiExt;
+    locationDispatch["cgi"] = &ConfigParser::locationCgiMapping;
     locationDispatch["return"] = &ConfigParser::locationRedirect;
     locationDispatch["upload"] = &ConfigParser::locationUpload;
     locationDispatch["upload_path"] = &ConfigParser::locationUploadPath;

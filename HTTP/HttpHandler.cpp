@@ -17,16 +17,15 @@ bool HttpHandler::isMethodAllowed(const Location *location, const std::string &m
 
 bool HttpHandler::isCgiRequest(const RouteMatch &match) const
 {
-    if (!match.location || match.location->cgiExt.empty())
+    if (!match.location || match.location->cgiMappings.empty())
         return false;
-
-    const std::string &extension = match.location->cgiExt;
-
-    if (match.fullPath.size() < extension.size())
+    
+    size_t dotPos = match.fullPath.find_last_of('.');
+    if (dotPos == std::string::npos)
         return false;
-
-    size_t offset = match.fullPath.size() - extension.size();
-    return match.fullPath.compare(offset, extension.size(), extension) == 0;
+    
+    std::string extension = match.fullPath.substr(dotPos);
+    return match.location->cgiMappings.find(extension) != match.location->cgiMappings.end();
 }
 
 void HttpHandler::resolveRoute(const HttpRequest &request, RouteMatch &match) const
@@ -159,7 +158,15 @@ HttpResult HttpHandler::process(const HttpRequest &request) const
         return HttpResult::makeResponse(directoryResponse);
     std::cout << "[MAP TO]: " << match.fullPath << std::endl;
     if (isCgiRequest(match))
-        return HttpResult::makeCgi(match.location,match.fullPath);
+    {
+        size_t dotPos = match.fullPath.find_last_of('.');
+        std::string extension = match.fullPath.substr(dotPos);
+        std::map<std::string, std::string>::const_iterator it = match.location->cgiMappings.find(extension);
+        if (it == match.location->cgiMappings.end())
+            return HttpResult::makeResponse(ErrorPage(500, *serverConfig));
+        std::string interpreter = it->second;
+        return HttpResult::makeCgi(match.location, match.fullPath, interpreter);
+    }
 
     if (!fileExists(match.fullPath) && method != "POST")
     {

@@ -114,7 +114,8 @@ void Client::startCgi(HttpRequest &request, const HttpResult &result)
     state = PROCESSING_CGI;
     try
     {
-        activeCgi = new CGI(this, server, request, *result.cgiLocation, result.cgiRequestPath);
+        activeCgi = new CGI(this, server, request, 
+                           result.cgiRequestPath, result.cgiInterpreter);
         activeCgi->registerHandlers();
     }
     catch (...)

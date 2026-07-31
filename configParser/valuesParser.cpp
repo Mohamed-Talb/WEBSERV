@@ -112,32 +112,6 @@ namespace valuesParser
         return path;
     }
 
-    std::string parseCgiExtValue(TokenStream &tokens)
-    {
-        const Token &extensionToken =
-            tokens.peekValue("cgi_ext value");
-
-        std::string extension = extensionToken.text;
-
-        if (extension.find("..") != std::string::npos || extension.find('/') != std::string::npos)
-        {
-            throwConfigError(tokens, ERR_INVALID_EXTENSION);
-        }
-
-        if (extension.empty())
-            throwConfigError(tokens, ERR_INVALID_EXTENSION);
-
-        if (extension[0] != '.')
-            extension = "." + extension;
-
-        if (extension.size() == 1)
-            throwConfigError(tokens, ERR_INVALID_EXTENSION);
-
-        tokens.consume();
-
-        return extension;
-    }
-
     std::string parseRedirectTargetValue(TokenStream &tokens)
     {
         const Token &targetToken =
@@ -253,24 +227,50 @@ namespace valuesParser
         return indexes;
     }
 
-    std::string parseCgiPathValue(TokenStream &tokens)
+    std::map<std::string, std::string> parseCgiMappings(TokenStream &tokens)
     {
-        const Token &pathToken =
-            tokens.peekValue("cgi_path value");
-
-        std::string path = mergeSlashes(pathToken.text);
-
-        while (path.size() > 1 && path[path.size() - 1] == '/')
+        std::map<std::string, std::string> mappings;
+        
+        while (!tokens.atEnd() && tokens.peekCurrent().text != ";")
         {
-            path.erase(path.size() - 1);
+            const Token &extToken = tokens.peekValue("cgi extension");
+            std::string extension = extToken.text;
+            
+            if (extension.find("..") != std::string::npos || extension.find('/') != std::string::npos)
+                throwConfigError(tokens, ERR_INVALID_EXTENSION);
+            
+            if (extension.empty())
+                throwConfigError(tokens, ERR_INVALID_EXTENSION);
+            
+            if (extension[0] != '.')
+                extension = "." + extension;
+            
+            if (extension.size() == 1)
+                throwConfigError(tokens, ERR_INVALID_EXTENSION);
+            
+            tokens.consume();
+            
+            const Token &pathToken = tokens.peekValue("cgi path");
+            std::string path = mergeSlashes(pathToken.text);
+            
+            while (path.size() > 1 && path[path.size() - 1] == '/')
+                path.erase(path.size() - 1);
+            
+            if (path.find("..") != std::string::npos)
+                throwConfigError(tokens, ERR_INVALID_PATH);
+            
+            tokens.consume();
+            
+            if (mappings.find(extension) != mappings.end())
+                throwConfigError(tokens, ERR_DUPLICATE_VALUE);
+            
+            mappings[extension] = path;
         }
-
-        if (path.find("..") != std::string::npos)
-            throwConfigError(tokens, ERR_INVALID_PATH);
-
-        tokens.consume();
-
-        return path;
+        
+        if (mappings.empty())
+            throwConfigError(tokens, ERR_MISSING_VALUE);
+        
+        return mappings;
     }
 
 }

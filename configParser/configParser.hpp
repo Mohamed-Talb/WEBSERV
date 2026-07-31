@@ -31,8 +31,7 @@ struct Location
 {
     std::string path;
     std::string root;
-    std::string cgiExt;
-    std::string cgiPath;
+    std::map<std::string, std::string> cgiMappings;
     
     std::string autoindex;
     
@@ -123,11 +122,10 @@ class ConfigParser
     void locationRoot(Location &loc);
     void locationIndex(Location &loc);
     void locationUpload(Location &loc);
-    void locationCgiExt(Location &loc);
-    void locationCgiPath(Location &loc);
     void locationMethods(Location &loc);
     void locationRedirect(Location &loc);
     void locationAutoindex(Location &loc);
+    void locationCgiMapping(Location &loc);
     void locationUploadPath(Location &loc);
     void locationClientMaxBodySize(Location &loc);
 

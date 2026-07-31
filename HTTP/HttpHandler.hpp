@@ -39,11 +39,12 @@ struct HttpResult
     HttpResponse response;
     const Location *cgiLocation;
     std::string cgiRequestPath;
-
+    std::string cgiInterpreter;
+    
     HttpResult()
         : type(HTTP_RESULT_RESPONSE), response(),
-        cgiLocation(NULL), cgiRequestPath() {}
-
+          cgiLocation(NULL), cgiRequestPath(), cgiInterpreter() {}
+    
     static HttpResult makeResponse(const HttpResponse &res)
     {
         HttpResult result;
@@ -52,12 +53,13 @@ struct HttpResult
         return result;
     }
 
-    static HttpResult makeCgi(const Location *loc, const std::string &path)
+    static HttpResult makeCgi(const Location *loc, const std::string &path, const std::string &interpreter)
     {
         HttpResult result;
         result.type = HTTP_RESULT_CGI;
         result.cgiLocation = loc;
         result.cgiRequestPath = path;
+        result.cgiInterpreter = interpreter;
         return result;
     }
 };
