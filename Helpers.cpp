@@ -117,18 +117,14 @@ bool isValidHost(const std::string &host)
         {
             if (part.empty())
                 return false;
-
             if (part.size() > 3)
                 return false;
-
             for (size_t j = 0; j < part.size(); ++j)
             {
                 if (!std::isdigit(part[j]))
                     return false;
             }
-
             int value = std::atoi(part.c_str());
-
             if (value < 0 || value > 255)
                 return false;
 
@@ -140,7 +136,6 @@ bool isValidHost(const std::string &host)
             part += host[i];
         }
     }
-
     return dots == 4;
 }
 

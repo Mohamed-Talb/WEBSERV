@@ -42,6 +42,7 @@ bool readFile(const std::string &filePath, std::string &content)
     std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
     if (!file.is_open())
         return false;
+        
     std::ostringstream buffer;
     buffer << file.rdbuf();
     content = buffer.str();

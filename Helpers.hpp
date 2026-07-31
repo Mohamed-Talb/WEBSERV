@@ -2,21 +2,21 @@
 #define HELPERS_HPP
 
 #include <string>
-#include <sstream>
 #include <vector>
-#include <sys/types.h>
 #include <cstdlib>
+#include <sstream>
+#include <sys/types.h>
 
+int hexDigit(char c);
 std::string intToString(int value);
+bool        isValidErrorCode(int code);
 std::string toUpper(std::string value);
 std::string toLower(std::string value);
 std::string trim(const std::string &value);
 ssize_t     myStold(const std::string &str);
-std::string joinPath(std::string left, std::string right);
-std::string mergeSlashes(const std::string &path);
 bool        isOnlyDigits(const std::string &s);
 bool        isValidHost(const std::string &host);
-bool        isValidErrorCode(int code);
+std::string mergeSlashes(const std::string &path);
 bool        isValidServerName(const std::string &name);
-int hexDigit(char c);
+std::string joinPath(std::string left, std::string right);
 #endif

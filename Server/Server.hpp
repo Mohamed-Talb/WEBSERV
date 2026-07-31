@@ -1,27 +1,32 @@
 #ifndef SERVER_HPP
 #define SERVER_HPP
 
-#include <set>
 #include <map>
+#include <set>
 #include <ctime>
-#include <vector>
 #include <string>
-#include <stdint.h>
-#include <csignal>
-#include <iostream>
-
-#include "Client.hpp"
-#include "Listener.hpp"
-#include "../Helpers.hpp"
-#include "../HTTP/HttpHandler.hpp"
-#include "Server.ipp"
-#include <map>
-#include <set>
 #include <vector>
+#include <cerrno>
+#include <cstring>
+#include <stdint.h>
+#include <unistd.h>
+#include <stdexcept>
+#include <csignal>
+#include "Server.ipp"
+#include <sys/epoll.h>
+#include "../Helpers.hpp"
+#include "../configParser/configParser.hpp"
+
+class Client;
+class Listener;
 
 #define TIMEOUT_DURATION 30
 #define SESSION_TIMEOUT 1800
 #define SESSION_CLEANUP_INTERVAL 60
+
+typedef std::map<int, IEventHandler *> FDHandlerMap;
+typedef std::map<IEventHandler *, std::set<int> > HandlerFDMap;
+typedef std::map<std::string, std::vector<ServerConfig *> > ServerConfigMap;
 
 class Server
 {
@@ -30,19 +35,19 @@ class Server
         std::vector<ServerConfig>     configs;
         std::map<int, IEventHandler*> fdHandlers;
         std::set<IEventHandler*>   deletionQueue;
-        std::map<IEventHandler *, std::set<int> > registeredFds;
+        std::map<IEventHandler *, std::set<int> > handlers;
     public:
         Server();
         ~Server();
 
-        void checkTimeout();
         void eventLoop();
-        void init(const std::vector<ServerConfig> &confs);
-
+        void checkTimeout();
+        
         void clearDeletionQueue();
         void unregisterFD(int fd);
         void removeHandler(IEventHandler *handler);
         void modifyHandler(int fd, uint32_t events);
+        void init(const std::vector<ServerConfig> &confs);
         const std::vector<ServerConfig> &getConfigs() const;
         void addHandler(IEventHandler *handler, int fd, uint32_t events);
 };

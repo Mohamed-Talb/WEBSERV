@@ -71,7 +71,10 @@ class RequestParser
 
     void reset();
 
+    void setMaxBodySize(size_t value);
+
     size_t getParsedSize() const;
+    void resetParsedSize();
     int getErrorCode() const;
 
     HttpRequest &getRequest();

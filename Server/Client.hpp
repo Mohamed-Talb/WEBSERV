@@ -2,24 +2,20 @@
 #define CLIENT_HPP
 
 #include <ctime>
-#include <string>
 #include <vector>
-
 #include <stdint.h>
-#include "Server.ipp"
+
+#include "../HTTP/RouteMatch.hpp"
+#include "../HTTP/HttpHandler.hpp"
 #include "../HTTP/HttpResponse.hpp"
 #include "../configParser/configParser.hpp"
-#include "./Server.hpp"
-#include "../CGI/CGI.hpp"
-#include "../HTTP/HttpUtils/HttpUtils.hpp"
-#include "../HTTP/HttpHandler.hpp"
+#include "../HTTP/HttpRequest/HttpRequest.hpp"
 #include "../HTTP/HttpRequest/RequestParser.hpp"
 
-#include <sys/socket.h>
+#include <ctime>
 #include <unistd.h>
 #include <errno.h>
-#include <ctime>
-
+#include <sys/socket.h>
 
 class Server;
 class CGI;
@@ -30,6 +26,7 @@ enum ClientState
     PROCESSING_CGI,
     SENDING_RESPONSE
 };
+
 
 class Client : public IEventHandler
 {
@@ -56,13 +53,11 @@ class Client : public IEventHandler
     void closeConnection();
     void errorsHandler(int errorCode);
     void consumeReadBuffer(size_t bytes);
-    // void consumeWriteBuffer(size_t bytes);
-    
     void appendToWriteBuffer(const std::string &data);
     void appendToReadBuffer(const char *data, size_t size);
 
     public:
-    time_t timeout;
+    time_t lastAction;
 
     Client(int fd, Server *srv, const std::vector<ServerConfig *> &confs);
     ~Client();

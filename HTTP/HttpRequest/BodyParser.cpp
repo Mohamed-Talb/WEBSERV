@@ -6,13 +6,11 @@ StepStatus RequestParser::parseNormalBody(const std::string &raw)
     if (!bodySizeInitialized)
     {
         expectedBodySize = request.getContentLength();
-
         if (maxBodySize > 0 && expectedBodySize > maxBodySize)
         {
             setError(413);
             return STEP_ERROR;
         }
-
         request.reserveBody(expectedBodySize);
         bodySizeInitialized = true;
     }
@@ -81,7 +79,6 @@ StepStatus RequestParser::parseChunkedBody(const std::string &raw)
                 setError(400);
                 return STEP_ERROR;
             }
-
             parsedSize = dataStart + crlfSize;
             return STEP_COMPLETE;
         }
@@ -98,7 +95,6 @@ StepStatus RequestParser::parseChunkedBody(const std::string &raw)
             return STEP_NEED_MORE_DATA;
 
         size_t chunkEnd = dataStart + chunkSize;
-
         if (raw.size() < chunkEnd + crlfSize)
             return STEP_NEED_MORE_DATA;
 
@@ -107,7 +103,6 @@ StepStatus RequestParser::parseChunkedBody(const std::string &raw)
             setError(400);
             return STEP_ERROR;
         }
-
         request.appendToBody(raw.data() + dataStart, chunkSize);
         parsedSize = chunkEnd + crlfSize;
     }

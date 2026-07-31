@@ -1,7 +1,10 @@
 #include "Client.hpp"
+#include "Server.hpp"
+#include "Listener.hpp"
+
 
 Client::Client(int fd, Server *srv, const std::vector<ServerConfig *> &confs)
-    : socketFD(fd), server(srv), configs(confs), activeConfig(NULL), requestParser(confs), activeCgi(NULL), state(READING_REQUEST), closeAfterWrite(false), writeOffset(0), timeout(std::time(NULL)) {}
+    : socketFD(fd), server(srv), configs(confs), activeConfig(NULL), requestParser(confs), activeCgi(NULL), state(READING_REQUEST), closeAfterWrite(false), writeOffset(0), lastAction(std::time(NULL)) {}
 
 Client::~Client()
 {
@@ -10,15 +13,23 @@ Client::~Client()
         ::close(socketFD);
         socketFD = -1;
     }
-    activeCgi = NULL;
+    if (activeCgi)
+    {
+        CGI *cgi = activeCgi;
+        activeCgi = NULL;
+        cgi->killCgi();
+    }
 }
 
 void Client::consumeReadBuffer(size_t bytes)
 {
     if (bytes >= readBuffer.size())
-        readBuffer.clear();
-    else
-        readBuffer.erase(0, bytes);
+    {
+        std::string().swap(readBuffer);
+        return;
+    }
+    std::string remaining = readBuffer.substr(bytes);
+    remaining.swap(readBuffer);
 }
 
 ClientState Client::getState() const { return state;}
@@ -41,8 +52,6 @@ void Client::closeConnection()
         activeCgi = NULL;
         cgi->killCgi();
     }
-    writeOffset = 0;
-    timeout = std::time(NULL);
     server->removeHandler(this);
 }
 
@@ -71,7 +80,7 @@ void Client::terminateCgi()
 
     writeBuffer = response.toString();
     writeOffset = 0;
-    timeout = std::time(NULL);
+    lastAction = std::time(NULL);
 
     requestParser.reset();
     readBuffer.clear();
@@ -95,7 +104,7 @@ void Client::onCgiDone(HttpResponse &response)
 
     writeBuffer = response.toString();
     writeOffset = 0;
-    timeout = std::time(NULL);
+    lastAction = std::time(NULL);
 
     requestParser.reset();
 
@@ -150,7 +159,7 @@ void Client::errorsHandler(int errorCode)
 
     writeBuffer = response.toString();
     writeOffset = 0;
-    timeout = std::time(NULL);
+    lastAction = std::time(NULL);
 
     requestParser.reset();
     readBuffer.clear();
@@ -171,7 +180,7 @@ bool Client::readFromSocket()
         {
             appendToReadBuffer(buffer, static_cast<size_t>(bytesRead));
             totalRead += static_cast<size_t>(bytesRead);
-            timeout = std::time(NULL);
+            lastAction = std::time(NULL);
             continue;
         }
         if (bytesRead == 0)
@@ -188,55 +197,50 @@ void Client::processReadBuffer()
 {
     while (state == READING_REQUEST)
     {
-        ParseStatus parseStatus = requestParser.parse(readBuffer);
-        if (parseStatus == PARSE_NEED_MORE_DATA)
+        ParseStatus status = requestParser.parse(readBuffer);
+        size_t consumed = requestParser.getParsedSize();
+        if (consumed > 0)
+        {
+            consumeReadBuffer(consumed);
+            requestParser.resetParsedSize();
+        }
+        if (status == PARSE_NEED_MORE_DATA)
             return;
-
-        if (parseStatus == PARSE_REQUEST_ERROR)
+        if (status == PARSE_REQUEST_ERROR)
         {
             activeConfig = requestParser.getActiveConfig();
             errorsHandler(requestParser.getErrorCode());
             return;
         }
-        if (parseStatus != PARSE_REQUEST_COMPLETE)
+        if (status != PARSE_REQUEST_COMPLETE)
         {
             errorsHandler(500);
             return;
         }
         HttpRequest &request = requestParser.getRequest();
         activeConfig = requestParser.getActiveConfig();
-
         if (!activeConfig)
         {
             errorsHandler(500);
             return;
         }
-
         closeAfterWrite = request.shouldCloseConnection();
-
         HttpHandler handler(*activeConfig);
         HttpResult result = handler.process(request);
-
-        consumeReadBuffer(requestParser.getParsedSize());
-
         if (result.type == HTTP_RESULT_CGI)
         {
             startCgi(request, result);
             return;
         }
-
         HttpResponse response = result.response;
-
         if (closeAfterWrite)
             response.setHeader("Connection", "close");
         else if (request.getVersion() == "HTTP/1.0")
             response.setHeader("Connection", "keep-alive");
-
         writeBuffer = response.toString();
         writeOffset = 0;
 
         requestParser.reset();
-
         state = SENDING_RESPONSE;
         server->modifyHandler(socketFD, EPOLLOUT);
         return;
@@ -264,7 +268,7 @@ void Client::handleWrite()
         if (bytesSent > 0)
         {
             writeOffset += static_cast<size_t>(bytesSent);
-            timeout = std::time(NULL);
+            lastAction = std::time(NULL);
             continue;
         }
         if (bytesSent == 0)

@@ -34,9 +34,19 @@ size_t RequestParser::getParsedSize() const
     return parsedSize;
 }
 
+void RequestParser::resetParsedSize()
+{
+    parsedSize = 0;
+}
+
 const ServerConfig *RequestParser::getActiveConfig()
 {
     return activeConfig;
+}
+
+void RequestParser::setMaxBodySize(size_t value)
+{
+    maxBodySize = value;
 }
 
 void RequestParser::setError(int code)

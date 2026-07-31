@@ -1,24 +1,20 @@
+#include "Server.hpp"
+#include "Client.hpp"
 #include "Listener.hpp"
 
 
-
-Listener::Listener(const std::vector<ServerConfig *> &confs, Server *srv)
-    : socketFD(-1), server(srv), configs(confs)
+Listener::Listener(const std::vector<ServerConfig *> &confs, Server *srv) : socketFD(-1), server(srv), configs(confs)
 {
-    if (!server)
-        throw std::runtime_error("LISTENER: invalid server");
-
     if (configs.empty() || !configs[0])
-        throw std::runtime_error("LISTENER: no server configuration");
+        throw std::runtime_error("LISTENER: missing configuration");
 
     ServerConfig *conf = configs[0];
     socketFD = socket(AF_INET, SOCK_STREAM, 0);
 
     if (socketFD < 0)
-        throw std::runtime_error("LISTENER: socket() failed on port " + intToString(conf->port));
+        throw std::runtime_error("LISTENER: create socket() failed");
 
     int opt = 1;
-
     if (setsockopt(socketFD, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
     {
         close(socketFD);
@@ -27,7 +23,6 @@ Listener::Listener(const std::vector<ServerConfig *> &confs, Server *srv)
     }
 
     int flags = fcntl(socketFD, F_GETFL, 0);
-
     if (flags < 0 || fcntl(socketFD, F_SETFL, flags | O_NONBLOCK) < 0)
     {
         close(socketFD);
@@ -37,14 +32,9 @@ Listener::Listener(const std::vector<ServerConfig *> &confs, Server *srv)
 
     sockaddr_in addr;
     std::memset(&addr, 0, sizeof(addr));
-
     addr.sin_family = AF_INET;
     addr.sin_port = htons(conf->port);
     addr.sin_addr.s_addr = inet_addr(conf->host.c_str());
-
-    if (addr.sin_addr.s_addr == INADDR_NONE)
-        addr.sin_addr.s_addr = INADDR_ANY;
-
     if (bind(socketFD, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0)
     {
         close(socketFD);
@@ -91,11 +81,13 @@ void Listener::handleEvent(int fd, uint32_t events)
                 continue;
             }
             Client *newClient = NULL;
-            try
+            try { newClient = new Client(clientFD, server, configs); }
+            catch (...)
             {
-                newClient = new Client(clientFD, server, configs);
-                server->addHandler(newClient, clientFD, EPOLLIN);
+                close(clientFD);
+                throw;
             }
+            try { server->addHandler(newClient, clientFD, EPOLLIN); }
             catch (...)
             {
                 delete newClient;
