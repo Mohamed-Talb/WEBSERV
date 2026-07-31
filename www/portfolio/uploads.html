@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>webserv // uploads</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <nav class="nav">
+        <a href="index.html">Home</a>
+        <a href="about.html">About</a>
+        <a href="upload.html">Upload</a>
+        <a href="uploads.html">Uploads</a>
+        <a href="session.html">Session</a>
+        <a href="cgi-test.html">CGI Test</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <p class="eyebrow">03 — Uploads</p>
+    <h1 style="text-transform:none;">Stored files</h1>
+    <p class="lead">Fetches your uploads directory and lists what's there. Works with either a JSON array response or an
+      HTML autoindex — pick whichever your server returns.</p>
+
+    <div class="panel" style="margin-top:24px;">
+      <div class="field-row">
+        <div>
+          <label for="listPath">Listing endpoint</label>
+          <input type="text" id="listPath" value="/upload/">
+        </div>
+        <div>
+          <label for="respType">Response format</label>
+          <select id="respType">
+            <option value="auto" selected>Auto-detect</option>
+            <option value="json">JSON array of names</option>
+            <option value="html">HTML directory index</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn accent" id="refreshBtn">Refresh list</button>
+        <button class="btn ghost" id="clearLog">Clear log</button>
+      </div>
+
+      <ul class="file-list" id="fileList" style="margin-top:18px;">
+        <li><span class="fname">no data loaded yet</span><span class="fmeta">click refresh</span></li>
+      </ul>
+
+      <div class="console" id="log" style="display:none;"></div>
+    </div>
+  </main>
+
+  <script src="Common.js"></script>
+  <script>
+    const listEl = document.querySelector("#fileList");
+    const log = document.querySelector("#log");
+    const refreshBtn = document.querySelector("#refreshBtn");
+
+    const clearBtn = document.querySelector("#clearLog");
+
+    clearBtn.addEventListener("click", () => { log.textContent = ""; });
+
+    function renderEmpty(msg) {
+      listEl.innerHTML = `<li><span class="fname">${wsEscape(msg)}</span></li>`;
+    }
+
+    function renderFromNames(names) {
+      if (!names.length) return renderEmpty("directory is empty");
+      listEl.innerHTML = names
+        .map((n) => `<li><span class="fname">${wsEscape(n)}</span><a class="fmeta" href="${wsUrl(document.querySelector("#listPath").value.replace(/\/$/, "") + "/" + n)}" target="_blank">open ↗</a></li>`)
+        .join("");
+    }
+
+    function parseHtmlIndex(html) {
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      return Array.from(doc.querySelectorAll("a"))
+        .map((a) => a.getAttribute("href"))
+        .filter((h) => h && h !== "../" && h !== "/")
+        .map((h) => decodeURIComponent(h.replace(/\/$/, "")));
+    }
+
+    refreshBtn.addEventListener("click", async () => {
+      const path = document.querySelector("#listPath").value || "/uploads/";
+      const mode = document.querySelector("#respType").value;
+      const url = wsUrl(path);
+
+      log.style.display = "block";
+      log.textContent = "";
+      wsLog(log, `GET ${url}`, "k");
+      refreshBtn.disabled = true;
+
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        const text = await res.text();
+        wsLog(log, `${res.status} ${res.statusText}`, res.ok ? "ok" : "err");
+
+        if (!res.ok) {
+          renderEmpty(`server returned ${res.status}`);
+          return;
+        }
+
+        let names = [];
+        const ctype = res.headers.get("content-type") || "";
+
+        if (mode === "json" || (mode === "auto" && ctype.includes("json"))) {
+          try {
+            const data = JSON.parse(text);
+            names = Array.isArray(data) ? data : data.files || [];
+          } catch {
+            names = parseHtmlIndex(text);
+          }
+        } else {
+          names = parseHtmlIndex(text);
+        }
+
+        renderFromNames(names);
+      } catch (e) {
+        wsLog(log, "request failed: " + e.message, "err");
+        renderEmpty("could not reach server");
+      } finally {
+        refreshBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+
+</html>
