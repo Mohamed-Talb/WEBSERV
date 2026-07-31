@@ -71,7 +71,7 @@ void ConfigParser::initLocationDispatch()
     locationDispatch["root"] = &ConfigParser::locationRoot;
     locationDispatch["autoindex"] = &ConfigParser::locationAutoindex;
     locationDispatch["index"] = &ConfigParser::locationIndex;
-    locationDispatch["cgi"] = &ConfigParser::locationCgiMapping;
+    locationDispatch["cgi_pass"] = &ConfigParser::locationCgiMapping;
     locationDispatch["return"] = &ConfigParser::locationRedirect;
     locationDispatch["upload"] = &ConfigParser::locationUpload;
     locationDispatch["upload_path"] = &ConfigParser::locationUploadPath;

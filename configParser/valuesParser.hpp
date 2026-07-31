@@ -22,7 +22,6 @@ namespace valuesParser
     std::string parseErrorPagePathValue(TokenStream &tokens);
     std::string parseRedirectTargetValue(TokenStream &tokens);
     std::vector<std::string> parseIndexesList(TokenStream &tokens);
-    std::map<std::string, std::string> parseCgiMappings(TokenStream &tokens);
     std::vector<std::string> parseWordListUntilSemicolon(TokenStream &tokens, const std::string &directiveName);
 }
 
