@@ -11,8 +11,7 @@ struct Token
     std::string text;
 
     Token() : line(0), column(0), text("") {}
-    Token(const std::string &tokenText, size_t tokenLine, size_t tokenColumn) 
-        : line(tokenLine),column(tokenColumn), text(tokenText) {}
+    Token(const std::string &tokenText, size_t tokenLine, size_t tokenColumn)  : line(tokenLine),column(tokenColumn), text(tokenText) {}
 };
 
 #endif

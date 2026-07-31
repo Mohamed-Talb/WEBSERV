@@ -11,8 +11,8 @@ void ContentTypeData::reset()
     parameters.clear();
 }
 
-HttpRequest::HttpRequest(): hostPresent(false), contentLengthPresent(false), contentLength(0), contentTypePresent(false), chunked(false), closeConnection(false)
-{}
+HttpRequest::HttpRequest(): chunked(false),  hostPresent(false),contentLength(0),closeConnection(false), contentTypePresent(false), contentLengthPresent(false) {}
+
 
 void HttpRequest::reset()
 {

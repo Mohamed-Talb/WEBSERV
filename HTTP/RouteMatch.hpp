@@ -7,9 +7,9 @@
 struct RouteMatch
 {
     std::string root;
-    const Location *location;
-    std::string requestPath;
     std::string fullPath;
+    std::string requestPath;
+    const Location *location;
 };
 
 #endif

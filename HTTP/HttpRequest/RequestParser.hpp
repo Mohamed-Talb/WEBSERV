@@ -40,44 +40,40 @@ enum StepStatus
 class RequestParser
 {
     private:
-    HttpRequest request;
-
-    size_t maxBodySize;
+    
+    State state;
+    int errorCode;
     size_t parsedSize;
+    size_t maxBodySize;
+    HttpRequest request;
     size_t expectedBodySize;
     bool bodySizeInitialized;
 
-    State state;
-    int errorCode;
 
-    const std::vector<ServerConfig *> configs;
     const ServerConfig *activeConfig;
+    const std::vector<ServerConfig *> configs;
     private:
+    
     void setError(int code);
-
+    bool initializeRequestConfig();
     StepStatus bodyParser(const std::string &raw);
     StepStatus headersParser(const std::string &raw);
     StepStatus parseNormalBody(const std::string &raw);
     StepStatus parseChunkedBody(const std::string &raw);
     StepStatus requestLineParser(const std::string &raw);
-    bool initializeRequestConfig();
     
     public:
-    RequestParser(const std::vector<ServerConfig *> &conf);
-    ~RequestParser();
-    const ServerConfig *getActiveConfig();
-
-    ParseStatus parse(const std::string &rawRequestData);
-
     void reset();
-
-    void setMaxBodySize(size_t value);
-
-    size_t getParsedSize() const;
+    ~RequestParser();
     void resetParsedSize();
-    int getErrorCode() const;
+    void setMaxBodySize(size_t value);
+    const ServerConfig *getActiveConfig();
+    ParseStatus parse(const std::string &rawRequestData);
+    RequestParser(const std::vector<ServerConfig *> &conf);
 
+    int getErrorCode() const;
     HttpRequest &getRequest();
+    size_t getParsedSize() const;
     const HttpRequest &getRequest() const;
 };
 

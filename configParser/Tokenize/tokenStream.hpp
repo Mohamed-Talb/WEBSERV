@@ -8,23 +8,23 @@
 class TokenStream
 {
     private:
-        std::vector<Token> tokens;
-        size_t position;
+    size_t position;
+    std::vector<Token> tokens;
 
-        bool isSpecialToken(const std::string &text) const;
-        void throwUnexpected(const std::string &expected) const;
+    bool isSpecialToken(const std::string &text) const;
+    void throwUnexpected(const std::string &expected) const;
 
     public:
-        TokenStream();
-        TokenStream(const std::string &filePath);
+    TokenStream();
+    TokenStream(const std::string &filePath);
 
-        Token consume();
-        bool atEnd() const;
-        const Token &peekCurrent() const;
-        const Token &previous() const;
-        Token expect(const std::string &expected);
-        Token expectValue(const std::string &description);
-        const Token &peekValue(const std::string &description) const;
+    Token consume();
+    bool atEnd() const;
+    const Token &previous() const;
+    const Token &peekCurrent() const;
+    Token expect(const std::string &expected);
+    Token expectValue(const std::string &description);
+    const Token &peekValue(const std::string &description) const;
 };
 
 #endif

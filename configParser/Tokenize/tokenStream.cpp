@@ -6,7 +6,7 @@
 
 TokenStream::TokenStream() : position(0) {}
 
-TokenStream::TokenStream(const std::string &filePath): tokens(Tokenizer::tokenize(filePath)), position(0) {}
+TokenStream::TokenStream(const std::string &filePath): position(0), tokens(Tokenizer::tokenize(filePath)) {}
 
 bool TokenStream::isSpecialToken(const std::string &text) const
 {

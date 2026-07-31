@@ -2,20 +2,20 @@
 #define HTTPRESPONSE_HPP
 
 #include <map>
+#include <vector>
 #include <string>
 #include <sstream>
 #include <fstream>
 #include <iostream>
 #include "../Helpers.hpp"
-#include <vector>
 
 class HttpResponse
 {
     private:
         int statusCode;
+        std::string body;
         std::string reasonPhrase;
         std::map<std::string, std::vector<std::string> > headers;
-        std::string body;
 
     public:
         HttpResponse();

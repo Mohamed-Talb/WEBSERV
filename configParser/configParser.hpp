@@ -13,9 +13,9 @@
 #include <algorithm>
 #include <sys/types.h>
 #include "../Helpers.hpp"
-#include "./Tokenize/tokenStream.hpp"
 #include "valuesParser.hpp"
 #include "./configError.hpp"
+#include "./Tokenize/tokenStream.hpp"
 
 
 void throwConfigError(const TokenStream &tokens, int errorCode);
@@ -31,24 +31,21 @@ struct Location
 {
     std::string path;
     std::string root;
-    std::map<std::string, std::string> cgiMappings;
     
+    int redirectCode;
     std::string autoindex;
-    
     std::string uploadPath;
     std::string uploadEnabled;
     
-    int redirectCode;
     std::string redirectTarget;
-    
     ssize_t client_max_body_size;
-
     std::vector<std::string> methods;
     std::vector<std::string> indexes;
     std::vector<std::string> allowedMethods;
     std::map<std::string, bool> seenDirectives;
+    std::map<std::string, std::string> cgiMappings;
     
-    Location() : autoindex("off"), uploadEnabled("off") ,redirectCode(0), client_max_body_size(-1)
+    Location() : redirectCode(0), autoindex("off"), uploadEnabled("off"), client_max_body_size(-1)
     {
         allowedMethods.push_back("GET");
         allowedMethods.push_back("DELETE");
@@ -61,13 +58,13 @@ struct ServerConfig
     int port;
     std::string host;
     std::string root;
-
     ssize_t client_max_body_size;
     std::vector<Location> locations;
     std::vector<std::string> indexes;
     std::vector<std::string> serverNames;
     std::map<int, std::string> errorPage;
     std::map<std::string, bool> seenDirectives;
+
     ServerConfig() : port(80), host("127.0.0.1"), root("./www"), client_max_body_size(1048576)
     {
         serverNames.push_back(""); 

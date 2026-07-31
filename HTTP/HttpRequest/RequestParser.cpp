@@ -3,14 +3,14 @@
 #include "../HttpUtils/HttpUtils.hpp"
 
 RequestParser::RequestParser(const std::vector<ServerConfig *> &conf)
-    : maxBodySize(0),
-      parsedSize(0),
-      expectedBodySize(0),
-      bodySizeInitialized(false),
-      state(PARSE_REQUEST_LINE),
-      errorCode(0),
-      configs(conf),
-      activeConfig(NULL) {}
+    :state(PARSE_REQUEST_LINE),
+    errorCode(0),
+    parsedSize(0),
+    maxBodySize(0),
+    expectedBodySize(0),
+    bodySizeInitialized(false),
+    activeConfig(NULL),
+    configs(conf) {}
 
 RequestParser::~RequestParser() {}
 

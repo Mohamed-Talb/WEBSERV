@@ -9,7 +9,6 @@ class Tokenizer
 {
     private:
         static bool isSeparator(char character);
-
     public:
         static std::vector<Token> tokenize(const std::string &filePath);
 };

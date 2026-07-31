@@ -4,7 +4,16 @@
 
 
 Client::Client(int fd, Server *srv, const std::vector<ServerConfig *> &confs)
-    : socketFD(fd), server(srv), configs(confs), activeConfig(NULL), requestParser(confs), activeCgi(NULL), state(READING_REQUEST), closeAfterWrite(false), writeOffset(0), lastAction(std::time(NULL)) {}
+    : socketFD(fd), 
+    server(srv),
+    activeCgi(NULL),
+    state(READING_REQUEST),
+    writeOffset(0),
+    closeAfterWrite(false),
+    requestParser(confs),
+    activeConfig(NULL),
+    configs(confs),
+    lastAction(std::time(NULL)) {}
 
 Client::~Client()
 {
@@ -32,9 +41,9 @@ void Client::consumeReadBuffer(size_t bytes)
     remaining.swap(readBuffer);
 }
 
-ClientState Client::getState() const { return state;}
 
 int  Client::getFD() const { return socketFD;}
+ClientState Client::getState() const { return state;}
 bool Client::isConnected() const { return socketFD >= 0;}
 bool Client::hasPendingWrite() const { return !writeBuffer.empty();}
 const std::string &Client::getReadBuffer() const { return readBuffer;}

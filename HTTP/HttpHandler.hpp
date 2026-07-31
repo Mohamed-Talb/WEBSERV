@@ -1,16 +1,6 @@
 #ifndef HTTPHANDLER_HPP
 #define HTTPHANDLER_HPP
 
-#include "../CGI/CGI.hpp"
-#include "Methods/Methods.hpp" 
-#include "HttpUtils/HttpUtils.hpp"
-
-#include "../FileSystem.hpp"
-#include "../Helpers.hpp"
-#include "./HttpRequest/HttpRequest.hpp"
-#include "HttpResponse.hpp"
-#include "../configParser/configParser.hpp"
-#include "RouteMatch.hpp"
 
 #include <vector>
 #include <string>
@@ -20,6 +10,17 @@
 #include <dirent.h>
 #include <algorithm>
 #include <sys/stat.h>
+
+#include "RouteMatch.hpp"
+#include "../Helpers.hpp"
+#include "../CGI/CGI.hpp"
+#include "HttpResponse.hpp"
+#include "../FileSystem.hpp"
+#include "Methods/Methods.hpp" 
+#include "HttpUtils/HttpUtils.hpp"
+#include "./HttpRequest/HttpRequest.hpp"
+#include "../configParser/configParser.hpp"
+
 
 enum HttpResultType
 {
@@ -31,14 +32,11 @@ struct HttpResult
 {
     HttpResultType type;
     HttpResponse response;
-    const Location *cgiLocation;
     std::string cgiRequestPath;
     std::string cgiInterpreter;
+    const Location *cgiLocation;
     
-    HttpResult()
-        : type(HTTP_RESULT_RESPONSE), response(),
-          cgiLocation(NULL), cgiRequestPath(), cgiInterpreter() {}
-    
+    HttpResult() : type(HTTP_RESULT_RESPONSE), response(), cgiRequestPath(), cgiInterpreter(), cgiLocation(NULL) {}
     static HttpResult makeResponse(const HttpResponse &res)
     {
         HttpResult result;
@@ -46,7 +44,6 @@ struct HttpResult
         result.response = res;
         return result;
     }
-
     static HttpResult makeCgi(const Location *loc, const std::string &path, const std::string &interpreter)
     {
         HttpResult result;
@@ -65,12 +62,12 @@ class HttpHandler
     private:
     const ServerConfig *serverConfig;
 
-    bool isMethodAllowed(const Location *location, const std::string &method) const;
     bool isCgiRequest(const RouteMatch &match) const;
+    HttpResponse resolveRedirection(const Location &location) const;
     void resolveRoute(const HttpRequest &request,RouteMatch &match) const;
     std::vector<std::string> resolveIndexFiles(const Location *location) const;
+    bool isMethodAllowed(const Location *location, const std::string &method) const;
     bool resolveDirectory(RouteMatch &match, const HttpRequest &request, HttpResponse &response) const;
-    HttpResponse resolveRedirection(const Location &location) const;
     
     public:
     HttpHandler(const ServerConfig &config);

@@ -3,18 +3,18 @@
 
 
 #include <cctype>
-#include <fstream>
 #include <cerrno>
+#include <fstream>
 #include <cstring>
-#include "../Helpers.hpp"
 #include <cstring>
+#include <fcntl.h>
+#include <unistd.h>
 #include <stdexcept>
 #include <arpa/inet.h>
-#include <fcntl.h>
 #include <netinet/in.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
-#include <unistd.h>
+#include "../Helpers.hpp"
 #include "../configParser/configParser.hpp"
 
 class Server;
@@ -25,9 +25,6 @@ class Listener : public IEventHandler
         int socketFD;
         Server* server; 
         const std::vector<ServerConfig *> configs;
-        
-        Listener();
-        Listener(const Listener &);
 
         public:
         virtual ~Listener();
