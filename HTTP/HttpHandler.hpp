@@ -21,12 +21,6 @@
 #include <algorithm>
 #include <sys/stat.h>
 
-#include "HttpResponse.hpp"
-#include "RouteMatch.hpp"
-#include "../configParser/configParser.hpp"
-#include <string>
-
-
 enum HttpResultType
 {
     HTTP_RESULT_RESPONSE,

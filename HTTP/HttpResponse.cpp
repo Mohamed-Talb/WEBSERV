@@ -1,10 +1,5 @@
 #include "HttpResponse.hpp"
 
-size_t HttpResponse::getBodySize()
-{
-    return body.size();
-}
-
 HttpResponse::HttpResponse() : statusCode(200), reasonPhrase("OK")
 {
     setHeader("Connection", "keep-alive");
@@ -51,38 +46,12 @@ void HttpResponse::writeBody(const std::string &chunk)
     setHeader("Content-Length", sizeStream.str());
 }
 
-bool HttpResponse::setBodyFromFile(const std::string &filePath)
-{
-    std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
-
-    if (!file.is_open())
-        return false;
-
-    std::ostringstream buffer;
-    buffer << file.rdbuf();
-
-    if (file.bad())
-        return false;
-
-    body = buffer.str();
-
-    std::ostringstream sizeStream;
-    sizeStream << body.size();
-
-    setHeader("Content-Length", sizeStream.str());
-
-    return true;
-}
-
 std::string HttpResponse::toString() const
 {
     std::ostringstream responseStream;
 
     responseStream << "HTTP/1.1 " << statusCode << " "
                    << reasonPhrase << "\r\n";
-
-    std::cout << "[RESPONSE]: HTTP/1.1 " << statusCode << " "
-              << reasonPhrase << std::endl;
 
     std::map<std::string, std::vector<std::string> >::const_iterator headerIterator;
 

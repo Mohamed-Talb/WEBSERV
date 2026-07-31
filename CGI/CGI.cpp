@@ -210,7 +210,7 @@ CGI::CGI(
         };
         execve(args[0], args, envp);
         perror("CGI: execve");
-        exit(1);
+        _exit(1);
     }
     close(pipeIn[0]);
     close(pipeOut[1]);
@@ -380,12 +380,29 @@ void CGI::finish()
 
     Client *client = parentClient;
     parentClient = NULL;
-    HttpResponse response = parseCgiOutput(rawOutputBuffer);
+    int childStatus = 0;
+    bool childFailed = false;
     if (cgiPid > 0)
     {
-        waitpid(cgiPid, NULL, 0);
+        if (waitpid(cgiPid, &childStatus, 0) < 0
+            || !WIFEXITED(childStatus)
+            || WEXITSTATUS(childStatus) != 0)
+        {
+            childFailed = true;
+        }
         cgiPid = -1;
     }
+
+    HttpResponse response;
+    if (childFailed)
+    {
+        response = HttpResponse(502, "Bad Gateway");
+        response.setHeader("Content-Type", "text/plain");
+        response.setBody("CGI execution failed\n");
+    }
+    else
+        response = parseCgiOutput(rawOutputBuffer);
+
     if (client)
         client->onCgiDone(response);
     server->removeHandler(this);
@@ -524,6 +541,5 @@ HttpResponse CGI::parseCgiOutput(const std::string &rawOutput)
     response.setBody(bodyPart);
     return response;
 }
-
 
 

@@ -1,42 +1,6 @@
 #include "./HttpUtils.hpp"
 
 
-std::vector<std::string> splitHeaderValues(const std::string &value)
-{
-    std::vector<std::string> values;
-    size_t start = 0;
-
-    while (start <= value.size())
-    {
-        size_t comma = value.find(',', start);
-        std::string item;
-        if (comma == std::string::npos)
-            item = value.substr(start);
-        else
-            item = value.substr(start, comma - start);
-        item = trim(item);
-        if (!item.empty())
-            values.push_back(item);
-        if (comma == std::string::npos)
-            break;
-        start = comma + 1;
-    }
-    return values;
-}
-
-
-bool isCommaSeparatedHeader(const std::string &name)
-{
-    return name == "connection" || name == "transfer-encoding" || name == "te"
-        || name == "upgrade"
-        || name == "accept"
-        || name == "accept-encoding"
-        || name == "accept-language"
-        || name == "cookie"
-        || name == "cache-control";
-}
-
-
 
 bool urlDecode(const std::string &input, std::string &output)
 {

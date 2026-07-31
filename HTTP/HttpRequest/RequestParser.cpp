@@ -39,11 +39,6 @@ const ServerConfig *RequestParser::getActiveConfig()
     return activeConfig;
 }
 
-void RequestParser::setMaxBodySize(size_t value)
-{
-    maxBodySize = value;
-}
-
 void RequestParser::setError(int code)
 {
     errorCode = code;

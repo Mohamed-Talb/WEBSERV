@@ -98,11 +98,16 @@ HttpResponse HttpHandler::resolveRedirection(const Location &location) const
 
 bool HttpHandler::resolveDirectory(RouteMatch &match, const HttpRequest &request, HttpResponse &response) const
 {
-
     if (request.getMethod() == "POST")
         return true;
     if (!isDirectory(match.fullPath))
         return true;
+
+    if (request.getMethod() == "DELETE")
+    {
+        response = ErrorPage(403, *serverConfig);
+        return false;
+    }
     
     if (match.requestPath.empty() || match.requestPath[match.requestPath.size() - 1] != '/')
     {
@@ -140,10 +145,8 @@ bool HttpHandler::resolveDirectory(RouteMatch &match, const HttpRequest &request
 
 HttpResult HttpHandler::process(const HttpRequest &request) const
 {
-    std::cout << "[REQUEST]: " << request.getVersion() << " " << request.getMethod() << " " << request.getRequestPath() << std::endl;
     RouteMatch match;
     resolveRoute(request, match);
-    std::cout << "[LOCATION]: " << (match.location ? match.location->path : "NONE") << std::endl;
     if (match.location && match.location->redirectCode != 0)
     {
         return HttpResult::makeResponse(resolveRedirection(*match.location));
@@ -151,14 +154,30 @@ HttpResult HttpHandler::process(const HttpRequest &request) const
     const std::string &method = request.getMethod();
     if (!isMethodAllowed(match.location, method))
     {
-        return HttpResult::makeResponse(ErrorPage(405, *serverConfig));
+        HttpResponse response = ErrorPage(405, *serverConfig);
+        std::string allowedMethods;
+        if (match.location)
+        {
+            for (size_t i = 0; i < match.location->methods.size(); ++i)
+            {
+                if (i != 0)
+                    allowedMethods += ", ";
+                allowedMethods += match.location->methods[i];
+            }
+        }
+        else
+            allowedMethods = "GET";
+        response.setHeader("Allow", allowedMethods);
+        return HttpResult::makeResponse(response);
     }
     HttpResponse directoryResponse;
     if (!resolveDirectory(match, request, directoryResponse))
         return HttpResult::makeResponse(directoryResponse);
-    std::cout << "[MAP TO]: " << match.fullPath << std::endl;
     if (isCgiRequest(match))
     {
+        if (!isRegularFile(match.fullPath))
+            return HttpResult::makeResponse(ErrorPage(404, *serverConfig));
+
         size_t dotPos = match.fullPath.find_last_of('.');
         std::string extension = match.fullPath.substr(dotPos);
         std::map<std::string, std::string>::const_iterator it = match.location->cgiMappings.find(extension);

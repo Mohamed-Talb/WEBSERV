@@ -57,7 +57,6 @@ void ConfigParser::serverRoot(ServerConfig &conf)
     tokens.expect("root");
 
     conf.root = valuesParser::parseFilesystemPath(tokens);
-    std::cout << conf.root << std::endl;
     tokens.expect(";");
 }
 
