@@ -13,7 +13,7 @@
 #include "../../configParser/configParser.hpp"
 
 
-
+std::string getReasonPhrase(int statusCode);
 std::string contentType(const std::string &path);
 HttpResponse ErrorPage(int statusCode, const ServerConfig &config);
 HttpResponse resolveAutoIndexing(const RouteMatch &match, const ServerConfig &serverConfig);

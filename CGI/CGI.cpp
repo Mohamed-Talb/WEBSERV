@@ -469,7 +469,10 @@ HttpResponse CGI::parseCgiOutput(const std::string &rawOutput)
                 return ErrorPage(500, *config);
             std::getline(statusStream >> std::ws, reason);
             statusCode = code;
-            reasonPhrase = reason.empty() ? "OK" : reason;
+            if (reason.empty())
+                reasonPhrase = getReasonPhrase(code);
+            else
+                reasonPhrase = reason;
         }
         else if (lowerName == "content-type")
         {
