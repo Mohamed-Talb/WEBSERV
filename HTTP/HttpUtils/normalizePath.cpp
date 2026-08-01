@@ -1,7 +1,7 @@
 #include <vector>
 #include <sstream>
 
-std::string normalizePath(const std::string &path)
+bool normalizePath(const std::string &path, std::string &normalized)
 {
     std::vector<std::string> stack;
     std::istringstream iss(path);
@@ -10,23 +10,27 @@ std::string normalizePath(const std::string &path)
     while (std::getline(iss, token, '/'))
     {
         if (token.empty() || token == ".")
+            continue;
+
+        if (token == "..")
         {
+            if (stack.empty())
+                return false;
+
+            stack.pop_back();
             continue;
         }
-        else if (token == "..")
-        {
-            if (!stack.empty())
-                stack.pop_back();
-        }
-        else
-        {
-            stack.push_back(token); 
-        }
+
+        stack.push_back(token);
     }
-    std::string normalized = "";
+
+    normalized.clear();
+
     for (size_t i = 0; i < stack.size(); ++i)
-    {
         normalized += "/" + stack[i];
-    }
-    return normalized.empty() ? "/" : normalized;
+
+    if (normalized.empty())
+        normalized = "/";
+
+    return true;
 }

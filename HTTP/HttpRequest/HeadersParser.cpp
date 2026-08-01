@@ -129,22 +129,18 @@ int parseContentType(HttpRequest &request)
         return 400;
 
     const std::string raw = trim(request.getRawHeader("content-type")[0]);
-
     if (raw.empty())
         return 400;
 
     std::vector<std::string> parts;
     size_t start = 0;
-
     for (size_t i = 0; i <= raw.size(); ++i)
     {
         if (i == raw.size() || raw[i] == ';')
         {
             std::string part = trim(raw.substr(start, i - start));
-
             if (part.empty())
                 return 400;
-
             parts.push_back(part);
             start = i + 1;
         }

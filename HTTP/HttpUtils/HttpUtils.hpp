@@ -17,7 +17,7 @@ std::string getReasonPhrase(int statusCode);
 std::string contentType(const std::string &path);
 HttpResponse ErrorPage(int statusCode, const ServerConfig &config);
 HttpResponse resolveAutoIndexing(const RouteMatch &match, const ServerConfig &serverConfig);
-std::string normalizePath(const std::string &path);
+bool normalizePath(const std::string &path, std::string &normalized);
 
 bool parseHexSize(const std::string &value, size_t &result);
 bool parseDecimalSize(const std::string &value, size_t &result);

@@ -1,6 +1,6 @@
 #include "RequestParser.hpp"
 
-bool splitTarget(HttpRequest &request)
+int splitTarget(HttpRequest &request)
 {
     const std::string &target = request.getTarget();
     size_t queryPosition = target.find('?');
@@ -20,22 +20,22 @@ bool splitTarget(HttpRequest &request)
     }
 
     std::string requestPath;
-
     if (!urlDecode(rawPath, requestPath))
-        return false;
+        return 400;
 
-    bool hadTrailingSlash = requestPath.size() > 1
-        && requestPath[requestPath.size() - 1] == '/';
+    bool hadTrailingSlash = requestPath.size() > 1 && requestPath[requestPath.size() - 1] == '/';
 
-    requestPath = normalizePath(requestPath);
+    std::string normalizedPath;
+    if (!normalizePath(requestPath, normalizedPath))
+    {
+        return 403;
+    }
+    request.setRequestPath(normalizedPath);
 
-    if (hadTrailingSlash
-        && requestPath.size() > 1
-        && requestPath[requestPath.size() - 1] != '/')
+    if (hadTrailingSlash && requestPath.size() > 1 && requestPath[requestPath.size() - 1] != '/')
     {
         requestPath += "/";
     }
-
     if (requestPath.empty())
         requestPath = "/";
 
@@ -105,10 +105,10 @@ StepStatus RequestParser::requestLineParser(const std::string &raw)
     request.setMethod(method);
     request.setTarget(target);
     request.setVersion(version);
-
-    if (!splitTarget(request))
+    int ret = splitTarget(request);
+    if (ret > 0)
     {
-        setError(400);
+        setError(ret);
         return STEP_ERROR;
     }
 
