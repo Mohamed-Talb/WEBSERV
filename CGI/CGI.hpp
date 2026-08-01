@@ -33,17 +33,18 @@ class CGI : public IEventHandler
     int pipeInFd;          // pipeIn[1]
     int pipeOutFd;         // pipeOut[0]
     pid_t cgiPid;
-
+    
     size_t writeOffset;
     std::string requestBody;
     std::string rawOutputBuffer;
-
+    
     CgiState state;
-
+    
     Server* server;
     Client* parentClient;
     std::string execBin;
-
+    
+    const ServerConfig *config;
 
     HttpResponse parseCgiOutput(const std::string &rawOutput);
     void closeInput();
@@ -53,7 +54,7 @@ class CGI : public IEventHandler
     void handleOutput();
     public:
     virtual ~CGI();
-    CGI(Client *client, Server *srv, const HttpRequest &request, const std::string &fullResolvedPath, const std::string &interpreter);
+    CGI(Client *client, Server *srv, const HttpRequest &request, const std::string &fullResolvedPath, const std::string &interpreter, const ServerConfig *config);
     void killCgi();
     int getFD() const;
     void registerHandlers();

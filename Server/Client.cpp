@@ -133,7 +133,7 @@ void Client::startCgi(HttpRequest &request, const HttpResult &result)
     try
     {
         activeCgi = new CGI(this, server, request, 
-                           result.cgiRequestPath, result.cgiInterpreter);
+                           result.cgiRequestPath, result.cgiInterpreter, activeConfig);
         activeCgi->registerHandlers();
     }
     catch (...)

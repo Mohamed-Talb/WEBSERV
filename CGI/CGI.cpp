@@ -123,7 +123,8 @@ CGI::CGI(
     Server *srv,
     const HttpRequest &request,
     const std::string &fullResolvedPath,
-    const std::string &interpreter
+    const std::string &interpreter,
+    const ServerConfig *config
 )
     : pipeInFd(-1),
       pipeOutFd(-1),
@@ -132,7 +133,8 @@ CGI::CGI(
       state(WRITING_INPUT),
       server(srv),
       parentClient(client),
-      execBin(interpreter)
+      execBin(interpreter),
+      config(config)
 {
     if (!server || !parentClient)
         throw std::runtime_error("CGI: invalid server or client");
@@ -416,11 +418,6 @@ void CGI::handleEvent(int fd, uint32_t events)
 
 HttpResponse CGI::parseCgiOutput(const std::string &rawOutput)
 {
-    int statusCode = 200;
-    std::string reasonPhrase = "OK";
-    std::string contentType = "text/html";
-    std::vector<std::pair<std::string, std::string> > headers;
-
     size_t delimiter = rawOutput.find("\r\n\r\n");
     size_t delimiterLen = 4;
     if (delimiter == std::string::npos)
@@ -428,88 +425,81 @@ HttpResponse CGI::parseCgiOutput(const std::string &rawOutput)
         delimiter = rawOutput.find("\n\n");
         delimiterLen = 2;
     }
-
-    std::string headersPart;
-    std::string bodyPart;
-
     if (delimiter == std::string::npos)
-    {
-        bodyPart = rawOutput;
-    }
-    else
-    {
-        headersPart = rawOutput.substr(0, delimiter);
-        bodyPart = rawOutput.substr(delimiter + delimiterLen);
-    }
+        return ErrorPage(500, *config);
+
+    std::string headersPart = rawOutput.substr(0, delimiter);
+    std::string bodyPart = rawOutput.substr(delimiter + delimiterLen);
+
+    if (headersPart.find("HTTP/") == 0)
+        return ErrorPage(500, *config);
+
+    int statusCode = 200;
+    std::string reasonPhrase = "OK";
+    std::string contentType;
+    bool contentTypeSet = false;
+    std::vector<std::pair<std::string, std::string> > extraHeaders;
 
     std::istringstream headerStream(headersPart);
     std::string line;
-
     while (std::getline(headerStream, line))
     {
         if (!line.empty() && line[line.size() - 1] == '\r')
             line.erase(line.size() - 1);
-
         if (line.empty())
             continue;
 
-        if (line.find("HTTP/") == 0)
-        {
-            std::istringstream statusLine(line);
-            std::string httpVersion;
-            std::string statusStr;
-            statusLine >> httpVersion >> statusStr;
-            if (statusLine)
-            {
-                statusCode = std::atoi(statusStr.c_str());
-                std::string rest;
-                std::getline(statusLine >> std::ws, reasonPhrase);
-                if (reasonPhrase.empty())
-                    reasonPhrase = "OK";
-            }
-            continue;
-        }
+        size_t colon = line.find(':');
+        if (colon == std::string::npos)
+            return ErrorPage(500, *config);
 
-        if (line.find("Status:") == 0)
-        {
-            std::string statusValue = line.substr(7);
-            std::istringstream statusStream(statusValue);
-            statusStream >> statusCode;
-            std::getline(statusStream >> std::ws, reasonPhrase);
-            if (reasonPhrase.empty())
-                reasonPhrase = "OK";
-            continue;
-        }
-        size_t colonPos = line.find(':');
-        if (colonPos == std::string::npos)
-            continue;
-
-        std::string name = trim(line.substr(0, colonPos));
-        std::string value = trim(line.substr(colonPos + 1));
-
+        std::string name = trim(line.substr(0, colon));
+        std::string value = trim(line.substr(colon + 1));
         if (name.empty() || value.empty())
-            continue;
+            return ErrorPage(500, *config);
 
         std::string lowerName = toLower(name);
 
-        if (lowerName == "content-type")
+        if (lowerName == "status")
         {
+            std::istringstream statusStream(value);
+            int code = 0;
+            std::string reason;
+            if (!(statusStream >> code) || code < 200 || code >= 600)
+                return ErrorPage(500, *config);
+            std::getline(statusStream >> std::ws, reason);
+            statusCode = code;
+            reasonPhrase = reason.empty() ? "OK" : reason;
+        }
+        else if (lowerName == "content-type")
+        {
+            if (contentTypeSet)
+                return ErrorPage(500, *config);
             contentType = value;
+            contentTypeSet = true;
+        }
+        else if (lowerName == "content-length" ||
+                 lowerName == "connection" ||
+                 lowerName == "transfer-encoding" ||
+                 lowerName == "keep-alive")
+        {
             continue;
         }
-
-        if (lowerName == "content-length")
-            continue;
-
-        headers.push_back(std::make_pair(name, value));
+        else
+        {
+            extraHeaders.push_back(std::make_pair(name, value));
+        }
     }
+
+    if (!contentTypeSet)
+        return ErrorPage(500, *config);
 
     HttpResponse response(statusCode, reasonPhrase);
     response.setHeader("Content-Type", contentType);
-    for (size_t i = 0; i < headers.size(); ++i)
+    for (size_t i = 0; i < extraHeaders.size(); ++i)
     {
-        const std::string &name = headers[i].first;
-        const std::string &value = headers[i].second;
+        const std::string &name = extraHeaders[i].first;
+        const std::string &value = extraHeaders[i].second;
         if (toLower(name) == "set-cookie")
             response.addHeader(name, value);
         else
