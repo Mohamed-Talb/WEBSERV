@@ -20,6 +20,7 @@
         <a href="uploads.html">UPLOADS</a>
         <a href="cgi-test.html">CGI TEST</a>
         <a href="session.html">SESSION</a>
+        <a href="virtual-host-tests.html">VIRTUAL HOSTS</a>
       </nav>
     </div>
   </header>
@@ -128,7 +129,19 @@
 
       <div class="btn-row">
         <button class="btn" data-path="/upload" data-method="GET" data-redirect-test="true" data-final-path="/upload/">
-          301 SLASH REDIRECT
+          301 UPLOAD SLASH
+        </button>
+
+        <button class="btn" data-path="/cgi_bin" data-method="GET" data-redirect-test="true" data-final-path="/cgi_bin/">
+          301 CGI DIRECTORY SLASH
+        </button>
+
+        <button class="btn" data-path="/errors" data-method="GET" data-redirect-test="true" data-final-path="/errors/">
+          301 ERRORS DIRECTORY SLASH
+        </button>
+
+        <button class="btn" data-path="/upload?source=basic-test" data-method="GET" data-redirect-test="true" data-final-path="/upload/" data-final-query="?source=basic-test">
+          301 PRESERVE QUERY
         </button>
       </div>
 

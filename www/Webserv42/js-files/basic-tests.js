@@ -39,17 +39,19 @@ diagnosticButtons.forEach((button) => {
       let passed = false;
       let expectedMessage = "";
 
-      if (isRedirectTest) {
-        const finalUrl = new URL(response.url);
-        const expectedFinalPath = button.dataset.finalPath;
+    if (isRedirectTest) {
+      const finalUrl = new URL(response.url);
+      const expectedFinalPath = button.dataset.finalPath;
+      const expectedFinalQuery = button.dataset.finalQuery || "";
 
-        passed = response.redirected && finalUrl.pathname === expectedFinalPath;
-        expectedMessage = `EXPECTED REDIRECTION TO: ${expectedFinalPath}`;
-      }
-      else {
-        passed = !expectedStatus || response.status === expectedStatus;
-        expectedMessage = `EXPECTED STATUS: ${expectedStatus}`;
-      }
+      passed = response.redirected && finalUrl.pathname === expectedFinalPath && finalUrl.search === expectedFinalQuery;
+
+      expectedMessage = `EXPECTED REDIRECTION TO: ${expectedFinalPath}${expectedFinalQuery}`;
+    }
+    else {
+      passed = !expectedStatus || response.status === expectedStatus;
+      expectedMessage = `EXPECTED STATUS: ${expectedStatus}`;
+    }
 
       wsLog(log, `${response.status} ${response.statusText} — ${passed ? "PASS" : "FAIL"}`, passed ? "ok" : "err");
 

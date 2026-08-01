@@ -27,19 +27,29 @@ void Server::init(const std::vector<ServerConfig> &confs)
     epollFD = epoll_create(1000);
     if (epollFD < 0)
         throw std::runtime_error("SERVER: epoll_create failed");
-    
-    ServerConfigMap groupedConfigs;
-    for (size_t i = 0; i < configs.size(); ++i) 
+
+    std::map<int, bool> wildcardPorts;
+    for (size_t i = 0; i < configs.size(); ++i)
     {
-        std::string ipPort = configs[i].host + ":" + intToString(configs[i].port);
-        groupedConfigs[ipPort].push_back(&configs[i]);
+        if (configs[i].host == "0.0.0.0")
+            wildcardPorts[configs[i].port] = true;
     }
-    ServerConfigMap::iterator it;
-    for (it = groupedConfigs.begin(); it != groupedConfigs.end(); ++it)
-    { 
-        Listener *listener = new Listener(it->second, this);
+    ServerConfigMap groupedConfigs;
+    for (size_t i = 0; i < configs.size(); ++i)
+    {
+        std::string listenerHost = configs[i].host;
+        if (wildcardPorts[configs[i].port])
+            listenerHost = "0.0.0.0";
+        
+        std::string key = listenerHost + ":" + intToString(configs[i].port);
+        groupedConfigs[key].push_back(&configs[i]);
+    }
+    for (ServerConfigMap::iterator it = groupedConfigs.begin(); it != groupedConfigs.end(); ++it)
+    {
+        Listener *listener = NULL;
         try
         {
+            listener = new Listener(it->second, this);
             addHandler(listener, listener->getFD(), EPOLLIN);
         }
         catch (...)
@@ -192,5 +202,4 @@ void Server::eventLoop()
         }
         checkTimeout();
     }
-    // cleanup funtion needed here for when we break off the loop
 }

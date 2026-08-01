@@ -906,3 +906,23 @@ footer p {
     max-width: 100%;
   }
 }
+
+.command-block {
+  margin-top: 32px;
+}
+
+.command-block:first-of-type {
+  margin-top: 0;
+}
+
+.command-label {
+  margin: 0 0 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.command-text {
+  margin: 0 0 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

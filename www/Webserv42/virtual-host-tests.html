@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WEBSERV // VIRTUAL HOST TESTS</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <nav class="nav">
+        <a href="index.html">HOME</a>
+        <a href="about.html">ABOUT</a>
+        <a href="basic-tests.html">BASIC TESTS</a>
+        <a href="upload.html">UPLOAD</a>
+        <a href="uploads.html">UPLOADS</a>
+        <a href="cgi-test.html">CGI TEST</a>
+        <a href="session.html">SESSION</a>
+        <a href="virtual-host-tests.html">VIRTUAL HOSTS</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <p class="eyebrow">03 — VIRTUAL HOSTS</p>
+    <h1>SERVER BLOCK TESTS</h1>
+
+    <p class="lead">
+      Run these commands in another terminal while Webserv is running.
+      They test virtual-host selection and multiple listening ports.
+    </p>
+
+    <div class="panel" style="margin-top:24px;">
+      <p class="sub">
+        Browser JavaScript cannot manually set the Host header, so curl is required for alpha.local and beta.local.
+      </p>
+
+      <div class="command-block">
+        <p class="command-label">ALPHA VIRTUAL HOST</p>
+        <pre class="console command-text" id="alphaCommand">curl -i -H "Host: alpha.local" http://127.0.0.1:8080/</pre>
+        <button class="btn copy-command" data-target="alphaCommand">COPY COMMAND</button>
+        <p class="sub">Expected body: ALPHA VIRTUAL HOST</p>
+      </div>
+
+      <div class="command-block">
+        <p class="command-label">BETA VIRTUAL HOST</p>
+        <pre class="console command-text" id="betaCommand">curl -i -H "Host: beta.local" http://127.0.0.1:8080/</pre>
+        <button class="btn copy-command" data-target="betaCommand">COPY COMMAND</button>
+        <p class="sub">Expected body: BETA VIRTUAL HOST</p>
+      </div>
+
+      <div class="command-block">
+        <p class="command-label">UNKNOWN HOST</p>
+        <pre class="console command-text" id="unknownCommand">curl -i -H "Host: unknown.local" http://127.0.0.1:8080/</pre>
+        <button class="btn copy-command" data-target="unknownCommand">COPY COMMAND</button>
+        <p class="sub">Expected: the first server block configured for 127.0.0.1:8080.</p>
+      </div>
+
+      <div class="command-block">
+        <p class="command-label">HOST NAME WITH PORT</p>
+        <pre class="console command-text" id="hostPortCommand">curl -i -H "Host: alpha.local:8080" http://127.0.0.1:8080/</pre>
+        <button class="btn copy-command" data-target="hostPortCommand">COPY COMMAND</button>
+        <p class="sub">Expected body: ALPHA VIRTUAL HOST</p>
+      </div>
+
+      <div class="command-block">
+        <p class="command-label">CASE-INSENSITIVE HOST</p>
+        <pre class="console command-text" id="caseCommand">curl -i -H "Host: ALPHA.LOCAL" http://127.0.0.1:8080/</pre>
+        <button class="btn copy-command" data-target="caseCommand">COPY COMMAND</button>
+        <p class="sub">Expected body: ALPHA VIRTUAL HOST</p>
+      </div>
+
+      <div class="command-block">
+        <p class="command-label">SECOND LISTENING PORT</p>
+        <pre class="console command-text" id="portCommand">curl -i http://127.0.0.1:9090/</pre>
+        <button class="btn copy-command" data-target="portCommand">COPY COMMAND</button>
+        <p class="sub">Expected body: SERVER ON PORT 9090</p>
+      </div>
+
+      <div class="command-block">
+        <p class="command-label">HTTP/1.1 WITHOUT HOST</p>
+        <pre class="console command-text" id="missingHostCommand">printf 'GET / HTTP/1.1\r\nConnection: close\r\n\r\n' | nc 127.0.0.1 8080</pre>
+        <button class="btn copy-command" data-target="missingHostCommand">COPY COMMAND</button>
+        <p class="sub">Expected status: 400 Bad Request</p>
+      </div>
+
+      <div class="command-block">
+        <p class="command-label">HTTP/1.0 WITHOUT HOST</p>
+        <pre class="console command-text" id="http10Command">printf 'GET / HTTP/1.0\r\nConnection: close\r\n\r\n' | nc 127.0.0.1 8080</pre>
+        <button class="btn copy-command" data-target="http10Command">COPY COMMAND</button>
+        <p class="sub">Expected: the default server response.</p>
+      </div>
+
+      <div class="command-block">
+        <p class="command-label">RUN ALL TESTS</p>
+        <pre class="console command-text" id="allCommands">echo "=== ALPHA ==="
+        curl -i -H "Host: alpha.local" http://127.0.0.1:8080/
+
+        echo
+        echo "=== BETA ==="
+        curl -i -H "Host: beta.local" http://127.0.0.1:8080/
+
+        echo
+        echo "=== UNKNOWN HOST ==="
+        curl -i -H "Host: unknown.local" http://127.0.0.1:8080/
+
+        echo
+        echo "=== HOST WITH PORT ==="
+        curl -i -H "Host: alpha.local:8080" http://127.0.0.1:8080/
+
+        echo
+        echo "=== CASE INSENSITIVE ==="
+        curl -i -H "Host: ALPHA.LOCAL" http://127.0.0.1:8080/
+
+        echo
+        echo "=== SECOND PORT ==="
+        curl -i http://127.0.0.1:9090/</pre>
+        <button class="btn copy-command" data-target="allCommands">COPY ALL COMMANDS</button>
+      </div>
+
+      <div class="console" id="copyLog"></div>
+    </div>
+  </main>
+
+  <script src="js-files/Common.js"></script>
+  <script src="js-files/virtual-host-tests.js"></script>
+
+</body>
+
+</html>
