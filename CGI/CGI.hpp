@@ -60,7 +60,7 @@ class CGI : public IEventHandler
     void registerHandlers();
     void freeEnv(char **envp);
     void handleEvent(int, uint32_t);
-    char **buildEnv(const HttpRequest &request);
+    char **buildEnv(const HttpRequest &request, const std::string &scriptPath);
 };
 
 #endif

@@ -3,121 +3,6 @@
 #include "../Server/Server.hpp"
 
 
-char **CGI::buildEnv(const HttpRequest &request)
-{
-    const std::map<std::string, std::vector<std::string> > &headers = request.getRawHeaders();
-    std::vector<std::string> environment;
-
-    std::string contentType;
-    if (request.hasContentType())
-        contentType = request.getContentType().raw;
-
-    std::ostringstream lengthStream;
-    lengthStream << request.getBody().size();
-
-    std::string uri = request.getRequestPath();
-    if (!request.getQuery().empty())
-        uri += "?" + request.getQuery();
-
-    std::string serverName;
-    if (request.hasHost())
-    {
-        serverName = request.getHost();
-        if (!serverName.empty() && serverName[0] == '[')
-        {
-            size_t closingBracket = serverName.find(']');
-            if (closingBracket != std::string::npos)
-                serverName = serverName.substr(1, closingBracket - 1);
-        }
-        else
-        {
-            size_t colon = serverName.find(':');
-            if (colon != std::string::npos)
-                serverName = serverName.substr(0, colon);
-        }
-    }
-
-    environment.push_back("REQUEST_METHOD=" + request.getMethod());
-    environment.push_back("REQUEST_URI=" + uri);
-    environment.push_back("CONTENT_LENGTH=" + lengthStream.str());
-    environment.push_back("CONTENT_TYPE=" + contentType);
-    environment.push_back("SCRIPT_NAME=" + request.getRequestPath());
-    environment.push_back("PATH_INFO=" + request.getRequestPath());
-    environment.push_back("QUERY_STRING=" + request.getQuery());
-    environment.push_back("GATEWAY_INTERFACE=CGI/1.1");
-    environment.push_back("SERVER_PROTOCOL=" + request.getVersion());
-    environment.push_back("SERVER_NAME=" + serverName);
-    environment.push_back("SERVER_SOFTWARE=webserv");
-    environment.push_back("REDIRECT_STATUS=200");
-
-    for (std::map<std::string, std::vector<std::string> >::const_iterator it = headers.begin();
-         it != headers.end(); ++it)
-    {
-        const std::string &key = it->first;
-        if (key == "content-length" || key == "content-type")
-            continue;
-
-        const std::vector<std::string> &values = it->second;
-        std::string combined;
-        std::string separator = ", ";
-        if (key == "cookie")
-            separator = "; ";
-
-        for (size_t i = 0; i < values.size(); ++i)
-        {
-            std::string value = trim(values[i]);
-            if (value.empty())
-                continue;
-            if (!combined.empty())
-                combined += separator;
-            combined += value;
-        }
-        if (combined.empty())
-            continue;
-
-        std::string envName = "HTTP_";
-        for (size_t i = 0; i < key.size(); ++i)
-        {
-            unsigned char current = static_cast<unsigned char>(key[i]);
-            if (current == '-')
-                envName += '_';
-            else
-                envName += static_cast<char>(std::toupper(current));
-        }
-        environment.push_back(envName + "=" + combined);
-    }
-
-    char **envp = new char *[environment.size() + 1];
-    for (size_t i = 0; i <= environment.size(); ++i)
-        envp[i] = NULL;
-
-    for (size_t i = 0; i < environment.size(); ++i)
-    {
-        envp[i] = strdup(environment[i].c_str());
-        if (!envp[i])
-        {
-            for (size_t j = 0; j < i; ++j)
-                free(envp[j]);
-            delete[] envp;
-            throw std::bad_alloc();
-        }
-    }
-    envp[environment.size()] = NULL;
-    return envp;
-}
-
-
-void CGI::freeEnv(char **envp)
-{
-    if (!envp)
-        return;
-    for (int i = 0; envp[i]; i++)
-        free(envp[i]);
-    delete[] envp;
-}
-
-int CGI::getFD() const { return -1;}
-
 CGI::CGI(
     Client *client,
     Server *srv,
@@ -141,14 +26,18 @@ CGI::CGI(
 
     parentClient->lastAction = std::time(NULL);
     requestBody = request.getBody();
-    char **envp = buildEnv(request);
+
+    char **envp = buildEnv(request, fullResolvedPath);
+
     int pipeIn[2] = {-1, -1};
     int pipeOut[2] = {-1, -1};
+
     if (pipe(pipeIn) < 0)
     {
         freeEnv(envp);
         throw std::runtime_error("CGI: input pipe failed");
     }
+
     if (pipe(pipeOut) < 0)
     {
         close(pipeIn[0]);
@@ -156,7 +45,9 @@ CGI::CGI(
         freeEnv(envp);
         throw std::runtime_error("CGI: output pipe failed");
     }
+
     int flags = fcntl(pipeIn[1], F_GETFL, 0);
+
     if (flags < 0 || fcntl(pipeIn[1], F_SETFL, flags | O_NONBLOCK) < 0)
     {
         close(pipeIn[0]);
@@ -166,7 +57,9 @@ CGI::CGI(
         freeEnv(envp);
         throw std::runtime_error("CGI: failed to configure input pipe");
     }
+
     flags = fcntl(pipeOut[0], F_GETFL, 0);
+
     if (flags < 0 || fcntl(pipeOut[0], F_SETFL, flags | O_NONBLOCK) < 0)
     {
         close(pipeIn[0]);
@@ -176,7 +69,9 @@ CGI::CGI(
         freeEnv(envp);
         throw std::runtime_error("CGI: failed to configure output pipe");
     }
+
     cgiPid = fork();
+
     if (cgiPid < 0)
     {
         close(pipeIn[0]);
@@ -187,6 +82,7 @@ CGI::CGI(
         cgiPid = -1;
         throw std::runtime_error("CGI: fork failed");
     }
+
     if (cgiPid == 0)
     {
         if (dup2(pipeIn[0], STDIN_FILENO) < 0)
@@ -208,11 +104,151 @@ CGI::CGI(
         perror("CGI: execve");
         exit(1);
     }
+
     close(pipeIn[0]);
     close(pipeOut[1]);
+
     pipeInFd = pipeIn[1];
     pipeOutFd = pipeOut[0];
+
     freeEnv(envp);
+}
+
+
+char **CGI::buildEnv(const HttpRequest &request, const std::string &scriptPath)
+{
+    const std::map<std::string, std::vector<std::string> > &headers = request.getRawHeaders();
+    std::vector<std::string> environment;
+
+    std::string absoluteScriptPath = getAbsolutePath(scriptPath);
+    if (absoluteScriptPath.empty())
+        throw std::runtime_error("CGI: cannot resolve script path: " + scriptPath);
+
+    std::string contentType;
+    if (request.hasContentType())
+        contentType = request.getContentType().raw;
+
+    std::ostringstream lengthStream;
+    lengthStream << request.getBody().size();
+
+    std::string uri = request.getRequestPath();
+    if (!request.getQuery().empty())
+        uri += "?" + request.getQuery();
+
+    std::string serverName;
+    if (request.hasHost())
+    {
+        serverName = request.getHost();
+
+        if (!serverName.empty() && serverName[0] == '[')
+        {
+            size_t closingBracket = serverName.find(']');
+            if (closingBracket != std::string::npos)
+                serverName = serverName.substr(1, closingBracket - 1);
+        }
+        else
+        {
+            size_t colon = serverName.find(':');
+            if (colon != std::string::npos)
+                serverName = serverName.substr(0, colon);
+        }
+    }
+
+    environment.push_back("REQUEST_METHOD=" + request.getMethod());
+    environment.push_back("REQUEST_URI=" + uri);
+    environment.push_back("CONTENT_LENGTH=" + lengthStream.str());
+    environment.push_back("CONTENT_TYPE=" + contentType);
+    environment.push_back("SCRIPT_NAME=" + request.getRequestPath());
+    environment.push_back("SCRIPT_FILENAME=" + absoluteScriptPath);
+    environment.push_back("PATH_INFO=");
+    environment.push_back("QUERY_STRING=" + request.getQuery());
+    environment.push_back("GATEWAY_INTERFACE=CGI/1.1");
+    environment.push_back("SERVER_PROTOCOL=" + request.getVersion());
+    environment.push_back("SERVER_NAME=" + serverName);
+    environment.push_back("SERVER_SOFTWARE=webserv");
+    environment.push_back("REDIRECT_STATUS=200");
+
+    for (std::map<std::string, std::vector<std::string> >::const_iterator it = headers.begin(); it != headers.end(); ++it)
+    {
+        const std::string &key = it->first;
+
+        if (key == "content-length" || key == "content-type")
+            continue;
+
+        const std::vector<std::string> &values = it->second;
+        std::string combined;
+        std::string separator = ", ";
+
+        if (key == "cookie")
+            separator = "; ";
+
+        for (size_t i = 0; i < values.size(); ++i)
+        {
+            std::string value = trim(values[i]);
+
+            if (value.empty())
+                continue;
+
+            if (!combined.empty())
+                combined += separator;
+
+            combined += value;
+        }
+
+        if (combined.empty())
+            continue;
+
+        std::string envName = "HTTP_";
+
+        for (size_t i = 0; i < key.size(); ++i)
+        {
+            unsigned char current = static_cast<unsigned char>(key[i]);
+
+            if (current == '-')
+                envName += '_';
+            else
+                envName += static_cast<char>(std::toupper(current));
+        }
+
+        environment.push_back(envName + "=" + combined);
+    }
+
+    char **envp = new char *[environment.size() + 1];
+
+    for (size_t i = 0; i <= environment.size(); ++i)
+        envp[i] = NULL;
+
+    for (size_t i = 0; i < environment.size(); ++i)
+    {
+        envp[i] = strdup(environment[i].c_str());
+
+        if (!envp[i])
+        {
+            for (size_t j = 0; j < i; ++j)
+                free(envp[j]);
+
+            delete[] envp;
+            throw std::bad_alloc();
+        }
+    }
+
+    return envp;
+}
+
+void CGI::freeEnv(char **envp)
+{
+    if (!envp)
+        return;
+
+    for (int i = 0; envp[i]; ++i)
+        free(envp[i]);
+
+    delete[] envp;
+}
+
+int CGI::getFD() const
+{
+    return -1;
 }
 
 void CGI::registerHandlers()
@@ -309,64 +345,6 @@ void CGI::killCgi()
     server->removeHandler(this);
 }
 
-void CGI::handleInput()
-{
-    while (writeOffset < requestBody.size())
-    {
-        ssize_t written = write( pipeInFd,
-            requestBody.data() + writeOffset,
-            requestBody.size() - writeOffset
-        );
-        if (written > 0)
-        {
-            writeOffset += static_cast<size_t>(written);
-            if (parentClient)
-                parentClient->lastAction = std::time(NULL);
-
-            continue;
-        }
-        if (written < 0 && errno == EINTR)
-            continue;
-        if (written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
-            return;
-        if (written < 0 && errno == EPIPE)
-        {
-            closeInput();
-            return;
-        }
-        killCgi();
-        return;
-    }
-    closeInput();
-}
-
-void CGI::handleOutput()
-{
-    char buffer[4096];
-    while (true)
-    {
-        ssize_t bytesRead = read(pipeOutFd, buffer, sizeof(buffer));
-        if (bytesRead > 0)
-        {
-            rawOutputBuffer.append(buffer, static_cast<size_t>(bytesRead));
-            if (parentClient)
-                parentClient->lastAction = std::time(NULL);
-            continue;
-        }
-        if (bytesRead == 0)
-        {
-            closeOutput();
-            return;
-        }
-        if (errno == EINTR)
-            continue;
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return;
-        killCgi();
-        return;
-    }
-}
-
 void CGI::finish()
 {
     if (state == DONE)
@@ -386,35 +364,6 @@ void CGI::finish()
         client->onCgiDone(response);
     server->removeHandler(this);
 }
-
-void CGI::handleEvent(int fd, uint32_t events)
-{
-    if (state == DONE)
-        return;
-
-    if (fd == pipeInFd)
-    {
-        if (events & (EPOLLERR | EPOLLHUP))
-            closeInput();
-        else if (events & EPOLLOUT)
-            handleInput();
-    }
-    else if (fd == pipeOutFd)
-    {
-        if (events & (EPOLLIN | EPOLLHUP))
-            handleOutput();
-        else if (events & EPOLLERR)
-        {
-            killCgi();
-            return;
-        }
-    }
-    if (state == DONE)
-        return;
-    if (pipeInFd == -1 && pipeOutFd == -1)
-        finish();
-}
-
 
 HttpResponse CGI::parseCgiOutput(const std::string &rawOutput)
 {
@@ -514,3 +463,88 @@ HttpResponse CGI::parseCgiOutput(const std::string &rawOutput)
 
 
 
+void CGI::handleInput()
+{
+    while (writeOffset < requestBody.size())
+    {
+        ssize_t written = write( pipeInFd,
+            requestBody.data() + writeOffset,
+            requestBody.size() - writeOffset
+        );
+        if (written > 0)
+        {
+            writeOffset += static_cast<size_t>(written);
+            if (parentClient)
+                parentClient->lastAction = std::time(NULL);
+
+            continue;
+        }
+        if (written < 0 && errno == EINTR)
+            continue;
+        if (written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            return;
+        if (written < 0 && errno == EPIPE)
+        {
+            closeInput();
+            return;
+        }
+        killCgi();
+        return;
+    }
+    closeInput();
+}
+
+void CGI::handleOutput()
+{
+    char buffer[4096];
+    while (true)
+    {
+        ssize_t bytesRead = read(pipeOutFd, buffer, sizeof(buffer));
+        if (bytesRead > 0)
+        {
+            rawOutputBuffer.append(buffer, static_cast<size_t>(bytesRead));
+            if (parentClient)
+                parentClient->lastAction = std::time(NULL);
+            continue;
+        }
+        if (bytesRead == 0)
+        {
+            closeOutput();
+            return;
+        }
+        if (errno == EINTR)
+            continue;
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return;
+        killCgi();
+        return;
+    }
+}
+
+void CGI::handleEvent(int fd, uint32_t events)
+{
+    if (state == DONE)
+        return;
+
+    if (fd == pipeInFd)
+    {
+        if (events & (EPOLLERR | EPOLLHUP))
+            closeInput();
+        else if (events & EPOLLOUT)
+            handleInput();
+    }
+    else if (fd == pipeOutFd)
+    {
+        if (events & (EPOLLIN | EPOLLHUP))
+            handleOutput();
+        else if (events & EPOLLERR)
+        {
+            killCgi();
+            return;
+        }
+    }
+    if (state == DONE)
+        return;
+    if (pipeInFd == -1 && pipeOutFd == -1)
+        finish();
+}

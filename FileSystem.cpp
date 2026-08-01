@@ -74,3 +74,13 @@ bool isDirectory(const std::string &path)
         return false;
     return S_ISDIR(s.st_mode);
 }
+
+std::string getAbsolutePath(const std::string &path)
+{
+    char resolvedPath[PATH_MAX];
+
+    if (!realpath(path.c_str(), resolvedPath))
+        return "";
+
+    return std::string(resolvedPath);
+}
