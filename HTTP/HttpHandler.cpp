@@ -96,9 +96,6 @@ HttpResponse HttpHandler::resolveRedirection(const Location &location) const
 
 HttpResult HttpHandler::resolveCgi(const RouteMatch &match) const
 {
-    // if (!isRegularFile(match.fullPath))
-    //     return HttpResult::makeResponse(ErrorPage(404, *serverConfig));
-
     size_t dotPos = match.fullPath.find_last_of('.');
 
     if (dotPos == std::string::npos)
