@@ -38,14 +38,12 @@ void HttpHandler::resolveRoute(const HttpRequest &request, RouteMatch &match) co
         match.root = match.location->root;
 
         std::string relativePath = match.requestPath.substr(match.location->path.size());
-
         if (relativePath.empty())
             relativePath = "/";
 
         match.fullPath = joinPath(match.root, relativePath);
         return;
     }
-
     match.root = serverConfig->root;
     match.fullPath = joinPath(match.root, match.requestPath);
 }
@@ -98,8 +96,8 @@ HttpResponse HttpHandler::resolveRedirection(const Location &location) const
 
 HttpResult HttpHandler::resolveCgi(const RouteMatch &match) const
 {
-    if (!isRegularFile(match.fullPath))
-        return HttpResult::makeResponse(ErrorPage(404, *serverConfig));
+    // if (!isRegularFile(match.fullPath))
+    //     return HttpResult::makeResponse(ErrorPage(404, *serverConfig));
 
     size_t dotPos = match.fullPath.find_last_of('.');
 
@@ -128,7 +126,7 @@ bool HttpHandler::resolveDirectory(RouteMatch &match, const HttpRequest &request
     {
         response = ErrorPage(403, *serverConfig);
         return false;
-    }
+    } // ??????????????????????
     
     if (match.requestPath.empty() || match.requestPath[match.requestPath.size() - 1] != '/')
     {
@@ -166,8 +164,10 @@ bool HttpHandler::resolveDirectory(RouteMatch &match, const HttpRequest &request
 
 HttpResult HttpHandler::process(const HttpRequest &request) const
 {
+    std::cout << "[REQUEST]: " << request.getVersion() << " " << request.getMethod() << " " << request.getRequestPath() << std::endl;
     RouteMatch match;
     resolveRoute(request, match);
+    std::cout << "[LOCATION]: " << (match.location ? match.location->path : "NONE") << std::endl;
     if (match.location && match.location->redirectCode != 0)
     {
         return HttpResult::makeResponse(resolveRedirection(*match.location));
@@ -194,6 +194,7 @@ HttpResult HttpHandler::process(const HttpRequest &request) const
     HttpResponse directoryResponse;
     if (!resolveDirectory(match, request, directoryResponse))
         return HttpResult::makeResponse(directoryResponse);
+    std::cout << "[MAP TO]: " << match.fullPath << std::endl;
     if (isCgiRequest(match))
     {
         return resolveCgi(match);
@@ -212,6 +213,7 @@ HttpResult HttpHandler::process(const HttpRequest &request) const
     }
     if (method == "POST")
     {
+        std::cout << "hhhe from post\n";
         return HttpResult::makeResponse(HttpMethods::POST(request, match, *serverConfig));
     }
     return HttpResult::makeResponse(ErrorPage(501, *serverConfig));

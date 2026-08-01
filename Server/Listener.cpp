@@ -69,33 +69,41 @@ void Listener::handleEvent(int fd, uint32_t events)
     }
     if (!(events & EPOLLIN))
         return;
+
     while (true)
     {
         int clientFD = accept(socketFD, NULL, NULL);
-        if (clientFD >= 0)
+        if (clientFD < 0)
         {
-            int flags = fcntl(clientFD, F_GETFL, 0);
-            if (flags < 0 || fcntl(clientFD, F_SETFL, flags | O_NONBLOCK) < 0)
-            {
-                close(clientFD);
+            if (errno == EINTR)
                 continue;
-            }
-            Client *newClient = NULL;
-            try { newClient = new Client(clientFD, server, configs); }
-            catch (...)
-            {
-                close(clientFD);
-                throw;
-            }
-            try { server->addHandler(newClient, clientFD, EPOLLIN); }
-            catch (...)
-            {
-                delete newClient;
-                throw;
-            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                return;
+            server->removeHandler(this);
+            return;
+        }
+        int flags = fcntl(clientFD, F_GETFL, 0);
+        if (flags < 0 || fcntl(clientFD, F_SETFL, flags | O_NONBLOCK) < 0)
+        {
+            close(clientFD);
             continue;
         }
-        return;
+        Client *newClient = NULL;
+        try
+        {
+            newClient = new Client(clientFD, server, configs);
+            server->addHandler(newClient, clientFD, EPOLLIN);
+            std::cout << "[CONNECTION]: new Client in FD = " << clientFD << std::endl;
+        }
+        catch (...)
+        {
+            if (newClient)
+                delete newClient;
+            else
+                close(clientFD);
+
+            continue;
+        }
     }
 }
 

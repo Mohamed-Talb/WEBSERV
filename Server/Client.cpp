@@ -180,26 +180,16 @@ void Client::errorsHandler(int errorCode)
 bool Client::readFromSocket()
 {
     char buffer[65536];
-    size_t totalRead = 0;
-    const size_t maxReadPerEvent = 1024 * 1024;
-    while (totalRead < maxReadPerEvent)
+
+    ssize_t bytesRead = recv(socketFD, buffer, sizeof(buffer), 0);
+    if (bytesRead > 0)
     {
-        ssize_t bytesRead = recv(socketFD, buffer, sizeof(buffer), 0);
-        if (bytesRead > 0)
-        {
-            appendToReadBuffer(buffer, static_cast<size_t>(bytesRead));
-            totalRead += static_cast<size_t>(bytesRead);
-            lastAction = std::time(NULL);
-            continue;
-        }
-        if (bytesRead == 0)
-        {
-            closeConnection();
-            return false;
-        }
+        appendToReadBuffer(buffer, static_cast<size_t>(bytesRead));
+        lastAction = std::time(NULL);
         return true;
     }
-    return true;
+    closeConnection();
+    return false;
 }
 
 void Client::processReadBuffer()
