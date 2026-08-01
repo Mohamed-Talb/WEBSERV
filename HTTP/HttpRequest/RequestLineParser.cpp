@@ -42,7 +42,7 @@ int splitTarget(HttpRequest &request)
     request.setRequestPath(requestPath);
     request.setQuery(query);
 
-    return true;
+    return 0;
 }
 
 bool parseRequestLineValues(const std::string &line, std::string &method, std::string &target, std::string &version)
