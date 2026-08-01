@@ -39,7 +39,7 @@
       <div class="field-row">
         <div>
           <label for="cgiPath">CGI PATH</label>
-          <input type="text" id="cgiPath" value="/cgi_bin/test.py">
+          <input type="text" id="cgiPath" value="/cgi_bin/env.py">
         </div>
 
         <div>
@@ -77,76 +77,8 @@
     </div>
   </main>
 
-  <script src="Common.js"></script>
-
-  <script>
-    const log = document.querySelector("#log");
-    const clearBtn = document.querySelector("#clearBtn");
-    const runBtn = document.querySelector("#runBtn");
-
-    clearBtn.addEventListener("click", () => {
-      log.textContent = "";
-    });
-
-    runBtn.addEventListener("click", async () => {
-      log.textContent = "";
-
-      const path = document.querySelector("#cgiPath").value || "/cgi_bin/test.py";
-      const method = document.querySelector("#cgiMethod").value;
-      const query = document.querySelector("#cgiQuery").value.trim();
-      const body = document.querySelector("#cgiBody").value;
-      const contentType = document.querySelector("#cgiContentType").value;
-
-      let fullPath = path;
-
-      if (method === "GET" && query)
-        fullPath += "?" + query;
-
-      const url = wsUrl(fullPath);
-      const options = { method };
-
-      if (method === "POST") {
-        options.headers = {
-          "Content-Type": contentType
-        };
-
-        options.body = body;
-      }
-
-      wsLog(log, "Request:", "type");
-      wsLog(log, `${method} ${url}`, "k");
-
-      for (let i = 0; i < 2; i++) {
-        const new_line = document.createElement("br");
-        log.appendChild(new_line);
-      }
-      wsLog(log, "Response:", "type");
-
-      if (method === "POST")
-        wsLog(log, `CONTENT-TYPE: ${contentType}\n${body}`);
-
-      try {
-        const response = await fetch(url, options);
-        const text = await response.text();
-
-        wsLog(
-          log,
-          `\n${response.status} ${response.statusText}`,
-          response.ok ? "ok" : "err"
-        );
-
-        response.headers.forEach((value, name) => {
-          wsLog(log, `${name.toUpperCase()}: ${value}`);
-        });
-
-        if (text)
-          wsLog(log, "\n" + text);
-      }
-      catch (error) {
-        wsLog(log, "REQUEST FAILED: " + error.message, "err");
-      }
-    });
-  </script>
+  <script src="js-files/Common.js"></script>
+  <script src="js-files/cgi-test.js"></script>
 
 </body>
 </html>

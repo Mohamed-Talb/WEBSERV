@@ -29,24 +29,90 @@
     <h1>HTTP BEHAVIOUR CHECKS</h1>
 
     <p class="lead">
-      Run safe browser-side checks for routing, methods, redirects, CGI failures,
-      and path normalization.
+      Test static resources, HTTP methods, URL handling, directory redirects,
+      and common HTTP error responses.
     </p>
 
     <div class="panel" style="margin-top:24px;">
+      <p class="sub">
+        The CGI timeout check uses an intentionally slow or infinite script and
+        may take the configured server timeout duration. A browser cannot send
+        malformed raw HTTP requests, so use the project tester or Netcat for
+        those checks.
+      </p>
       <div class="btn-row">
         <button class="btn" data-path="/index.html" data-method="GET" data-expected="200">
-          200 STATIC FILE
+          GET HTML FILE
+        </button>
+
+        <button class="btn" data-path="/style.css" data-method="GET" data-expected="200">
+          GET CSS FILE
+        </button>
+
+        <button class="btn" data-path="/Common.js" data-method="GET" data-expected="200">
+          GET JAVASCRIPT FILE
+        </button>
+
+        <button class="btn" data-path="/images.png" data-method="GET" data-expected="200" data-binary="true">
+          GET IMAGE FILE
+        </button>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" data-path="/about.html" data-method="GET" data-expected="200">
+          GET REQUEST
         </button>
 
         <button class="btn" data-path="/index.html" data-method="HEAD" data-expected="200">
           HEAD REQUEST
         </button>
 
+        <button class="btn" data-path="/index.html" data-method="POST" data-body="TEST BODY" data-expected="405">
+          POST NOT ALLOWED
+        </button>
+
+        <button class="btn" data-path="/index.html" data-method="DELETE" data-expected="405">
+          DELETE NOT ALLOWED
+        </button>
+
+        <button class="btn" data-path="/index.html" data-method="PATCH" data-expected="405">
+          PATCH NOT ALLOWED
+        </button>
+      </div>
+
+      <div class="btn-row">
         <button class="btn" data-path="/index.html?test=webserv&value=42" data-method="GET" data-expected="200">
           QUERY STRING
         </button>
 
+        <button class="btn" data-path="/about.html?name=mohamed" data-method="GET" data-expected="200">
+          QUERY WITH VALUE
+        </button>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" data-path="/%69%6e%64%65%78.html" data-method="GET" data-expected="200">
+          DECODE INDEX PATH
+        </button>
+
+        <button class="btn" data-path="/basic%2Dtests.html" data-method="GET" data-expected="200">
+          DECODE DASH
+        </button>
+
+        <button class="btn" data-path="/configuration%2Ehtml" data-method="GET" data-expected="200">
+          DECODE DOT
+        </button>
+
+        <button class="btn" data-path="/cgi%2Dtest.html" data-method="GET" data-expected="200">
+          DECODE CGI TEST PATH
+        </button>
+
+        <button class="btn" data-path="/%2569ndex.html" data-method="GET" data-expected="404">
+          DECODE ONLY ONCE
+        </button>
+      </div>
+
+      <div class="btn-row">
         <button class="btn" data-path="/./index.html" data-method="GET" data-expected="200">
           DOT NORMALIZATION
         </button>
@@ -55,126 +121,35 @@
           PARENT NORMALIZATION
         </button>
 
-        <button class="btn" data-path="/%69%6e%64%65%78.html" data-method="GET" data-expected="200">
-          URL DECODING
+        <button class="btn" data-path="/upload/%2e%2e/%2e%2e/secret.txt" data-method="GET" data-expected="403">
+          PATH TRAVERSAL
         </button>
+      </div>
 
-        <button class="btn" data-path="/upload" data-method="GET" data-redirect="manual" data-expected="301">
+      <div class="btn-row">
+        <button class="btn" data-path="/upload" data-method="GET" data-redirect-test="true" data-final-path="/upload/">
           301 SLASH REDIRECT
         </button>
+      </div>
 
-        <button class="btn" data-path="/does-not-exist" data-method="GET" data-expected="404">
+      <div class="btn-row">
+        <button class="btn" data-path="/does-not-exist.html" data-method="GET" data-expected="404">
           404 MISSING FILE
+        </button>
+
+        <button class="btn" data-path="/missing-directory/file.html" data-method="GET" data-expected="404">
+          404 MISSING PATH
         </button>
 
         <button class="btn" data-path="/index.html" data-method="POST" data-body="TEST BODY" data-expected="405">
           405 METHOD
         </button>
-
-        <button class="btn" data-path="/cgi_bin/timeout.py?name=webserv" data-method="GET" data-expected="200">
-          CGI GET
-        </button>
-
-        <button class="btn" data-path="/cgi_bin/echo.py" data-method="POST" data-body="message=hello"
-          data-content-type="application/x-www-form-urlencoded" data-expected="200">
-          CGI POST
-        </button>
-
-        <button class="btn" data-path="/cgi_bin/does-not-exist.py" data-method="GET" data-expected="404">
-          CGI NOT FOUND
-        </button>
-
-        <button class="btn" data-path="/cgi_bin/timeout.py" data-method="GET" data-expected="504">
-          CGI TIMEOUT
-        </button>
-
-        <button class="btn" data-path="/upload/%2e%2e/secret.txt" data-method="GET" data-expected="403">
-          PATH TRAVERSAL
-        </button>
       </div>
-
-      <p class="sub">
-        The CGI timeout check uses an intentionally slow or infinite script and
-        may take the configured server timeout duration. A browser cannot send
-        malformed raw HTTP requests, so use the project tester or Netcat for
-        those checks.
-      </p>
-
       <div class="console" id="log"></div>
     </div>
   </main>
+  <script src="js-files/Common.js"></script>
+  <script src="js-files/basic-tests.js"></script>
 
-  <script src="Common.js"></script>
-  <script>
-    const log = document.querySelector("#log");
-    const diagnosticButtons = document.querySelectorAll("button[data-path]");
-
-    diagnosticButtons.forEach((button) => {
-      button.addEventListener("click", async () => {
-          log.textContent = "";
-        
-        const path = button.dataset.path;
-        const method = button.dataset.method || "GET";
-        const expectedStatus = Number(button.dataset.expected);
-
-        const options = {
-          method: method,
-          cache: "no-store",
-          credentials: "include"
-        };
-
-        if (button.dataset.redirect)
-          options.redirect = button.dataset.redirect;
-
-        if (button.dataset.body && method !== "GET" && method !== "HEAD")
-          options.body = button.dataset.body;
-
-        if (button.dataset.contentType) {
-          options.headers = {
-            "Content-Type": button.dataset.contentType
-          };
-        }
-        
-        
-        const url = wsUrl(path);
-        
-        wsLog(log, "Request:", "type");
-        
-
-        wsLog(log, `${method} ${url}`, "k");
-
-        for (let i = 0; i < 2; i++) {
-          const new_line = document.createElement("br");
-          log.appendChild(new_line);
-        }
-
-        wsLog(log, "Response:", "type");
-        try {
-          const response = await fetch(url, options);
-          const text = method === "HEAD" ? "" : await response.text();
-          const passed = !expectedStatus || response.status === expectedStatus;
-
-          wsLog(
-            log,
-            `${response.status} ${response.statusText} — ${passed ? "PASS" : "FAIL"}`,
-            passed ? "ok" : "err"
-          );
-
-          if (expectedStatus && !passed)
-            wsLog(log, `EXPECTED STATUS: ${expectedStatus}`, "err");
-
-          response.headers.forEach((value, name) => {
-            wsLog(log, `${name.toUpperCase()}: ${value}`);
-          });
-
-          if (text)
-            wsLog(log, "\n" + text.slice(0, 500));
-        }
-        catch (error) {
-          wsLog(log, "REQUEST FAILED: " + error.message, "err");
-        }
-      });
-    });
-  </script>
 </body>
 </html>

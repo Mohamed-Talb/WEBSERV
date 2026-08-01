@@ -54,59 +54,8 @@
       <div class="console" id="log"></div>
     </div>
   </main>
-
-  <script src="Common.js"></script>
-  <script>
-    const fileInput = document.querySelector("#fileInput");
-    const log = document.querySelector("#log");
-    const sendBtn = document.querySelector("#sendUpload");
-    const clearBtn = document.querySelector("#clearLog");
-
-    clearBtn.addEventListener("click", () => { log.textContent = ""; });
-
-    sendBtn.addEventListener("click", async () => {
-      log.textContent = "";
-
-      const file = fileInput.files[0];
-      const path = document.querySelector("#uploadPath").value || "/upload";
-      const field = document.querySelector("#fieldName").value || "file";
-
-      if (!file) {
-        wsLog(log, "no file selected", "err");
-        return;
-      }
-
-      const fd = new FormData();
-      fd.append(field, file, file.name);
-
-      wsLog(log, "Request:", "type");
-
-      const url = wsUrl(path);
-      wsLog(log, `POST ${url}  (${file.name}, ${file.size} bytes, ${file.type || "unknown type"})`, "k");
-
-      for (let i = 0; i < 2; i++) {
-        const new_line = document.createElement("br");
-        log.appendChild(new_line);
-      }
-
-      wsLog(log, "Response:", "type");
-      sendBtn.disabled = true;
-      sendBtn.textContent = "SENDING…";
-
-      try {
-        const res = await fetch(url, { method: "POST", body: fd });
-        const text = await res.text();
-        wsLog(log, `${res.status} ${res.statusText}`, res.ok ? "ok" : "err");
-        res.headers.forEach((v, k) => wsLog(log, `${k}: ${v}`));
-        if (text) wsLog(log, "\n" + text);
-      } catch (e) {
-        wsLog(log, "request failed: " + e.message, "err");
-      } finally {
-        sendBtn.disabled = false;
-        sendBtn.textContent = "Send upload";
-      }
-    });
-  </script>
+  <script src="js-files/Common.js"></script>
+  <script src="js-files/upload.js"></script>
 </body>
 
 </html>
