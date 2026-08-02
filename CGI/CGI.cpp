@@ -479,15 +479,6 @@ void CGI::handleInput()
 
             continue;
         }
-        if (written < 0 && errno == EINTR)
-            continue;
-        if (written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
-            return;
-        if (written < 0 && errno == EPIPE)
-        {
-            closeInput();
-            return;
-        }
         killCgi();
         return;
     }
@@ -512,10 +503,6 @@ void CGI::handleOutput()
             closeOutput();
             return;
         }
-        if (errno == EINTR)
-            continue;
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return;
         killCgi();
         return;
     }
