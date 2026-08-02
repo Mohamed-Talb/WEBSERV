@@ -4,14 +4,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <title>WEBSERV // SESSION</title>
+
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="/favicon.ico">
 </head>
 
 <body>
-
   <header class="topbar">
+    <div class="topbar-inner">
       <nav class="nav">
         <a href="index.html">HOME</a>
         <a href="about.html">ABOUT</a>
@@ -27,6 +29,7 @@
 
   <main class="wrap">
     <p class="eyebrow">06 — SESSION</p>
+
     <h1>COOKIES &amp; SESSIONS</h1>
 
     <p class="lead">
@@ -40,82 +43,71 @@
 
         <p class="sub" style="margin: 0;">
           The browser stores only the session ID. The CGI script stores the
-          session variables and expiration std::time inside a JSON file.
+          session variables and expiration time inside a JSON file.
         </p>
       </div>
 
       <div>
         <label for="sessionPath">SESSION CGI ENDPOINT</label>
 
-        <input
-          type="text"
-          id="sessionPath"
-          value="/cgi_bin/session.py"
-        >
+        <input type="text" id="sessionPath" value="/cgi_bin/session.py">
       </div>
 
       <div>
         <label for="sessionUsername">USERNAME</label>
 
-        <input
-          type="text"
-          id="sessionUsername"
-          placeholder="guest"
-        >
+        <input type="text" id="sessionUsername" placeholder="guest">
       </div>
 
       <div>
         <label for="sessionValue">SESSION VALUE</label>
 
-        <input
-          type="text"
-          id="sessionValue"
-          placeholder="webserv"
-        >
+        <input type="text" id="sessionValue" placeholder="webserv">
       </div>
     </div>
 
-      <div class="btn-row">
-        <button class="btn accent" id="createBtn">
-          CREATE SESSION
-        </button>
+    <div class="btn-row">
+      <button class="btn accent" id="createBtn">
+        CREATE SESSION
+      </button>
 
-        <button class="btn" id="readBtn">
-          READ SESSION
-        </button>
+      <button class="btn" id="readBtn">
+        READ SESSION
+      </button>
 
-        <button class="btn" id="updateBtn">
-          UPDATE SESSION
-        </button>
+      <button class="btn" id="updateBtn">
+        UPDATE SESSION
+      </button>
 
-        <button class="btn" id="listBtn">
-          LIST ALL SESSIONS
-        </button>
+      <button class="btn" id="listBtn">
+        LIST ALL SESSIONS
+      </button>
 
-        <button class="btn ghost" id="destroyBtn">
-          DESTROY SESSION
-        </button>
+      <button class="btn ghost" id="destroyBtn">
+        DESTROY SESSION
+      </button>
 
-        <button class="btn ghost" id="clearLog">
-          CLEAR LOG
-        </button>
-      </div>
+      <button class="btn ghost" id="clearLog">
+        CLEAR LOG
+      </button>
+    </div>
 
-      <div class="meta-row">
-        <span class="meta">
-          HTTPONLY COOKIE:
-          <b id="cookieView">
-            SENT BY BROWSER — NOT READABLE FROM JAVASCRIPT
-          </b>
-        </span>
-      </div>
+    <div class="meta-row">
+      <span class="meta">
+        HTTPONLY COOKIE:
+        <b id="cookieView">
+          SENT BY BROWSER — NOT READABLE FROM JAVASCRIPT
+        </b>
+      </span>
+    </div>
 
-      <div class="console" id="log">
-        // SESSION RESPONSES WILL APPEAR HERE
-      </div>
+    <div class="console" id="log">
+      // SESSION RESPONSES WILL APPEAR HERE
     </div>
   </main>
+
   <script src="js-files/Common.js"></script>
   <script src="js-files/session.js"></script>
 </body>
+
 </html>

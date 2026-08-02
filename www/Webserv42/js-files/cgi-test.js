@@ -17,7 +17,7 @@ runBtn.addEventListener("click", async () => {
 
   let fullPath = path;
 
-  if (method === "GET" && query)
+  if (query)
     fullPath += "?" + query;
 
   const url = wsUrl(fullPath);
@@ -33,24 +33,34 @@ runBtn.addEventListener("click", async () => {
 
   wsLog(log, "Request:", "type");
   wsLog(log, `${method} ${url}`, "k");
+
+  if (method === "POST") {
+    wsLog(log, `CONTENT-TYPE: ${contentType}`);
+    wsLog(log, `CONTENT-LENGTH: ${new TextEncoder().encode(body).length}`);
+
+    wsLog(log, "");
+    wsLog(log, "Body:", "type");
+    wsLog(log, body || "(empty)");
+  }
+
   wsAddEmptyLines(log, 2);
   wsLog(log, "Response:", "type");
-
-  if (method === "POST")
-    wsLog(log, `CONTENT-TYPE: ${contentType}\n${body}`);
 
   try {
     const response = await fetch(url, options);
     const text = await response.text();
 
-    wsLog(log, `\n${response.status} ${response.statusText}`, response.ok ? "ok" : "err");
+    wsLog(log, `${response.status} ${response.statusText}`, response.ok ? "ok" : "err");
 
     response.headers.forEach((value, name) => {
       wsLog(log, `${name.toUpperCase()}: ${value}`);
     });
 
-    if (text)
-      wsLog(log, "\n" + text);
+    if (text) {
+      wsLog(log, "");
+      wsLog(log, "Body:", "type");
+      wsLog(log, text);
+    }
   }
   catch (error) {
     wsLog(log, "REQUEST FAILED: " + error.message, "err");

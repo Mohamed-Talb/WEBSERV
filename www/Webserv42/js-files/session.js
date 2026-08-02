@@ -1,58 +1,95 @@
 const log = document.querySelector("#log");
-const clearBtn = document.querySelector("#clearBtn");
-const runBtn = document.querySelector("#runBtn");
+const createBtn = document.querySelector("#createBtn");
+const readBtn = document.querySelector("#readBtn");
+const updateBtn = document.querySelector("#updateBtn");
+const listBtn = document.querySelector("#listBtn");
+const destroyBtn = document.querySelector("#destroyBtn");
+const clearLogBtn = document.querySelector("#clearLog");
 
-clearBtn.addEventListener("click", () => {
-  log.textContent = "";
-});
+function getSessionPath() {
+  return document.querySelector("#sessionPath").value.trim()
+    || "/cgi_bin/session.py";
+}
 
-runBtn.addEventListener("click", async () => {
-  log.textContent = "";
+function getUsername() {
+  return document.querySelector("#sessionUsername").value.trim()
+    || "guest";
+}
 
-  const path = document.querySelector("#cgiPath").value || "/cgi_bin/test.py";
-  const method = document.querySelector("#cgiMethod").value;
-  const query = document.querySelector("#cgiQuery").value.trim();
-  const body = document.querySelector("#cgiBody").value;
-  const contentType = document.querySelector("#cgiContentType").value;
+function getSessionValue() {
+  return document.querySelector("#sessionValue").value.trim()
+    || "webserv";
+}
 
-  let fullPath = path;
+async function sessionRequest(action, method, includeValues) {
+  const parameters = new URLSearchParams();
 
-  if (method === "GET" && query)
-    fullPath += "?" + query;
+  parameters.set("action", action);
 
-  const url = wsUrl(fullPath);
-  const options = { method: method };
-
-  if (method === "POST") {
-    options.headers = {
-      "Content-Type": contentType
-    };
-
-    options.body = body;
+  if (includeValues) {
+    parameters.set("username", getUsername());
+    parameters.set("value", getSessionValue());
   }
+
+  const path = getSessionPath() + "?" + parameters.toString();
+  const url = wsUrl(path);
+
+  const options = {
+    method: method,
+    credentials: "same-origin"
+  };
+
+  log.textContent = "";
 
   wsLog(log, "Request:", "type");
   wsLog(log, `${method} ${url}`, "k");
+
   wsAddEmptyLines(log, 2);
   wsLog(log, "Response:", "type");
-
-  if (method === "POST")
-    wsLog(log, `CONTENT-TYPE: ${contentType}\n${body}`);
 
   try {
     const response = await fetch(url, options);
     const text = await response.text();
 
-    wsLog(log, `\n${response.status} ${response.statusText}`, response.ok ? "ok" : "err");
+    wsLog(
+      log,
+      `${response.status} ${response.statusText}`,
+      response.ok ? "ok" : "err"
+    );
 
     response.headers.forEach((value, name) => {
       wsLog(log, `${name.toUpperCase()}: ${value}`);
     });
 
-    if (text)
-      wsLog(log, "\n" + text);
+    wsLog(log, "");
+    wsLog(log, "Body:", "type");
+    wsLog(log, text || "(empty)");
   }
   catch (error) {
     wsLog(log, "REQUEST FAILED: " + error.message, "err");
   }
+}
+
+createBtn.addEventListener("click", () => {
+  sessionRequest("create", "POST", true);
+});
+
+readBtn.addEventListener("click", () => {
+  sessionRequest("read", "GET", false);
+});
+
+updateBtn.addEventListener("click", () => {
+  sessionRequest("update", "POST", true);
+});
+
+listBtn.addEventListener("click", () => {
+  sessionRequest("list", "GET", false);
+});
+
+destroyBtn.addEventListener("click", () => {
+  sessionRequest("destroy", "POST", false);
+});
+
+clearLogBtn.addEventListener("click", () => {
+  log.textContent = "";
 });
