@@ -23,7 +23,6 @@ CGI::CGI(
 {
     if (!server || !parentClient)
         throw std::runtime_error("CGI: invalid server or client");
-
     parentClient->lastAction = std::time(NULL);
     requestBody = request.getBody();
 
@@ -119,9 +118,9 @@ char **CGI::buildEnv(const HttpRequest &request, const std::string &scriptPath)
     const std::map<std::string, std::vector<std::string> > &headers = request.getRawHeaders();
     std::vector<std::string> environment;
 
-    std::string absoluteScriptPath = getAbsolutePath(scriptPath);
-    if (absoluteScriptPath.empty())
-        throw std::runtime_error("CGI: cannot resolve script path: " + scriptPath);
+    std::string scriptFilename = getAbsolutePath(scriptPath);
+    if (scriptFilename.empty())
+        scriptFilename = scriptPath;
 
     std::string contentType;
     if (request.hasContentType())
@@ -158,8 +157,8 @@ char **CGI::buildEnv(const HttpRequest &request, const std::string &scriptPath)
     environment.push_back("CONTENT_LENGTH=" + lengthStream.str());
     environment.push_back("CONTENT_TYPE=" + contentType);
     environment.push_back("SCRIPT_NAME=" + request.getRequestPath());
-    environment.push_back("SCRIPT_FILENAME=" + absoluteScriptPath);
-    environment.push_back("PATH_INFO=");
+    environment.push_back("SCRIPT_FILENAME=" + scriptFilename);
+    environment.push_back("PATH_INFO=" + request.getTarget());
     environment.push_back("QUERY_STRING=" + request.getQuery());
     environment.push_back("GATEWAY_INTERFACE=CGI/1.1");
     environment.push_back("SERVER_PROTOCOL=" + request.getVersion());
