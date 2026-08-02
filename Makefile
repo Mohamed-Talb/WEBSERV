@@ -1,34 +1,34 @@
 
-WEBSERV_SRC = main.cpp \
-	Helpers.cpp FileSystem.cpp \
-	Server/Server.cpp \
-	Server/Listener.cpp \
-	Server/Client.cpp \
-	configParser/configParser.cpp \
-	configParser/valuesParser.cpp \
-	configParser/locationHandlers.cpp \
-	configParser/serverHandlers.cpp \
-	configParser/configError.cpp \
-	configParser/Tokenize/tokenStream.cpp \
-	configParser/Tokenize/tokenizer.cpp \
-	HTTP/HttpRequest/HttpRequest.cpp \
-	HTTP/HttpRequest/RequestParser.cpp \
-	HTTP/HttpRequest/RequestLineParser.cpp \
-	HTTP/HttpRequest/HeadersParser.cpp \
-	HTTP/HttpRequest/BodyParser.cpp \
-	HTTP/HttpHandler.cpp \
-	HTTP/HttpResponse.cpp \
-	HTTP/HttpUtils/ContentType.cpp \
-	HTTP/HttpUtils/RequestParserUtils.cpp \
-	HTTP/HttpUtils/matchLocation.cpp \
-	HTTP/HttpUtils/matchConfig.cpp \
-	HTTP/HttpUtils/ErrorPagesBuilder.cpp \
-	HTTP/HttpUtils/AutoIndexing.cpp \
-	HTTP/HttpUtils/normalizePath.cpp \
-	HTTP/Methods/GET.cpp \
-	HTTP/Methods/POST.cpp \
-	HTTP/Methods/DELETE.cpp \
-	CGI/CGI.cpp
+WEBSERV_SRC = src/main.cpp \
+	src/Helpers.cpp src/FileSystem.cpp \
+	src/Server/Server.cpp \
+	src/Server/Listener.cpp \
+	src/Server/Client.cpp \
+	src/configParser/configParser.cpp \
+	src/configParser/valuesParser.cpp \
+	src/configParser/locationHandlers.cpp \
+	src/configParser/serverHandlers.cpp \
+	src/configParser/configError.cpp \
+	src/configParser/Tokenize/tokenStream.cpp \
+	src/configParser/Tokenize/tokenizer.cpp \
+	src/HTTP/HttpRequest/HttpRequest.cpp \
+	src/HTTP/HttpRequest/RequestParser.cpp \
+	src/HTTP/HttpRequest/RequestLineParser.cpp \
+	src/HTTP/HttpRequest/HeadersParser.cpp \
+	src/HTTP/HttpRequest/BodyParser.cpp \
+	src/HTTP/HttpHandler.cpp \
+	src/HTTP/HttpResponse.cpp \
+	src/HTTP/HttpUtils/ContentType.cpp \
+	src/HTTP/HttpUtils/RequestParserUtils.cpp \
+	src/HTTP/HttpUtils/matchLocation.cpp \
+	src/HTTP/HttpUtils/matchConfig.cpp \
+	src/HTTP/HttpUtils/ErrorPagesBuilder.cpp \
+	src/HTTP/HttpUtils/AutoIndexing.cpp \
+	src/HTTP/HttpUtils/normalizePath.cpp \
+	src/HTTP/Methods/GET.cpp \
+	src/HTTP/Methods/POST.cpp \
+	src/HTTP/Methods/DELETE.cpp \
+	src/CGI/CGI.cpp
 
 			
 WEBSERV_OBJ = $(WEBSERV_SRC:.cpp=.o)

@@ -22,7 +22,7 @@ Listener::Listener(const std::vector<ServerConfig *> &confs, Server *srv) : sock
         throw std::runtime_error("LISTENER: setsockopt() failed on port " + intToString(conf->port));
     }
 
-    int flags = fcntl(socketFD, F_GETFL);
+    int flags = fcntl(socketFD, F_GETFL, 0);
     if (flags < 0 || fcntl(socketFD, F_SETFL, flags | O_NONBLOCK) < 0)
     {
         close(socketFD);

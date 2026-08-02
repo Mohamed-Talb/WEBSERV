@@ -13,7 +13,6 @@ printf "SCRIPT_FILENAME=%s\n" "${SCRIPT_FILENAME}"
 printf "SCRIPT_NAME=%s\n" "${SCRIPT_NAME}"
 printf "CONTENT_TYPE=%s\n" "${CONTENT_TYPE}"
 printf "CONTENT_LENGTH=%s\n" "${CONTENT_LENGTH}"
-
 printf "\nBODY:\n"
 
 if [ "${REQUEST_METHOD}" = "POST" ]; then

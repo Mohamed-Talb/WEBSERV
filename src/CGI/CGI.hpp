@@ -46,21 +46,21 @@ class CGI : public IEventHandler
     
     const ServerConfig *config;
 
-    HttpResponse parseCgiOutput(const std::string &rawOutput);
+    void finish();
     void closeInput();
     void closeOutput();
-    void finish();
     void handleInput();
     void handleOutput();
     public:
     virtual ~CGI();
-    CGI(Client *client, Server *srv, const HttpRequest &request, const std::string &fullResolvedPath, const std::string &interpreter, const ServerConfig *config);
     void killCgi();
     int getFD() const;
     void registerHandlers();
     void freeEnv(char **envp);
     void handleEvent(int, uint32_t);
+    HttpResponse parseCgiOutput(const std::string &rawOutput);
     char **buildEnv(const HttpRequest &request, const std::string &scriptPath);
+    CGI(Client *client, Server *srv, const HttpRequest &request, const std::string &fullResolvedPath, const std::string &interpreter, const ServerConfig *config);
 };
 
 #endif

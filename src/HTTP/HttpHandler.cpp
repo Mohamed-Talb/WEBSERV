@@ -123,8 +123,7 @@ bool HttpHandler::resolveDirectory(RouteMatch &match, const HttpRequest &request
     {
         response = ErrorPage(403, *serverConfig);
         return false;
-    } // ??????????????????????
-    
+    } 
     if (match.requestPath.empty() || match.requestPath[match.requestPath.size() - 1] != '/')
     {
         std::string queryString = request.getQuery();

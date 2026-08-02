@@ -28,9 +28,8 @@ CGI::CGI(
     requestBody = request.getBody();
 
     char **envp = buildEnv(request, fullResolvedPath);
-
-    int pipeIn[2] = {-1, -1};
     int pipeOut[2] = {-1, -1};
+    int pipeIn[2] = {-1, -1};
 
     if (pipe(pipeIn) < 0)
     {
@@ -465,47 +464,47 @@ HttpResponse CGI::parseCgiOutput(const std::string &rawOutput)
 
 void CGI::handleInput()
 {
-    while (writeOffset < requestBody.size())
+    if (pipeInFd < 0)
+        return;
+    if (writeOffset >= requestBody.size())
     {
-        ssize_t written = write( pipeInFd,
-            requestBody.data() + writeOffset,
-            requestBody.size() - writeOffset
-        );
-        if (written > 0)
-        {
-            writeOffset += static_cast<size_t>(written);
-            if (parentClient)
-                parentClient->lastAction = std::time(NULL);
-
-            continue;
-        }
+        closeInput();
+        return;
+    }
+    ssize_t written = write(pipeInFd,requestBody.data() + writeOffset, requestBody.size() - writeOffset);
+    if (written <= 0)
+    {
         killCgi();
         return;
     }
-    closeInput();
+    writeOffset += static_cast<size_t>(written);
+    if (parentClient)
+        parentClient->lastAction = std::time(NULL);
+    if (writeOffset >= requestBody.size())
+        closeInput();
 }
+
 
 void CGI::handleOutput()
 {
-    char buffer[4096];
-    while (true)
+    if (pipeOutFd < 0)
+        return;
+
+    char buffer[65000];
+    ssize_t bytesRead = read(pipeOutFd, buffer, sizeof(buffer));
+    if (bytesRead > 0)
     {
-        ssize_t bytesRead = read(pipeOutFd, buffer, sizeof(buffer));
-        if (bytesRead > 0)
-        {
-            rawOutputBuffer.append(buffer, static_cast<size_t>(bytesRead));
-            if (parentClient)
-                parentClient->lastAction = std::time(NULL);
-            continue;
-        }
-        if (bytesRead == 0)
-        {
-            closeOutput();
-            return;
-        }
-        killCgi();
+        rawOutputBuffer.append(buffer, static_cast<size_t>(bytesRead));
+        if (parentClient)
+            parentClient->lastAction = std::time(NULL);
         return;
     }
+    if (bytesRead == 0)
+    {
+        closeOutput();
+        return;
+    }
+    killCgi();
 }
 
 void CGI::handleEvent(int fd, uint32_t events)
