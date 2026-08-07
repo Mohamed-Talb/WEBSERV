@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WEBSERV // ABOUT</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <nav class="nav">
+        <a href="index.html">HOME</a>
+        <a href="about.html">ABOUT</a>
+        <a href="basic-tests.html">BASIC TESTS</a>
+        <a href="upload.html">UPLOAD</a>
+        <a href="uploads.html">UPLOADS</a>
+        <a href="cgi-test.html">CGI TEST</a>
+        <a href="session.html">SESSION</a>
+        <a href="virtual-host-tests.html">VIRTUAL HOSTS</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero" style="grid-template-columns: 1fr 300px; padding: 28px;">
+      <div>
+        <p class="eyebrow">C++98 HTTP SERVER</p>
+        <h1>WEBSERV</h1>
+
+        <p class="lead">
+          A non-blocking HTTP server that manages clients, parses requests,
+          serves resources, and executes CGI scripts.
+        </p>
+      </div>
+
+      <div class="hero-visual">
+        <img src="image.jpg" alt="Webserv architecture">
+        <span class="hero-tag">ARCHITECTURE</span>
+      </div>
+    </section>
+
+  <section class="section">
+  <p class="eyebrow">PROJECT STRUCTURE</p>
+  <h2 class="section-title">MAIN PARTS</h2>
+
+  <div class="grid">
+  <article class="card">
+    <span class="card-badge">01</span>
+    <h3>SERVER</h3>
+
+    <ul>
+      <li>Accepts client connections</li>
+      <li>Uses non-blocking sockets</li>
+      <li>Manages events with epoll()</li>
+      <li>Controls connections and timeouts</li>
+    </ul>
+  </article>
+
+  <article class="card">
+    <span class="card-badge">02</span>
+    <h3>CONFIGURATION</h3>
+
+    <ul>
+      <li>Reads server and location blocks</li>
+      <li>Defines hosts and ports</li>
+      <li>Defines routes and methods</li>
+      <li>Configures CGI, uploads, and errors</li>
+    </ul>
+  </article>
+
+  <article class="card">
+    <span class="card-badge">03</span>
+    <h3>HTTP</h3>
+
+    <ul>
+      <li>Parses requests</li>
+      <li>Supports GET, POST, and DELETE</li>
+      <li>Matches routes and resources</li>
+      <li>Creates HTTP responses</li>
+    </ul>
+  </article>
+
+  <article class="card">
+    <span class="card-badge">04</span>
+    <h3>CGI</h3>
+
+    <ul>
+      <li>Executes dynamic scripts</li>
+      <li>Creates child processes</li>
+      <li>Uses input and output pipes</li>
+      <li>Converts CGI output into a response</li>
+    </ul>
+  </article>
+  </div>
+  </main>
+
+  <script src="js-files/Common.js"></script>
+</body>
+
+</html>

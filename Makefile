@@ -1,34 +1,34 @@
 
-WEBSERV_SRC = src/main.cpp \
-	src/Helpers.cpp src/FileSystem.cpp \
-	src/Server/Server.cpp \
-	src/Server/Listener.cpp \
-	src/Server/Client.cpp \
-	src/configParser/configParser.cpp \
-	src/configParser/valuesParser.cpp \
-	src/configParser/locationHandlers.cpp \
-	src/configParser/serverHandlers.cpp \
-	src/configParser/configError.cpp \
-	src/configParser/Tokenize/tokenStream.cpp \
-	src/configParser/Tokenize/tokenizer.cpp \
-	src/HTTP/HttpRequest/HttpRequest.cpp \
-	src/HTTP/HttpRequest/RequestParser.cpp \
-	src/HTTP/HttpRequest/RequestLineParser.cpp \
-	src/HTTP/HttpRequest/HeadersParser.cpp \
-	src/HTTP/HttpRequest/BodyParser.cpp \
-	src/HTTP/HttpHandler.cpp \
-	src/HTTP/HttpResponse.cpp \
-	src/HTTP/HttpUtils/ContentType.cpp \
-	src/HTTP/HttpUtils/RequestParserUtils.cpp \
-	src/HTTP/HttpUtils/matchLocation.cpp \
-	src/HTTP/HttpUtils/matchConfig.cpp \
-	src/HTTP/HttpUtils/ErrorPagesBuilder.cpp \
-	src/HTTP/HttpUtils/AutoIndexing.cpp \
-	src/HTTP/HttpUtils/normalizePath.cpp \
-	src/HTTP/Methods/GET.cpp \
-	src/HTTP/Methods/POST.cpp \
-	src/HTTP/Methods/DELETE.cpp \
-	src/CGI/CGI.cpp
+WEBSERV_SRC = Src/main.cpp \
+	Src/Helpers.cpp Src/FileSystem.cpp \
+	Src/Server/Server.cpp \
+	Src/Server/Listener.cpp \
+	Src/Server/Client.cpp \
+	Src/configParser/configParser.cpp \
+	Src/configParser/valuesParser.cpp \
+	Src/configParser/locationHandlers.cpp \
+	Src/configParser/serverHandlers.cpp \
+	Src/configParser/configError.cpp \
+	Src/configParser/Tokenize/tokenStream.cpp \
+	Src/configParser/Tokenize/tokenizer.cpp \
+	Src/HTTP/HttpRequest/HttpRequest.cpp \
+	Src/HTTP/HttpRequest/RequestParser.cpp \
+	Src/HTTP/HttpRequest/RequestLineParser.cpp \
+	Src/HTTP/HttpRequest/HeadersParser.cpp \
+	Src/HTTP/HttpRequest/BodyParser.cpp \
+	Src/HTTP/HttpHandler.cpp \
+	Src/HTTP/HttpResponse.cpp \
+	Src/HTTP/HttpUtils/ContentType.cpp \
+	Src/HTTP/HttpUtils/RequestParserUtils.cpp \
+	Src/HTTP/HttpUtils/matchLocation.cpp \
+	Src/HTTP/HttpUtils/matchConfig.cpp \
+	Src/HTTP/HttpUtils/ErrorPagesBuilder.cpp \
+	Src/HTTP/HttpUtils/AutoIndexing.cpp \
+	Src/HTTP/HttpUtils/normalizePath.cpp \
+	Src/HTTP/Methods/GET.cpp \
+	Src/HTTP/Methods/POST.cpp \
+	Src/HTTP/Methods/DELETE.cpp \
+	Src/CGI/CGI.cpp
 
 			
 WEBSERV_OBJ = $(WEBSERV_SRC:.cpp=.o)

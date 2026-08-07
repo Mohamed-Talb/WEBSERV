@@ -4,19 +4,47 @@
 /* ===========================================================
 WEBSERV // SHARED STYLES
 
-COLORS:
---bg          PURE BLACK PAGE BACKGROUND
---panel       DEEP BLACK PANELS
---panel-high  DARK-GRAY INTERACTIVE SURFACES
---ink         PRIMARY WHITE TEXT
---muted       SECONDARY DARK-GRAY TEXT
---line        DARK-GRAY BORDERS
+WHITE MODE COLORS:
+--bg          LIGHT PAGE BACKGROUND
+--panel       WHITE PANELS
+--panel-high  LIGHT-GRAY INTERACTIVE SURFACES
+--ink         PRIMARY DARK TEXT
+--muted       SECONDARY GRAY TEXT
+--line        LIGHT-GRAY BORDERS
 
 TYPE:
 JETBRAINS MONO ACROSS THE ENTIRE WEBSITE
 =========================================================== */
 
 :root {
+  --bg: #f7f7f5;
+  --panel: #ffffff;
+  --panel-low: #f1f1ef;
+  --panel-high: #e7e7e3;
+  --input-bg: #ffffff;
+
+  --ink: #111111;
+  --muted: #666666;
+
+  --line: #d8d8d3;
+  --line-strong: #b8b8b2;
+
+  --accent: #111111;
+  --accent-hover: #333333;
+  --accent-dark: #555555;
+  --accent-text: #ffffff;
+
+  --ok: #16794b;
+  --err: #b42318;
+
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas,
+    "Liberation Mono", monospace;
+}
+
+html[data-theme="dark"] 
+{
+  color-scheme: dark;
+
   --bg: #080404;
   --panel: #080808;
   --panel-low: #101010;
@@ -36,9 +64,14 @@ JETBRAINS MONO ACROSS THE ENTIRE WEBSITE
 
   --ok: #ffffff;
   --err: #9a9a9a;
+}
 
-  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas,
-    "Liberation Mono", monospace;
+html[data-theme="dark"] .hero-visual::after {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0) 35%,
+    rgba(0, 0, 0, 0.85) 100%
+  );
 }
 
 * {
@@ -54,7 +87,7 @@ body
 }
 
 html {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
@@ -293,8 +326,8 @@ p.sub {
   inset: 0;
   background: linear-gradient(
     180deg,
-    rgba(0, 0, 0, 0) 35%,
-    rgba(0, 0, 0, 0.85) 100%
+    rgba(255, 255, 255, 0) 35%,
+    rgba(255, 255, 255, 0.88) 100%
   );
 }
 
