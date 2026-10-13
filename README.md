@@ -39,4 +39,4 @@ WEBSERV/
 - **HTTP:** Parses requests, resolves routes, and creates responses.
 - **CGI:** Executes external scripts and returns dynamic content.
 
-See the [User Guide](DOCS/USER.md) for the complete testing instructions.
+See the [User Guide](Docs/USER.md) for the complete testing instructions.
