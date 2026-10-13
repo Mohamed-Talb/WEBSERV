@@ -1,3 +1,4 @@
+![PROJECT GRAPTH](./Graph.png)
 # WEBSERV
 
 Webserv is a non-blocking HTTP server written in C++98. It accepts client connections, parses HTTP requests, serves static resources, executes CGI scripts, and generates HTTP responses.
